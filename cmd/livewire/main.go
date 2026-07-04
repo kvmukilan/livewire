@@ -18,6 +18,7 @@ var commands = []command{
 	{"info", "inspect a pcap/pcapng file and print a summary", cmdInfo},
 	{"ifaces", "list interfaces with addresses and live-replay capability", cmdIfaces},
 	{"capture", "record live frames from an interface into a pcap", cmdCapture},
+	{"rstdrop", "drop the host's outbound RSTs to a target until Ctrl-C", cmdRstdrop},
 	{"rewrite", "apply static edits (MAC/IP/port/TTL/VLAN/seq) to a capture", cmdRewrite},
 	{"prep", "classify packets client/server and write a cache file", cmdPrep},
 	{"replay", "stateless send: blast a capture onto an interface at a set rate", cmdReplay},
