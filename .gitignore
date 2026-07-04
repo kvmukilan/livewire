@@ -1,0 +1,24 @@
+# binaries
+/livewire
+/livewire.exe
+*.exe
+*.test
+*.out
+
+# captures / caches
+*.pcap
+*.pcapng
+*.cache
+!testdata/**
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# AI/agent scratch docs — keep only README.md and SETUP.md
+AGENTS.md
+CLAUDE.md
+INSTALL.md
+QUICKSTART.md
+.claude/

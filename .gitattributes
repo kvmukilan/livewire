@@ -1,0 +1,7 @@
+# Shell scripts must stay LF or they break on the Linux lab box.
+*.sh text eol=lf
+
+# Go tooling is LF-native; keep the tree consistent regardless of dev OS.
+*.go text eol=lf
+go.mod text eol=lf
+*.md text
