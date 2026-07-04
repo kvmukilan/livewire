@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>livewire dashboard</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#c9d1d9; --accent:#2f81f7; --ok:#3fb950; --bad:#f85149; --muted:#8b949e; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:12px; }
+  header h1 { font-size:18px; margin:0; }
+  header .sub { color:var(--muted); font-size:12px; }
+  .wrap { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px; max-width:1200px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; }
+  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
+  input, select, button { font:inherit; }
+  input, select { width:100%; padding:7px 9px; background:#0d1117; color:var(--fg); border:1px solid var(--border); border-radius:6px; }
+  input[type=checkbox] { width:auto; }
+  .row { display:flex; gap:10px; } .row > * { flex:1; }
+  button { cursor:pointer; padding:8px 14px; background:var(--accent); color:#fff; border:none; border-radius:6px; margin-top:10px; }
+  button.sec { background:#21262d; border:1px solid var(--border); color:var(--fg); }
+  button.danger { background:var(--bad); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  .full { grid-column:1 / -1; }
+  #log { background:#010409; border:1px solid var(--border); border-radius:6px; padding:10px; height:280px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:12px; white-space:pre-wrap; }
+  .status { font-size:12px; margin-left:8px; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+  .chip { display:inline-block; background:#21262d; border:1px solid var(--border); border-radius:12px; padding:2px 8px; font-size:11px; margin:2px 4px 2px 0; }
+  .flowsel tr { cursor:pointer; } .flowsel tr.sel td { background:#132030; }
+</style>
+</head>
+<body>
+<header>
+  <h1>livewire</h1>
+  <span class="sub" id="hdrsub">live replay dashboard</span>
+</header>
+<div class="wrap">
+
+  <!-- Interfaces -->
+  <div class="panel">
+    <h2>1 · Interface</h2>
+    <label>Replay / capture interface</label>
+    <select id="iface"></select>
+    <table id="addrs"><thead><tr><th>adapter</th><th>IPs</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <!-- Capture -->
+  <div class="panel">
+    <h2>2 · Capture a pcap</h2>
+    <label>Output file (in server dir)</label>
+    <input id="capOut" value="cap.pcap">
+    <label>Duration (seconds, 0 = until Stop)</label>
+    <input id="capDur" type="number" value="15">
+    <div class="row">
+      <button onclick="startCapture()">Capture</button>
+      <button class="sec" onclick="stopJob()">Stop</button>
+    </div>
+  </div>
+
+  <!-- Load pcap -->
+  <div class="panel">
+    <h2>3 · Load a pcap</h2>
+    <label>Pcap file</label>
+    <div class="row">
+      <select id="pcap"></select>
+      <button class="sec" style="flex:0 0 auto;margin-top:0" onclick="refreshPcaps()">↻</button>
+    </div>
+    <button onclick="loadFlows()">Load flows</button>
+    <table class="flowsel" id="flows"><thead><tr><th>#</th><th>client → server</th><th>proto</th><th>pkts</th><th>hs</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <!-- Replay -->
+  <div class="panel">
+    <h2>4 · Replay</h2>
+    <label>Mode</label>
+    <select id="mode" onchange="onMode()">
+      <option value="stateful">Stateful (maintain seq/ack to live host)</option>
+      <option value="stateless">Stateless (blast frames as-is)</option>
+      <option value="ssh">SSH re-termination</option>
+    </select>
+    <div id="replayFields">
+      <div class="row">
+        <div><label>Target IP</label><input id="tIP" placeholder="192.168.1.50"></div>
+        <div><label>Port</label><input id="tPort" type="number" placeholder="502"></div>
+      </div>
+      <label>Flow index (−1 = auto)</label>
+      <input id="flow" type="number" value="-1">
+      <label><input type="checkbox" id="noGuard"> disable host-RST guard (host kernel may reset)</label>
+      <button onclick="startReplay()">Run replay</button>
+    </div>
+    <div id="sshFields" style="display:none">
+      <div class="row">
+        <div><label>SSH target host:port</label><input id="sshTarget" placeholder="192.168.1.50:22"></div>
+      </div>
+      <div class="row">
+        <div><label>User</label><input id="sshUser"></div>
+        <div><label>Password</label><input id="sshPass" type="password"></div>
+      </div>
+      <label>Commands (one per line)</label>
+      <input id="sshCmds" placeholder="show version">
+      <button onclick="startSSH()">Run SSH replay</button>
+      <div class="muted" id="sshNote"></div>
+    </div>
+  </div>
+
+  <!-- RST rules -->
+  <div class="panel">
+    <h2>5 · Host-RST drop rules</h2>
+    <div class="muted">Drop the host's outbound RST to a target (for scapy / manual tools). <code>live</code> does this automatically.</div>
+    <div class="row">
+      <div><label>Target IP</label><input id="rstIP" placeholder="192.168.1.50"></div>
+      <div><label>Port</label><input id="rstPort" type="number" placeholder="502"></div>
+    </div>
+    <div class="row">
+      <button onclick="rstRule('add')">Add drop rule</button>
+      <button class="danger" onclick="rstRule('del')">Remove</button>
+    </div>
+    <div id="rstList"></div>
+  </div>
+
+  <!-- Output -->
+  <div class="panel full">
+    <h2>Output <span class="status" id="jobStatus"></span></h2>
+    <div id="log"></div>
+  </div>
+
+</div>
+<script>
+const $ = id => document.getElementById(id);
+async function api(path, body) {
+  const opt = { method: body ? 'POST' : 'GET' };
+  if (body) { opt.headers = {'Content-Type':'application/json'}; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+async function loadIfaces() {
+  const d = await api('/api/ifaces');
+  $('iface').innerHTML = (d.interfaces||[]).map(i =>
+    `<option value="${esc(i.value)}">${esc(i.label||i.value)}${i.ips&&i.ips.length?' — '+i.ips.join(', '):''}${i.kind==='loopback'?' [loopback]':''}</option>`).join('');
+  $('addrs').querySelector('tbody').innerHTML = (d.addrs||[]).map(a =>
+    `<tr><td>${esc(a.name)}</td><td>${(a.ips||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')||'<span class="muted">—</span>'}</td></tr>`).join('');
+}
+async function refreshPcaps() {
+  const d = await api('/api/pcaps');
+  $('pcap').innerHTML = (d||[]).map(p => `<option value="${esc(p.name)}">${esc(p.name)} (${p.size} B)</option>`).join('')
+    || '<option value="">(no pcaps in server dir)</option>';
+}
+let selectedFlow = -1;
+async function loadFlows() {
+  const pcap = $('pcap').value; if (!pcap) return;
+  try {
+    const flows = await api('/api/flows', {pcap});
+    const tb = $('flows').querySelector('tbody');
+    tb.innerHTML = flows.map(f =>
+      `<tr onclick="pickFlow(${f.index},'${esc(f.serverIP)}',${f.port})"><td>${f.index}</td><td>${esc(f.client)} → ${esc(f.server)}</td><td>${esc(f.proto)}</td><td>${f.packets}</td><td>${f.handshake?'✓':'—'}</td></tr>`).join('');
+    log('loaded '+flows.length+' flow(s) from '+pcap);
+  } catch(e){ log('error: '+e.message); }
+}
+function pickFlow(i, ip, port) {
+  selectedFlow = i; $('flow').value = i; $('tIP').value = ip; $('tPort').value = port;
+  document.querySelectorAll('#flows tbody tr').forEach((tr,idx)=>tr.classList.toggle('sel', idx===i));
+}
+function onMode() {
+  const ssh = $('mode').value === 'ssh';
+  $('sshFields').style.display = ssh ? 'block' : 'none';
+  $('replayFields').style.display = ssh ? 'none' : 'block';
+}
+async function startCapture() {
+  try { await api('/api/capture', {iface:$('iface').value, out:$('capOut').value, duration:+$('capDur').value}); poll(); }
+  catch(e){ log('error: '+e.message); }
+}
+async function startReplay() {
+  try {
+    await api('/api/replay', {
+      pcap:$('pcap').value, iface:$('iface').value, targetIP:$('tIP').value,
+      port:+$('tPort').value, flow:+$('flow').value, mode:$('mode').value, noGuard:$('noGuard').checked
+    });
+    poll();
+  } catch(e){ log('error: '+e.message); }
+}
+async function startSSH() {
+  try {
+    await api('/api/ssh', {target:$('sshTarget').value, user:$('sshUser').value, password:$('sshPass').value,
+      commands:$('sshCmds').value.split('\n').map(s=>s.trim()).filter(Boolean)});
+    poll();
+  } catch(e){ log('error: '+e.message); }
+}
+async function stopJob(){ await api('/api/stop', {}); }
+async function rstRule(action) {
+  try {
+    const d = await api('/api/rstrule', {action, ip:$('rstIP').value, port:+$('rstPort').value});
+    $('rstList').innerHTML = (d.rules||[]).map(r=>'<span class="chip">'+esc(r)+'</span>').join('') || '<span class="muted">no active rules</span>';
+    if (d.armed) log('RST guard armed: '+d.armed);
+  } catch(e){ log('error: '+e.message); }
+}
+function log(s){ const l=$('log'); l.textContent += s+'\n'; l.scrollTop = l.scrollHeight; }
+let lastLen = 0, polling = false;
+async function poll() {
+  if (polling) return; polling = true;
+  const tick = async () => {
+    try {
+      const s = await api('/api/status');
+      const lines = s.lines || [];
+      for (let i=lastLen; i<lines.length; i++) log(lines[i]);
+      lastLen = lines.length;
+      const st = $('jobStatus');
+      if (s.running) { st.textContent = '● '+s.kind+' running'; st.className='status'; setTimeout(tick, 500); }
+      else { polling=false; if (s.done){ st.textContent = (s.ok?'✓ ':'✗ ')+s.kind+': '+s.summary; st.className='status '+(s.ok?'ok':'bad'); } }
+    } catch(e){ polling=false; }
+  };
+  tick();
+}
+onMode(); loadIfaces(); refreshPcaps();
+fetch('/api/ssh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>{ if(r.status===501) $('sshNote').textContent='(this build lacks SSH; rebuild with -tags ssh)'; });
+setInterval(()=>{ if(!polling) poll(); }, 2000);
+</script>
+</body>
+</html>
