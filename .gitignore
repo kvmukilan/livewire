@@ -22,3 +22,6 @@ CLAUDE.md
 INSTALL.md
 QUICKSTART.md
 .claude/
+
+# release artifacts
+dist/
