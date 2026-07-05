@@ -49,8 +49,15 @@ func liveReal(flows []*engine.Flow, flowSel int, target string, iface string, se
 // liveAll replays every flow as its own stateful connection, one after another.
 // Flows without a handshake are skipped. This is whole-pcap replay that still
 // maintains seq/ack — each connection individually.
+type flowFail struct {
+	idx    int
+	phase  string
+	reason string
+}
+
 func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose, statelessRest bool) error {
 	stateful, ok, stateless, skipped := 0, 0, 0, 0
+	var fails []flowFail
 	for i, f := range flows {
 		targetIP, targetPort, err := resolveTarget(target, f)
 		if err != nil {
@@ -80,11 +87,21 @@ func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, ve
 		res, err := livereplay.Run(cfg, func(line string) { fmt.Println(line) })
 		stateful++
 		if err != nil {
+			fails = append(fails, flowFail{i, "error", err.Error()})
 			fmt.Printf("  error: %v\n", err)
 			continue
 		}
 		if res.Outcome.Succeeded() {
 			ok++
+		} else {
+			fails = append(fails, flowFail{i, res.Outcome.Phase.String(), res.Outcome.Reason})
+		}
+	}
+
+	if len(fails) > 0 {
+		fmt.Println("\nflows that did not complete:")
+		for _, ff := range fails {
+			fmt.Printf("  flow %d: %s — %s\n", ff.idx, ff.phase, ff.reason)
 		}
 	}
 	fmt.Printf("\nsummary: %d stateful (%d completed), %d stateless, %d skipped\n", stateful, ok, stateless, skipped)
