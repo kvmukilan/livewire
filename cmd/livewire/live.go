@@ -30,8 +30,7 @@ func cmdLive(args []string) error {
 	target := fs.String("target", "", "live target ip[:port] (default: the captured server endpoint)")
 	noGuard := fs.Bool("no-rst-guard", false, "do not install host-RST suppression (host kernel may reset the flow)")
 	useTUI := fs.Bool("tui", false, "render a live status dashboard instead of the per-flow text report")
-	allFlows := fs.Bool("all", false, "replay every flow in the capture, each stateful, one after another")
-	statelessRest := fs.Bool("stateless-rest", false, "in -all: also send handshake-less flows statelessly (they won't get a live response)")
+	allFlows := fs.Bool("all", false, "replay every flow: stateful where a handshake exists, stateless (raw) for the rest")
 	fs.Usage = func() {
 		fmt.Println("usage:")
 		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-out rewritten.pcap] [-v]")
@@ -77,7 +76,7 @@ func cmdLive(args []string) error {
 			return fmt.Errorf("live replay needs -iface (the interface to transmit on)")
 		}
 		if *allFlows {
-			return liveAll(flows, *target, *iface, *seed, *noGuard, *verbose, *statelessRest)
+			return liveAll(flows, *target, *iface, *seed, *noGuard, *verbose)
 		}
 		return liveReal(flows, *flowSel, *target, *iface, *seed, *noGuard, *useTUI, *verbose)
 	}

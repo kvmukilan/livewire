@@ -55,7 +55,7 @@ type flowFail struct {
 	reason string
 }
 
-func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose, statelessRest bool) error {
+func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose bool) error {
 	stateful, ok, stateless, skipped := 0, 0, 0, 0
 	var fails []flowFail
 	for i, f := range flows {
@@ -69,12 +69,8 @@ func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, ve
 			Flow: f, Iface: iface, TargetIP: targetIP, TargetPort: targetPort,
 			Seed: seed, NoGuard: noGuard, Trace: verbose,
 		}
+		// No handshake to anchor -> send the frames raw (device won't respond).
 		if !f.HasSyn || !f.HasSynAck {
-			if !statelessRest {
-				fmt.Printf("flow %d: skip (no handshake)\n", i)
-				skipped++
-				continue
-			}
 			fmt.Printf("=== flow %d (stateless): %s -> %s:%d ===\n", i, f.Client, targetIP, targetPort)
 			if err := livereplay.SendStateless(cfg, func(line string) { fmt.Println(line) }); err != nil {
 				fmt.Printf("  error: %v\n", err)
