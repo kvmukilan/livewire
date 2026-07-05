@@ -46,6 +46,41 @@ func liveReal(flows []*engine.Flow, flowSel int, target string, iface string, se
 	return nil
 }
 
+// liveAll replays every flow as its own stateful connection, one after another.
+// Flows without a handshake are skipped. This is whole-pcap replay that still
+// maintains seq/ack — each connection individually.
+func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose bool) error {
+	replayed, ok, skipped := 0, 0, 0
+	for i, f := range flows {
+		if !f.HasSyn || !f.HasSynAck {
+			fmt.Printf("flow %d: skip (no handshake)\n", i)
+			skipped++
+			continue
+		}
+		targetIP, targetPort, err := resolveTarget(target, f)
+		if err != nil {
+			fmt.Printf("flow %d: skip (%v)\n", i, err)
+			skipped++
+			continue
+		}
+		fmt.Printf("=== flow %d: %s -> %s:%d ===\n", i, f.Client, targetIP, targetPort)
+		res, err := livereplay.Run(livereplay.Config{
+			Flow: f, Iface: iface, TargetIP: targetIP, TargetPort: targetPort,
+			Seed: seed, NoGuard: noGuard, Trace: verbose,
+		}, func(line string) { fmt.Println(line) })
+		replayed++
+		if err != nil {
+			fmt.Printf("  error: %v\n", err)
+			continue
+		}
+		if res.Outcome.Succeeded() {
+			ok++
+		}
+	}
+	fmt.Printf("\nsummary: %d flow(s) replayed, %d completed, %d skipped (no handshake)\n", replayed, ok, skipped)
+	return nil
+}
+
 func selectFlow(flows []*engine.Flow, sel int) (*engine.Flow, error) {
 	if sel < 0 {
 		if len(flows) != 1 {
