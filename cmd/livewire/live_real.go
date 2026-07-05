@@ -49,26 +49,36 @@ func liveReal(flows []*engine.Flow, flowSel int, target string, iface string, se
 // liveAll replays every flow as its own stateful connection, one after another.
 // Flows without a handshake are skipped. This is whole-pcap replay that still
 // maintains seq/ack — each connection individually.
-func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose bool) error {
-	replayed, ok, skipped := 0, 0, 0
+func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, verbose, statelessRest bool) error {
+	stateful, ok, stateless, skipped := 0, 0, 0, 0
 	for i, f := range flows {
-		if !f.HasSyn || !f.HasSynAck {
-			fmt.Printf("flow %d: skip (no handshake)\n", i)
-			skipped++
-			continue
-		}
 		targetIP, targetPort, err := resolveTarget(target, f)
 		if err != nil {
 			fmt.Printf("flow %d: skip (%v)\n", i, err)
 			skipped++
 			continue
 		}
-		fmt.Printf("=== flow %d: %s -> %s:%d ===\n", i, f.Client, targetIP, targetPort)
-		res, err := livereplay.Run(livereplay.Config{
+		cfg := livereplay.Config{
 			Flow: f, Iface: iface, TargetIP: targetIP, TargetPort: targetPort,
 			Seed: seed, NoGuard: noGuard, Trace: verbose,
-		}, func(line string) { fmt.Println(line) })
-		replayed++
+		}
+		if !f.HasSyn || !f.HasSynAck {
+			if !statelessRest {
+				fmt.Printf("flow %d: skip (no handshake)\n", i)
+				skipped++
+				continue
+			}
+			fmt.Printf("=== flow %d (stateless): %s -> %s:%d ===\n", i, f.Client, targetIP, targetPort)
+			if err := livereplay.SendStateless(cfg, func(line string) { fmt.Println(line) }); err != nil {
+				fmt.Printf("  error: %v\n", err)
+				continue
+			}
+			stateless++
+			continue
+		}
+		fmt.Printf("=== flow %d: %s -> %s:%d ===\n", i, f.Client, targetIP, targetPort)
+		res, err := livereplay.Run(cfg, func(line string) { fmt.Println(line) })
+		stateful++
 		if err != nil {
 			fmt.Printf("  error: %v\n", err)
 			continue
@@ -77,7 +87,7 @@ func liveAll(flows []*engine.Flow, target, iface string, seed int64, noGuard, ve
 			ok++
 		}
 	}
-	fmt.Printf("\nsummary: %d flow(s) replayed, %d completed, %d skipped (no handshake)\n", replayed, ok, skipped)
+	fmt.Printf("\nsummary: %d stateful (%d completed), %d stateless, %d skipped\n", stateful, ok, stateless, skipped)
 	return nil
 }
 

@@ -33,6 +33,34 @@ type Result struct {
 	GuardArmed       bool
 }
 
+// SendStateless blasts a flow's captured frames onto the wire as-is, retargeting
+// only the layer-2 addresses. Used for flows that can't be replayed statefully
+// (no handshake to anchor). The device won't form a connection from these — they
+// carry mid-stream sequence numbers — but the frames go out.
+func SendStateless(cfg Config, log func(string)) error {
+	f := cfg.Flow
+	if f == nil {
+		return fmt.Errorf("livereplay: nil flow")
+	}
+	lb, err := backend.OpenLive(backend.LiveConfig{
+		Iface: cfg.Iface, Target: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: f.Client.Port, Promisc: true,
+	})
+	if err != nil {
+		return err
+	}
+	defer lb.Backend.Close()
+	b := backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
+	n := 0
+	for _, cp := range f.Packets {
+		if err := b.Send(cp.Rec.Data); err != nil {
+			return err
+		}
+		n++
+	}
+	log(fmt.Sprintf("stateless: sent %d frame(s)", n))
+	return nil
+}
+
 // Run executes a stateful replay of cfg.Flow against the live target, sending
 // progress and trace lines to log. It arms and releases the RST-suppression guard.
 func Run(cfg Config, log func(string)) (Result, error) {
