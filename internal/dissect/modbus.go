@@ -8,6 +8,7 @@ package dissect
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // MBAP header: transaction id, protocol id, length, unit id.
@@ -75,6 +76,145 @@ func ParseModbusStream(buf []byte) (adus []MBAP, leftover int, err error) {
 		off += n
 	}
 	return adus, 0, nil
+}
+
+// IsException reports whether this ADU is a Modbus exception response: the
+// server sets the high bit of the function code (fn | 0x80) and the single data
+// byte carries the exception code.
+func (m MBAP) IsException() bool { return m.Function&0x80 != 0 }
+
+// ExceptionCode returns the exception code of an exception response, or 0 if the
+// ADU is not an exception (or carries no code byte).
+func (m MBAP) ExceptionCode() uint8 {
+	if !m.IsException() || len(m.Data) < 1 {
+		return 0
+	}
+	return m.Data[0]
+}
+
+// FunctionName maps a Modbus function code to a short human label. The high bit
+// is masked off first, so an exception response names its underlying function.
+func FunctionName(code uint8) string {
+	switch code & 0x7f {
+	case 0x01:
+		return "read-coils"
+	case 0x02:
+		return "read-discrete-inputs"
+	case 0x03:
+		return "read-holding-registers"
+	case 0x04:
+		return "read-input-registers"
+	case 0x05:
+		return "write-single-coil"
+	case 0x06:
+		return "write-single-register"
+	case 0x07:
+		return "read-exception-status"
+	case 0x08:
+		return "diagnostics"
+	case 0x0b:
+		return "get-comm-event-counter"
+	case 0x0c:
+		return "get-comm-event-log"
+	case 0x0f:
+		return "write-multiple-coils"
+	case 0x10:
+		return "write-multiple-registers"
+	case 0x11:
+		return "report-server-id"
+	case 0x16:
+		return "mask-write-register"
+	case 0x17:
+		return "read-write-multiple-registers"
+	case 0x18:
+		return "read-fifo-queue"
+	case 0x2b:
+		return "encapsulated-transport"
+	}
+	return "unknown"
+}
+
+// ExceptionName maps a Modbus exception code to its standard label (IEC 61131 /
+// the Modbus spec, table of exception codes).
+func ExceptionName(code uint8) string {
+	switch code {
+	case 0x01:
+		return "illegal-function"
+	case 0x02:
+		return "illegal-data-address"
+	case 0x03:
+		return "illegal-data-value"
+	case 0x04:
+		return "server-device-failure"
+	case 0x05:
+		return "acknowledge"
+	case 0x06:
+		return "server-device-busy"
+	case 0x08:
+		return "memory-parity-error"
+	case 0x0a:
+		return "gateway-path-unavailable"
+	case 0x0b:
+		return "gateway-target-no-response"
+	}
+	return "unknown"
+}
+
+// ADUDiff is one difference between an expected (captured) response ADU and the
+// one a live device actually returned. Structural diffs mean the exchange did
+// not reproduce (wrong function, an exception, a bad id echo); a non-structural
+// diff is a value drift (e.g. register contents changed since capture) that a
+// lenient check tolerates.
+type ADUDiff struct {
+	Structural bool
+	Detail     string
+}
+
+// CompareADU checks a live response ADU against the captured one it should
+// reproduce and returns the differences, most significant first. An empty slice
+// means the live response matched the capture byte-for-byte.
+func CompareADU(want, got MBAP) []ADUDiff {
+	var diffs []ADUDiff
+
+	// An exception where the capture had a normal reply is the headline failure.
+	if got.IsException() && !want.IsException() {
+		ec := got.ExceptionCode()
+		diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+			"expected function 0x%02x (%s), got exception 0x%02x code 0x%02x (%s)",
+			want.Function, FunctionName(want.Function), got.Function, ec, ExceptionName(ec))})
+		return diffs
+	}
+	if got.Function != want.Function {
+		diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+			"expected function 0x%02x (%s), got 0x%02x (%s)",
+			want.Function, FunctionName(want.Function), got.Function, FunctionName(got.Function))})
+	}
+	if got.TransactionID != want.TransactionID {
+		diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+			"transaction id not echoed: capture 0x%04x, live 0x%04x", want.TransactionID, got.TransactionID)})
+	}
+	if got.UnitID != want.UnitID {
+		diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+			"unit id mismatch: capture 0x%02x, live 0x%02x", want.UnitID, got.UnitID)})
+	}
+	// Same framing, different payload: a value drift, not a protocol failure.
+	if got.Function == want.Function && !bytesEqual(want.Data, got.Data) {
+		diffs = append(diffs, ADUDiff{false, fmt.Sprintf(
+			"response data differs: capture [% x], live [% x]", want.Data, got.Data)})
+	}
+	return diffs
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // EncodeMBAP serialises an ADU, recomputing Length from the PDU so a mutated

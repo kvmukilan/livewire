@@ -47,6 +47,16 @@ type MockPeer struct {
 	dropUsed     bool
 	stash        [][]byte // withheld frames, re-emitted on client retransmit
 	lastClientTS uint32
+
+	// RespTransform, when set, rewrites each server payload before it goes on the
+	// wire — models a live device that answers differently than the capture (an
+	// exception reply, drifted register values). Nil replays faithfully.
+	RespTransform func(payload []byte) []byte
+
+	// serverDrift tracks the running byte difference a length-changing transform
+	// introduced, so the peer shifts its own later server sequence numbers to
+	// stay a coherent stream (a real device that simply answers shorter/longer).
+	serverDrift uint32
 }
 
 // NewMockPeer builds a simulated device for a flow. Timestamp bases come from
@@ -133,6 +143,22 @@ func (p *MockPeer) render(cp CapturedPacket) [][]byte {
 	buf, _, err := p.sess.Rewrite(cp)
 	if err != nil {
 		return nil
+	}
+	// Shift this server packet by the drift accumulated from earlier
+	// length-changing replies, keeping the peer's own stream contiguous.
+	if p.serverDrift != 0 {
+		if pk, e := wire.Parse(buf, p.link); e == nil && pk.IsTCP() {
+			pk.SetSeq(pk.Seq().AddDelta(p.serverDrift))
+			pk.RecalcChecksums()
+		}
+	}
+	if p.RespTransform != nil && cp.PayloadLen > 0 {
+		if pk, e := wire.Parse(buf, p.link); e == nil && pk.IsTCP() {
+			old := append([]byte(nil), pk.Payload()[:pk.PayloadLen()]...)
+			np := p.RespTransform(old)
+			buf = pk.RebuildWithPayload(np)
+			p.serverDrift += uint32(len(np) - len(old)) // affects subsequent packets
+		}
 	}
 	p.fixTSecr(buf)
 	hasPayload := cp.PayloadLen > 0

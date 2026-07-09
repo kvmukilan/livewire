@@ -264,6 +264,9 @@ func (s *Server) runReplay(j *job, path string, req replayReq) {
 	res, err := livereplay.Run(livereplay.Config{
 		Flow: f, Iface: req.Iface, TargetIP: targetIP, TargetPort: targetPort,
 		Seed: req.Seed, NoGuard: req.NoGuard, Trace: true,
+		// Smart defaults, matching the CLI: wait for and validate the device's
+		// replies, and stay coherent if it answers differently than the capture.
+		Verify: engine.VerifyLenient, Adaptive: true,
 	}, j.log)
 	if err != nil {
 		j.log(err.Error())

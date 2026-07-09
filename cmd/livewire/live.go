@@ -31,6 +31,12 @@ func cmdLive(args []string) error {
 	noGuard := fs.Bool("no-rst-guard", false, "do not install host-RST suppression (host kernel may reset the flow)")
 	useTUI := fs.Bool("tui", false, "render a live status dashboard instead of the per-flow text report")
 	allFlows := fs.Bool("all", false, "replay every flow: stateful where a handshake exists, stateless (raw) for the rest")
+	verify := fs.String("verify", "lenient", "check server replies against the capture: off | lenient | strict (Modbus/DNP3-aware)")
+	adaptive := fs.Bool("adaptive", true, "wait for and re-anchor on the live server's real replies so a shorter/longer answer than the capture still completes (use -adaptive=false for byte-exact replay)")
+	pace := fs.Bool("pace", false, "reproduce the capture's original inter-packet timing instead of replaying as fast as the device answers")
+	rawL4 := fs.Bool("raw-l4", false, "replay the client's frames exactly as captured (retransmits, RSTs, original acks) instead of driving a clean state machine")
+	sequential := fs.Bool("sequential", false, "with -all, replay flows one at a time instead of concurrently")
+	report := fs.String("report", "", "write a JSON replay report (per-flow result, reply divergences, and likely-cause diagnosis) to this file")
 	fs.Usage = func() {
 		fmt.Println("usage:")
 		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-out rewritten.pcap] [-v]")
@@ -75,10 +81,19 @@ func cmdLive(args []string) error {
 		if *iface == "" {
 			return fmt.Errorf("live replay needs -iface (the interface to transmit on)")
 		}
-		if *allFlows {
-			return liveAll(flows, *target, *iface, *seed, *noGuard, *verbose)
+		vmode, err := engine.ParseVerifyMode(*verify)
+		if err != nil {
+			return err
 		}
-		return liveReal(flows, *flowSel, *target, *iface, *seed, *noGuard, *useTUI, *verbose)
+		opts := liveOpts{
+			target: *target, iface: *iface, seed: *seed, noGuard: *noGuard,
+			verbose: *verbose, useTUI: *useTUI, verify: vmode, adaptive: *adaptive,
+			pace: *pace, rawL4: *rawL4, sequential: *sequential, report: *report,
+		}
+		if *allFlows {
+			return liveAll(flows, opts)
+		}
+		return liveReal(flows, *flowSel, opts)
 	}
 
 	opts := engine.Options{Seed: *seed}

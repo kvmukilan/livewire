@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.1.4"
+const version = "0.3.0"
 
 type command struct {
 	name    string

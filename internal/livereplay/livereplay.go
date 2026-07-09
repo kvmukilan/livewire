@@ -22,8 +22,12 @@ type Config struct {
 	TargetIP   netip.Addr
 	TargetPort uint16
 	Seed       int64
-	NoGuard    bool // skip host-RST suppression
-	Trace      bool // emit a per-frame TX/RX trace
+	NoGuard    bool              // skip host-RST suppression
+	Trace      bool              // emit a per-frame TX/RX trace
+	Verify     engine.VerifyMode // check live replies against the capture
+	Adaptive   bool              // re-anchor the ACK clock on the live server's real output
+	Pace       bool              // reproduce the capture's original inter-packet timing
+	RawL4      bool              // replay the client's frames exactly as captured (no response gating)
 }
 
 // Result reports the outcome of a replay.
@@ -69,7 +73,12 @@ func Run(cfg Config, log func(string)) (Result, error) {
 		return Result{}, fmt.Errorf("livereplay: nil flow")
 	}
 	if !f.HasSyn || !f.HasSynAck {
-		return Result{}, fmt.Errorf("flow lacks a full handshake; stateful replay needs the SYN/SYN-ACK to anchor ISNs")
+		sf, serr := engine.SynthesizeHandshake(f)
+		if serr != nil {
+			return Result{}, fmt.Errorf("flow lacks a handshake and one can't be synthesized: %w", serr)
+		}
+		log("no handshake in capture; synthesizing a SYN to open the connection (experimental)")
+		f = sf
 	}
 	localPort := f.Client.Port
 	log(fmt.Sprintf("live stateful replay: %s -> %s:%d on %s", f.Client, cfg.TargetIP, cfg.TargetPort, cfg.Iface))
@@ -115,7 +124,20 @@ func Run(cfg Config, log func(string)) (Result, error) {
 		b = newTracer(b, log)
 	}
 
-	conv, err := engine.NewConversation(f, engine.Options{Seed: cfg.Seed}, engine.ConvConfig{})
+	if cfg.Verify != engine.VerifyOff {
+		log("reply verification: " + cfg.Verify.String() + " (waiting for and checking server replies against the capture)")
+	}
+	if cfg.Adaptive {
+		log("adaptive clock: acking the live server's real output; a shorter/longer reply than the capture won't stall the flow")
+	}
+	if cfg.Pace {
+		log("pacing: reproducing the capture's original inter-packet timing")
+	}
+	if cfg.RawL4 {
+		log("raw-L4: replaying the client's frames exactly as captured (retransmits, RSTs, original acks)")
+	}
+	conv, err := engine.NewConversation(f, engine.Options{Seed: cfg.Seed},
+		engine.ConvConfig{Verify: cfg.Verify, Adaptive: cfg.Adaptive, Pace: cfg.Pace, RawL4: cfg.RawL4})
 	if err != nil {
 		return Result{}, err
 	}
@@ -133,6 +155,13 @@ func Run(cfg Config, log func(string)) (Result, error) {
 		log(fmt.Sprintf("SUCCESS: handshake-through-close completed; %d frames sent, %d retransmits", out.Sent, out.Retransmits))
 	} else {
 		log(fmt.Sprintf("replay ended in phase %s: %s (sent %d frames)", out.Phase, out.Reason, out.Sent))
+	}
+	if cfg.Verify != engine.VerifyOff {
+		if out.RepliesMatched() {
+			log(fmt.Sprintf("reply check: replies matched the capture (%d divergence note(s))", len(out.Mismatches)-out.ReplyMismatches))
+		} else {
+			log(fmt.Sprintf("reply check: %d structural divergence(s) from the capture", out.ReplyMismatches))
+		}
 	}
 	return res, nil
 }

@@ -3,6 +3,7 @@ package dissect
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 // DNP3 (IEEE 1815) framing, three stacked layers:
@@ -172,6 +173,82 @@ func ParseDNP3(buf []byte) (d DNP3, consumed int, err error) {
 		d.AppFunc = app[2]
 	}
 	return d, total, nil
+}
+
+// DNP3FunctionName maps an application function code to a short label (the
+// common request/response codes; responses are 0x81/0x82).
+func DNP3FunctionName(code uint8) string {
+	switch code {
+	case 0x00:
+		return "confirm"
+	case 0x01:
+		return "read"
+	case 0x02:
+		return "write"
+	case 0x03:
+		return "select"
+	case 0x04:
+		return "operate"
+	case 0x05:
+		return "direct-operate"
+	case 0x0d:
+		return "cold-restart"
+	case 0x0e:
+		return "warm-restart"
+	case 0x14:
+		return "enable-unsolicited"
+	case 0x15:
+		return "disable-unsolicited"
+	case 0x17:
+		return "delay-measure"
+	case 0x81:
+		return "response"
+	case 0x82:
+		return "unsolicited-response"
+	}
+	return "unknown"
+}
+
+// ParseDNP3Stream parses every complete DNP3 link frame in buf. A trailing
+// partial frame is reported via leftover (like ParseModbusStream).
+func ParseDNP3Stream(buf []byte) (frames []DNP3, leftover int, err error) {
+	off := 0
+	for off < len(buf) {
+		d, n, e := ParseDNP3(buf[off:])
+		if e != nil {
+			if errors.Is(e, ErrDNP3Short) || errors.Is(e, ErrDNP3Truncated) {
+				return frames, len(buf) - off, nil // incomplete tail
+			}
+			return frames, 0, e
+		}
+		frames = append(frames, d)
+		off += n
+	}
+	return frames, 0, nil
+}
+
+// CompareDNP3 checks a live DNP3 response frame against the captured one it
+// should reproduce, mirroring CompareADU. A differing application function or
+// application sequence is structural; user-data drift is a tolerated value
+// change.
+func CompareDNP3(want, got DNP3) []ADUDiff {
+	var diffs []ADUDiff
+	if want.HasApp || got.HasApp {
+		if want.AppFunc != got.AppFunc {
+			diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+				"expected app function 0x%02x (%s), got 0x%02x (%s)",
+				want.AppFunc, DNP3FunctionName(want.AppFunc), got.AppFunc, DNP3FunctionName(got.AppFunc))})
+		}
+		if want.AppSeq != got.AppSeq {
+			diffs = append(diffs, ADUDiff{true, fmt.Sprintf(
+				"application sequence mismatch: capture %d, live %d", want.AppSeq, got.AppSeq)})
+		}
+	}
+	if want.AppFunc == got.AppFunc && !bytesEqual(want.UserData, got.UserData) {
+		diffs = append(diffs, ADUDiff{false, fmt.Sprintf(
+			"response data differs: capture [% x], live [% x]", want.UserData, got.UserData)})
+	}
+	return diffs
 }
 
 // transportOctet rebuilds the transport control byte from FIN/FIR/SEQ.

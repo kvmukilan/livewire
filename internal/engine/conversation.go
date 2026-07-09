@@ -72,6 +72,10 @@ type Action struct {
 	Bytes  []byte
 	Delay  time.Duration
 	Reason string
+	// At is the captured send time of this frame relative to the flow's first
+	// packet. The driver uses it to pace an on-wire replay to the original
+	// timing; zero (or pacing off) sends as soon as the gate opens.
+	At time.Duration
 }
 
 // ConvConfig tunes retransmission behaviour.
@@ -80,6 +84,26 @@ type ConvConfig struct {
 	ResendBudget int
 	// RTO is the base retransmit timeout; it doubles per resend. Zero uses DefaultRTO.
 	RTO time.Duration
+	// Verify controls whether the live server's replies are checked against the
+	// capture. The zero value (VerifyOff) preserves the TCP-only behaviour.
+	Verify VerifyMode
+	// Adaptive makes the replay re-anchor on what the live server actually sends
+	// instead of assuming byte-identical responses: client ACKs acknowledge the
+	// live server's real high-water mark, and a turn completes once the server
+	// goes quiescent even if it answered with fewer bytes than the capture (e.g.
+	// a Modbus exception). Off by default (the exact byte-clock is used).
+	Adaptive bool
+	// Pace replays each client packet no earlier than its captured time offset,
+	// reproducing the original inter-packet timing instead of sending as fast as
+	// the peer answers. Off by default.
+	Pace bool
+	// RawL4 replays the client's frames exactly as captured — every packet in
+	// order including retransmissions, unusual flag combinations, and RSTs, with
+	// the original acknowledgement numbers (fixed-delta rewrite) — instead of
+	// driving a clean, response-gated state machine. Only the SYN-ACK is waited
+	// on, to learn the live server ISN. For reproducing bugs triggered by the
+	// messy TCP the client originally produced. Off by default.
+	RawL4 bool
 }
 
 const (
@@ -99,7 +123,8 @@ type Conversation struct {
 	cfg  ConvConfig
 
 	phase Phase
-	ci    int // index of the next captured packet to process
+	ci    int       // index of the next captured packet to process
+	t0    time.Time // capture time of the flow's first packet, for pacing
 
 	// serverRcvd is the next contiguous sequence expected from the server;
 	// everything below it has been delivered. Gates client packets.
@@ -112,6 +137,16 @@ type Conversation struct {
 	lastData []byte
 	resends  int
 	rto      time.Duration
+
+	// verify checks live replies against the capture; nil when verification off.
+	verify *respVerifier
+
+	// Adaptive-clock state (used only when cfg.Adaptive is set).
+	adaptive      bool
+	rawL4         bool
+	waitingServer bool      // pump last blocked waiting for a server reply
+	turnDrained   bool      // current server turn accepted as complete despite a byte shortfall
+	turnBase      units.Seq // serverRcvd at the start of the current server turn (after the request went out)
 }
 
 // NewConversation builds a conversation for a captured flow. The flow must
@@ -131,13 +166,28 @@ func NewConversation(f *Flow, opts Options, cfg ConvConfig) (*Conversation, erro
 	}
 	cISN, _, tsC, tsS := opts.isns()
 	return &Conversation{
-		flow:  f,
-		sess:  NewSession(f, units.Seq(cISN), tsC, tsS), // server ISN learned later
-		link:  f.Packets[0].Rec.LinkType,
-		cfg:   cfg,
-		phase: PhaseInit,
-		rto:   cfg.RTO,
+		flow:     f,
+		sess:     NewSession(f, units.Seq(cISN), tsC, tsS), // server ISN learned later
+		link:     f.Packets[0].Rec.LinkType,
+		cfg:      cfg,
+		phase:    PhaseInit,
+		rto:      cfg.RTO,
+		verify:   newRespVerifier(f, cfg.Verify),
+		adaptive: cfg.Adaptive,
+		rawL4:    cfg.RawL4,
+		t0:       f.Packets[0].Rec.Time,
 	}, nil
+}
+
+// VerifyMode reports the reply-verification mode this conversation runs in.
+func (c *Conversation) VerifyMode() VerifyMode { return c.cfg.Verify }
+
+// Mismatches returns every reply divergence found against the capture so far.
+func (c *Conversation) Mismatches() []Mismatch {
+	if c.verify == nil {
+		return nil
+	}
+	return c.verify.all
 }
 
 // Phase reports the current lifecycle phase.
@@ -171,23 +221,44 @@ func (c *Conversation) Poll(ev Event) []Action {
 // pump sends every client packet whose gate is open and skips already-delivered
 // server packets, until it blocks on the peer (arming a timer) or reaches the end.
 func (c *Conversation) pump() []Action {
+	if c.rawL4 {
+		return c.pumpRaw()
+	}
 	var acts []Action
+	c.waitingServer = false
 	for c.ci < len(c.flow.Packets) {
 		cp := c.flow.Packets[c.ci]
 
 		if cp.Dir == S2C {
-			// Server packet: wait for it rather than send it. Advance only once the
-			// server has delivered through its end.
+			// Server packet: wait for it rather than send it. The exact byte-clock
+			// advances once the server has delivered through this packet's mapped
+			// end; this also consumes the SYN-ACK and pure-ACKs in both modes.
 			if c.serverKnown && c.serverRcvd.GreaterEqual(c.serverEnd(cp)) {
 				c.ci++
 				continue
 			}
+			// Adaptive mode measures the whole server turn relative to the moment
+			// the request went out, so it stays correct even after an earlier
+			// length divergence shifted the live stream off the captured layout: a
+			// turn completes when the device has delivered the run's byte count, or
+			// when it went quiescent having answered short.
+			if c.adaptive && c.serverKnown {
+				delivered := c.turnBase.Delta(c.serverRcvd)
+				if delivered >= c.runBytes(c.ci) || c.turnDrained || c.framedTurnComplete(c.ci) {
+					c.ci = c.runEnd(c.ci)
+					c.turnDrained = false
+					continue
+				}
+			}
+			c.waitingServer = true
 			return append(acts, c.armWait())
 		}
 
-		// Client packet: gate on the server having delivered everything it acks.
-		// The byte-count clock, independent of how the server segmented.
-		if c.serverKnown && cp.Ack {
+		// Client packet. The exact byte-clock gates the send on the server having
+		// delivered everything this packet acks; adaptive mode instead relies on
+		// the S2C waits above for ordering and rewrites the ack to the live
+		// high-water mark below, so a shorter/longer reply stays coherent.
+		if !c.adaptive && c.serverKnown && cp.Ack {
 			liveAck := cp.AckN.AddDelta(c.sess.ServerDelta)
 			if c.serverRcvd.Less(liveAck) {
 				return append(acts, c.armWait())
@@ -199,11 +270,18 @@ func (c *Conversation) pump() []Action {
 			c.phase = PhaseAborted
 			return append(acts, Action{Kind: ActAbort, Reason: "rewrite: " + err.Error()})
 		}
-		acts = append(acts, Action{Kind: ActSend, Bytes: buf})
+		if c.adaptive && c.serverKnown && cp.Ack {
+			if nb, ok := reAck(buf, c.link, c.serverRcvd); ok {
+				buf = nb
+			}
+		}
+		acts = append(acts, Action{Kind: ActSend, Bytes: buf, At: cp.Rec.Time.Sub(c.t0)})
 		if cp.SegLen > 0 { // SYN/FIN/data consume sequence space, retransmittable
 			c.lastData = buf
 			c.resends = 0
 			c.rto = c.cfg.RTO
+			c.turnBase = c.serverRcvd // the next server turn is measured from here
+			c.turnDrained = false     // a new client turn must earn a fresh server reply
 		}
 		switch {
 		case cp.IsSyn:
@@ -215,6 +293,63 @@ func (c *Conversation) pump() []Action {
 	}
 	c.phase = PhaseClosed
 	return append(acts, Action{Kind: ActDone})
+}
+
+// pumpRaw replays the client side exactly as captured: it fires every
+// client-to-server packet in order (retransmissions, odd flags, RSTs included)
+// with fixed-delta seq/ack rewriting, waiting only for the SYN-ACK to learn the
+// live server ISN. Server packets are not gated on.
+func (c *Conversation) pumpRaw() []Action {
+	var acts []Action
+	c.waitingServer = false
+	for c.ci < len(c.flow.Packets) {
+		cp := c.flow.Packets[c.ci]
+
+		if cp.Dir == S2C {
+			if !c.serverKnown {
+				c.waitingServer = true // only the SYN-ACK is worth waiting for
+				return append(acts, c.armWait())
+			}
+			c.ci++
+			continue
+		}
+
+		// A client packet that acknowledges the server can't go until we've
+		// learned the live server ISN to rewrite its ack against.
+		if cp.Ack && !c.serverKnown {
+			c.waitingServer = true
+			return append(acts, c.armWait())
+		}
+
+		buf, _, err := c.sess.Rewrite(cp) // preserves flags (incl. RST) and captured acks
+		if err != nil {
+			c.phase = PhaseAborted
+			return append(acts, Action{Kind: ActAbort, Reason: "rewrite: " + err.Error()})
+		}
+		acts = append(acts, Action{Kind: ActSend, Bytes: buf, At: cp.Rec.Time.Sub(c.t0)})
+		switch {
+		case cp.IsSyn:
+			c.phase = PhaseSynSent
+		case cp.IsFin:
+			c.phase = PhaseClosing
+		}
+		c.ci++
+	}
+	c.phase = PhaseClosed
+	return append(acts, Action{Kind: ActDone})
+}
+
+// reAck overwrites a client frame's acknowledgement number with the live
+// server's real delivery high-water mark and recomputes checksums. buf is a
+// fresh copy owned by the caller, so mutating it in place is safe.
+func reAck(buf []byte, link wire.LinkType, ack units.Seq) ([]byte, bool) {
+	p, err := wire.Parse(buf, link)
+	if err != nil || !p.IsTCP() {
+		return nil, false
+	}
+	p.SetAck(units.Ack(ack))
+	p.RecalcChecksums()
+	return buf, true
 }
 
 // onRecv folds a received frame in: learn the server ISN from the SYN-ACK,
@@ -235,6 +370,7 @@ func (c *Conversation) onRecv(frame []byte) []Action {
 		c.sess.LearnServerISN(p.Seq())
 		c.serverKnown = true
 		c.serverRcvd = c.sess.LiveServerISN.Add(1)
+		c.turnBase = c.serverRcvd // base for any reply before the first request
 		c.phase = PhaseEstablished
 		return c.pump()
 	}
@@ -248,8 +384,52 @@ func (c *Conversation) onRecv(frame []byte) []Action {
 		if seq.LessEqual(c.serverRcvd) && end.Greater(c.serverRcvd) {
 			c.serverRcvd = end
 		}
+		if acts := c.verifyReply(p); acts != nil {
+			if c.phase == PhaseAborted {
+				return acts // strict-mode abort; stop here
+			}
+			return append(acts, c.pump()...)
+		}
 	}
 	return c.pump()
+}
+
+// verifyReply folds a live server frame's payload into the verifier and turns
+// any new divergences into log actions. In VerifyStrict a structural divergence
+// aborts the flow; VerifyLenient only reports. Returns nil when nothing to say.
+func (c *Conversation) verifyReply(p *wire.Packet) []Action {
+	if c.verify == nil {
+		return nil
+	}
+	pl := p.PayloadLen()
+	if pl <= 0 {
+		return nil
+	}
+	pay := p.Payload()
+	if pl > len(pay) {
+		return nil
+	}
+	// Offset of this segment within the server's data stream (first byte is ISN+1).
+	off := int(c.sess.LiveServerISN.Add(1).Delta(p.Seq()))
+	c.verify.deliver(off, pay[:pl])
+
+	newMism := c.verify.check()
+	if len(newMism) == 0 {
+		return nil
+	}
+	var acts []Action
+	var structural bool
+	for _, m := range newMism {
+		acts = append(acts, Action{Kind: ActLog, Reason: "reply-mismatch: " + m.Detail})
+		if m.Structural {
+			structural = true
+		}
+	}
+	if c.cfg.Verify == VerifyStrict && structural {
+		c.phase = PhaseAborted
+		acts = append(acts, Action{Kind: ActAbort, Reason: "live reply diverged from capture: " + newMism[0].Detail})
+	}
+	return acts
 }
 
 // onTimeout retransmits the last sequence-consuming client frame with RTO
@@ -257,6 +437,14 @@ func (c *Conversation) onRecv(frame []byte) []Action {
 func (c *Conversation) onTimeout() []Action {
 	if c.phase == PhaseClosed || c.phase == PhaseAborted {
 		return nil
+	}
+	// Adaptive quiescence: we're blocked waiting on a server reply that has
+	// already begun arriving but stopped short of the captured length. Treat the
+	// silence as the device having finished its (shorter) reply and move on,
+	// rather than retransmitting forever against a server that answered fine.
+	if c.adaptive && c.serverKnown && c.waitingServer && c.turnBase.Less(c.serverRcvd) {
+		c.turnDrained = true
+		return c.pump()
 	}
 	if c.lastData == nil {
 		return []Action{c.armWait()}
@@ -278,6 +466,46 @@ func (c *Conversation) onTimeout() []Action {
 // serverEnd is the live-space end sequence of a captured server packet.
 func (c *Conversation) serverEnd(cp CapturedPacket) units.Seq {
 	return cp.Seq.AddDelta(c.sess.ServerDelta).Add(cp.SegLen)
+}
+
+// runBytes sums the sequence-space length of the contiguous run of server
+// packets starting at index i — the byte count the live device must deliver to
+// satisfy this turn.
+func (c *Conversation) runBytes(i int) uint32 {
+	var n uint32
+	for ; i < len(c.flow.Packets) && c.flow.Packets[i].Dir == S2C; i++ {
+		n += c.flow.Packets[i].SegLen
+	}
+	return n
+}
+
+// runEnd returns the index just past the contiguous run of server packets
+// starting at i.
+func (c *Conversation) runEnd(i int) int {
+	for ; i < len(c.flow.Packets) && c.flow.Packets[i].Dir == S2C; i++ {
+	}
+	return i
+}
+
+// framedTurnComplete reports whether the live device has already delivered every
+// application message the captured server run at index i contains — letting an
+// adaptive turn finish the instant a full framed reply arrives (e.g. a complete
+// Modbus exception ADU) instead of waiting for the quiescence timer. Returns
+// false for unframed protocols or when verification is off.
+func (c *Conversation) framedTurnComplete(i int) bool {
+	if !c.verify.framed() {
+		return false
+	}
+	var runPayload []byte
+	for j := i; j < len(c.flow.Packets) && c.flow.Packets[j].Dir == S2C; j++ {
+		runPayload = append(runPayload, payloadOf(c.flow.Packets[j])...)
+	}
+	expected := countMessages(c.verify.proto, runPayload)
+	if expected == 0 {
+		return false
+	}
+	baseOff := int(c.sess.LiveServerISN.Add(1).Delta(c.turnBase))
+	return c.verify.liveMessagesSince(baseOff) >= expected
 }
 
 // armWait schedules the retransmit timer for the current RTO.
