@@ -62,6 +62,7 @@ func liveReal(flows []*engine.Flow, flowSel int, o liveOpts) error {
 		fmt.Println()
 		renderDashboard(o.iface, fmt.Sprintf("%s:%d", targetIP, targetPort), []tuiFlowState{st})
 	}
+	printVerdict("", res)
 	if o.report != "" {
 		rep := newReplayReport(o)
 		rep.add(0, f, fmt.Sprintf("%s:%d", targetIP, targetPort), "stateful", res, nil)
@@ -96,13 +97,13 @@ type oneFlowResult struct {
 	err    error
 }
 
-// liveAll replays every flow in the capture. By default the flows run
-// concurrently, each started at its captured time offset when -pace is set (so
-// overlapping connections overlap on the wire as they did in the recording) —
-// the fidelity that "only happens under load" bugs need. -sequential forces the
-// old one-at-a-time behaviour.
-func liveAll(flows []*engine.Flow, o liveOpts) error {
-	// Resolve targets up front; skip flows whose target can't be resolved.
+// replayAllFlows replays every flow in the capture and returns the per-flow
+// results. By default flows run concurrently, each started at its captured time
+// offset when -pace is set (so overlapping connections overlap on the wire as
+// they did in the recording) — the fidelity that "only happens under load" bugs
+// need. -sequential forces one-at-a-time. logf carries progress; idx<0 is a
+// global line, idx>=0 is scoped to a flow. Shared by `live -all` and `reproduce`.
+func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line string)) (results []oneFlowResult, skipped int) {
 	type task struct {
 		idx    int
 		flow   *engine.Flow
@@ -111,7 +112,6 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 		offset time.Duration
 	}
 	var tasks []task
-	skipped := 0
 	var earliest time.Time
 	for _, f := range flows {
 		if len(f.Packets) > 0 {
@@ -124,7 +124,7 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 	for i, f := range flows {
 		targetIP, targetPort, err := resolveTarget(o.target, f)
 		if err != nil {
-			fmt.Printf("flow %d: skip (%v)\n", i, err)
+			logf(i, fmt.Sprintf("skip (%v)", err))
 			skipped++
 			continue
 		}
@@ -138,12 +138,6 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 		})
 	}
 
-	var mu sync.Mutex // serialises stdout across concurrent flows
-	logf := func(idx int, line string) {
-		mu.Lock()
-		fmt.Printf("[flow %d] %s\n", idx, line)
-		mu.Unlock()
-	}
 	runOne := func(t task) oneFlowResult {
 		logf(t.idx, fmt.Sprintf("%s -> %s", t.flow.Client, t.target))
 		res, err := livereplay.Run(t.cfg, func(l string) { logf(t.idx, l) })
@@ -157,32 +151,47 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 		return oneFlowResult{t.idx, t.flow, t.target, "stateful", res, nil}
 	}
 
-	results := make([]oneFlowResult, len(tasks))
+	results = make([]oneFlowResult, len(tasks))
 	if o.sequential || len(tasks) <= 1 {
 		for i, t := range tasks {
 			results[i] = runOne(t)
 		}
-	} else {
-		fmt.Printf("replaying %d flows concurrently%s\n", len(tasks),
-			map[bool]string{true: " on the capture's original clock", false: ""}[o.pace])
-		var wg sync.WaitGroup
-		start := time.Now()
-		for i, t := range tasks {
-			wg.Add(1)
-			go func(i int, t task) {
-				defer wg.Done()
-				if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
-					if d := start.Add(t.offset).Sub(time.Now()); d > 0 {
-						time.Sleep(d)
-					}
-				}
-				results[i] = runOne(t)
-			}(i, t)
-		}
-		wg.Wait()
+		return results, skipped
 	}
+	logf(-1, fmt.Sprintf("replaying %d flows concurrently%s", len(tasks),
+		map[bool]string{true: " on the capture's original clock", false: ""}[o.pace]))
+	var wg sync.WaitGroup
+	start := time.Now()
+	for i, t := range tasks {
+		wg.Add(1)
+		go func(i int, t task) {
+			defer wg.Done()
+			if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
+				if d := start.Add(t.offset).Sub(time.Now()); d > 0 {
+					time.Sleep(d)
+				}
+			}
+			results[i] = runOne(t)
+		}(i, t)
+	}
+	wg.Wait()
+	return results, skipped
+}
 
-	// Tally and report in flow order.
+// liveAll replays every flow and prints a technical per-flow log and summary.
+func liveAll(flows []*engine.Flow, o liveOpts) error {
+	var mu sync.Mutex // serialises stdout across concurrent flows
+	logf := func(idx int, line string) {
+		mu.Lock()
+		if idx < 0 {
+			fmt.Println(line)
+		} else {
+			fmt.Printf("[flow %d] %s\n", idx, line)
+		}
+		mu.Unlock()
+	}
+	results, skipped := replayAllFlows(flows, o, logf)
+
 	stateful, ok, stateless := 0, 0, 0
 	var fails []flowFail
 	rep := newReplayReport(o)

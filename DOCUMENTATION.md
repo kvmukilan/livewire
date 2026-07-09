@@ -79,6 +79,12 @@ sudo setcap cap_net_raw,cap_net_admin+ep ./livewire
 
 ## 2. Quick start (the one command)
 
+> **Sharing this with a non-technical peer to reproduce an issue?** Point them at
+> [REPRODUCE.md](REPRODUCE.md) and have them run `livewire reproduce <capture>.pcap` —
+> it asks only for the device IP and network connection (with the right one
+> pre-selected) and prints a plain "same / different" verdict. No flags.
+
+
 ```
 # Linux
 sudo ./livewire live -in capture.pcap -iface eth0 -target 192.168.1.50:502

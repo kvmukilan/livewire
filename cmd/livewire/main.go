@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 type command struct {
 	name    string
@@ -22,6 +22,7 @@ var commands = []command{
 	{"rewrite", "apply static edits (MAC/IP/port/TTL/VLAN/seq) to a capture", cmdRewrite},
 	{"prep", "classify packets client/server and write a cache file", cmdPrep},
 	{"replay", "stateless send: blast a capture onto an interface at a set rate", cmdReplay},
+	{"reproduce", "guided, plain-language replay of a capture against your device", cmdReproduce},
 	{"live", "stateful TCP replay: realign seq/ack to a live peer (dry-run or on-wire)", cmdLive},
 	{"web", "serve the browser dashboard (capture/load/replay/RST rules/SSH)", cmdWeb},
 	{"convert", "convert a pcapng file to classic pcap", cmdConvert},
