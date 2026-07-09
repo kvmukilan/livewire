@@ -23,5 +23,8 @@ INSTALL.md
 QUICKSTART.md
 .claude/
 
+# internal reference, not distributed (documented in DOCUMENTATION.md instead)
+REPRODUCE.md
+
 # release artifacts
 dist/

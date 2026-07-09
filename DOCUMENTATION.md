@@ -79,10 +79,10 @@ sudo setcap cap_net_raw,cap_net_admin+ep ./livewire
 
 ## 2. Quick start (the one command)
 
-> **Sharing this with a non-technical peer to reproduce an issue?** Point them at
-> [REPRODUCE.md](REPRODUCE.md) and have them run `livewire reproduce <capture>.pcap` —
-> it asks only for the device IP and network connection (with the right one
-> pre-selected) and prints a plain "same / different" verdict. No flags.
+> **Handing a capture to someone who just needs to reproduce it?** Use the
+> guided `reproduce` command instead of `live` — it prompts for the device IP and
+> network connection and prints a plain same/different verdict, no flags. See
+> [§4e](#4e-guided-reproduction-reproduce).
 
 
 ```
@@ -215,6 +215,48 @@ livewire web -addr 0.0.0.0:9000 -dir ./captures
 
 > The dashboard binds to localhost by default. Only use `0.0.0.0` on a trusted
 > network — anyone who can reach the port can drive replays.
+
+### 4e. Guided reproduction (`reproduce`)
+
+`reproduce` is a thin, prompt-driven front end over the `live` path for operators
+who shouldn't have to reason about flags. It runs the most faithful default and
+reports a plain verdict; tuning is opt-in and only suggested when the default run
+diverges.
+
+```
+livewire reproduce <capture>.pcap [--to <device-ip>] [--on <connection>]
+```
+
+What it does:
+
+- **Target.** Takes the device IP from `--to`, or prompts for it
+  (non-interactive without `--to` is an error). The port is taken per-flow from
+  the capture — the recorded server IP is *not* reused, since the peer's device
+  is on a different network.
+- **Interface.** Uses `--on`, or presents a numbered menu. On non-Windows it
+  marks the connection whose subnet contains the device IP as *recommended* and
+  pre-selects it (Enter accepts). On Windows it lists the Npcap device names
+  (subnet matching isn't reliable there). Non-interactive with an unambiguous
+  single/recommended match auto-selects; otherwise it errors asking for `--on`.
+- **Replay.** Runs every flow through the shared concurrent runner with the
+  reliable defaults — `-verify lenient`, `-adaptive`, handshake synthesis for
+  mid-stream captures — with per-frame tracing off for clean output.
+- **Verdict.** Prints, per connection, `SAME AS THE RECORDING` (completed and
+  replies matched), `DIFFERENT FROM THE RECORDING` (completed but replies
+  diverged, with the specifics), or `DID NOT COMPLETE` (with a plain reason).
+- **Report.** Always writes a JSON report next to the capture
+  (`<capture>.report.json`, override with `--report`), including the per-flow
+  likely-cause diagnosis.
+
+Scenario flags map to the same knobs as `live`, and are printed as suggestions
+if the default run didn't reproduce:
+
+| `reproduce` flag | equivalent `live` behaviour |
+|---|---|
+| `--under-load` | `-pace` (original timing + concurrent overlap) |
+| `--exact-tcp` | `-raw-l4` (send the client's frames verbatim) |
+| `--strict` | `-verify strict` (abort on the first divergence) |
+| `--to` / `--on` | `-target` / `-iface` |
 
 ### Try it safely first (dry run, no NIC)
 
