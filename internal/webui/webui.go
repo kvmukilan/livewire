@@ -4,8 +4,10 @@
 package webui
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -41,6 +43,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/ifaces", s.handleIfaces)
 	mux.HandleFunc("/api/pcaps", s.handlePcaps)
 	mux.HandleFunc("/api/flows", s.handleFlows)
+	mux.HandleFunc("/api/plan", s.handlePlan)
+	mux.HandleFunc("/api/run", s.handleAdaptiveRun)
+	mux.HandleFunc("/api/lab", s.handleLab)
+	mux.HandleFunc("/api/validate", s.handleValidate)
+	mux.HandleFunc("/api/artifact", s.handleArtifact)
+	mux.HandleFunc("/api/bundle", s.handleBundle)
 	mux.HandleFunc("/api/capture", s.handleCapture)
 	mux.HandleFunc("/api/replay", s.handleReplay)
 	mux.HandleFunc("/api/ssh", s.handleSSH)
@@ -150,5 +158,20 @@ func writeErr(w http.ResponseWriter, code int, err error) {
 
 func decodeBody(r *http.Request, v any) error {
 	defer r.Body.Close()
-	return json.NewDecoder(r.Body).Decode(v)
+	const maxAPIRequest = 16 << 20
+	b, err := io.ReadAll(io.LimitReader(r.Body, maxAPIRequest+1))
+	if err != nil {
+		return err
+	}
+	if len(b) > maxAPIRequest {
+		return fmt.Errorf("request body exceeds %d bytes", maxAPIRequest)
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("request contains trailing JSON")
+	}
+	return nil
 }

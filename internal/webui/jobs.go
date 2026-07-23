@@ -2,12 +2,14 @@ package webui
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,25 +17,80 @@ import (
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/runvars"
 	"github.com/kvmukilan/livewire/internal/stateless"
 )
 
 // job is one operation (capture or replay) the dashboard polls. Only one runs at a time.
 type job struct {
-	mu      sync.Mutex
-	Kind    string   `json:"kind"`
-	Running bool     `json:"running"`
-	Lines   []string `json:"lines"`
-	Done    bool     `json:"done"`
-	OK      bool     `json:"ok"`
-	Summary string   `json:"summary"`
+	mu        sync.Mutex
+	Kind      string     `json:"kind"`
+	Running   bool       `json:"running"`
+	Lines     []string   `json:"lines"`
+	Done      bool       `json:"done"`
+	OK        bool       `json:"ok"`
+	Summary   string     `json:"summary"`
+	Events    []jobEvent `json:"events"`
+	Artifacts []string   `json:"artifacts,omitempty"`
+	secrets   []string
 
-	stop chan struct{}
+	stop   chan struct{}
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+type jobEvent struct {
+	At      time.Time `json:"at"`
+	Stage   string    `json:"stage"`
+	Session string    `json:"session,omitempty"`
+	Message string    `json:"message"`
 }
 
 func (j *job) log(line string) {
 	j.mu.Lock()
+	line = j.scrubLocked(line)
 	j.Lines = append(j.Lines, line)
+	j.Events = append(j.Events, jobEvent{At: time.Now(), Stage: "log", Message: line})
+	j.mu.Unlock()
+}
+
+func (j *job) progress(stage, session, message string) {
+	j.mu.Lock()
+	message = j.scrubLocked(message)
+	j.Events = append(j.Events, jobEvent{At: time.Now(), Stage: stage, Session: session, Message: message})
+	j.Lines = append(j.Lines, message)
+	j.mu.Unlock()
+}
+
+func (j *job) protectVariables(values map[string]string) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for name, value := range values {
+		if runvars.IsSecret(name) && value != "" {
+			j.secrets = append(j.secrets, value)
+		}
+	}
+}
+
+func (j *job) protectValue(value string) {
+	if value == "" {
+		return
+	}
+	j.mu.Lock()
+	j.secrets = append(j.secrets, value)
+	j.mu.Unlock()
+}
+
+func (j *job) scrubLocked(line string) string {
+	for _, secret := range j.secrets {
+		line = strings.ReplaceAll(line, secret, "[REDACTED]")
+	}
+	return line
+}
+
+func (j *job) artifact(name string) {
+	j.mu.Lock()
+	j.Artifacts = append(j.Artifacts, name)
 	j.mu.Unlock()
 }
 
@@ -41,14 +98,20 @@ func (j *job) finish(ok bool, summary string) {
 	j.mu.Lock()
 	j.Running, j.Done, j.OK, j.Summary = false, true, ok, summary
 	j.mu.Unlock()
+	if j.cancel != nil {
+		j.cancel()
+	}
 }
 
 func (j *job) snapshot() map[string]any {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 	lines := append([]string(nil), j.Lines...)
+	events := append([]jobEvent(nil), j.Events...)
+	artifacts := append([]string(nil), j.Artifacts...)
 	return map[string]any{
 		"kind": j.Kind, "running": j.Running, "lines": lines,
+		"events": events, "artifacts": artifacts,
 		"done": j.Done, "ok": j.OK, "summary": j.Summary,
 	}
 }
@@ -60,7 +123,8 @@ func (s *Server) startJob(kind string, fn func(j *job)) (*job, error) {
 	if s.job != nil && s.job.Running {
 		return nil, fmt.Errorf("a %s job is already running; stop it first", s.job.Kind)
 	}
-	j := &job{Kind: kind, Running: true, stop: make(chan struct{})}
+	ctx, cancel := context.WithCancel(context.Background())
+	j := &job{Kind: kind, Running: true, stop: make(chan struct{}), ctx: ctx, cancel: cancel}
 	s.job = j
 	go func() {
 		defer func() {
@@ -90,6 +154,9 @@ func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
 	j := s.job
 	s.mu.Unlock()
 	if j != nil && j.Running && j.stop != nil {
+		if j.cancel != nil {
+			j.cancel()
+		}
 		select {
 		case <-j.stop:
 		default:
@@ -261,7 +328,7 @@ func (s *Server) runReplay(j *job, path string, req replayReq) {
 	if req.Port > 0 {
 		targetPort = uint16(req.Port)
 	}
-	res, err := livereplay.Run(livereplay.Config{
+	res, err := livereplay.RunContext(j.ctx, livereplay.Config{
 		Flow: f, Iface: req.Iface, TargetIP: targetIP, TargetPort: targetPort,
 		Seed: req.Seed, NoGuard: req.NoGuard, Trace: true,
 		// Smart defaults, matching the CLI: wait for and validate the device's
@@ -295,7 +362,14 @@ func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
 		default:
 		}
 		if d := sched[i] - time.Since(start); d > 0 {
-			time.Sleep(d)
+			timer := time.NewTimer(d)
+			select {
+			case <-j.ctx.Done():
+				timer.Stop()
+				j.finish(true, fmt.Sprintf("stopped after %d frames", i))
+				return
+			case <-timer.C:
+			}
 		}
 		if err := snd.Send(rec.Data); err != nil {
 			j.log(err.Error())

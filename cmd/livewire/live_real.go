@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -14,7 +15,9 @@ import (
 
 // liveOpts bundles the options shared by the on-wire replay paths.
 type liveOpts struct {
+	ctx           context.Context
 	target, iface string
+	profile       string
 	seed          int64
 	noGuard       bool
 	verbose       bool
@@ -25,6 +28,7 @@ type liveOpts struct {
 	rawL4         bool
 	sequential    bool   // replay -all flows one at a time instead of concurrently
 	report        string // JSON report path ("" = none)
+	variables     map[string]string
 }
 
 func (o liveOpts) config(f *engine.Flow, ip netip.Addr, port uint16) livereplay.Config {
@@ -47,7 +51,7 @@ func liveReal(flows []*engine.Flow, flowSel int, o liveOpts) error {
 		return err
 	}
 
-	res, err := livereplay.Run(o.config(f, targetIP, targetPort), func(line string) { fmt.Println(line) })
+	res, err := livereplay.RunContext(liveContext(o), o.config(f, targetIP, targetPort), func(line string) { fmt.Println(line) })
 	if err != nil {
 		return err
 	}
@@ -140,13 +144,10 @@ func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line st
 
 	runOne := func(t task) oneFlowResult {
 		logf(t.idx, fmt.Sprintf("%s -> %s", t.flow.Client, t.target))
-		res, err := livereplay.Run(t.cfg, func(l string) { logf(t.idx, l) })
+		res, err := livereplay.RunContext(liveContext(o), t.cfg, func(l string) { logf(t.idx, l) })
 		if err != nil {
-			logf(t.idx, fmt.Sprintf("stateful replay unavailable (%v); sending frames raw", err))
-			if serr := livereplay.SendStateless(t.cfg, func(l string) { logf(t.idx, l) }); serr != nil {
-				return oneFlowResult{t.idx, t.flow, t.target, "failed", livereplay.Result{}, serr}
-			}
-			return oneFlowResult{t.idx, t.flow, t.target, "stateless", livereplay.Result{}, nil}
+			logf(t.idx, fmt.Sprintf("stateful replay failed: %v", err))
+			return oneFlowResult{t.idx, t.flow, t.target, "failed", res, err}
 		}
 		return oneFlowResult{t.idx, t.flow, t.target, "stateful", res, nil}
 	}
@@ -168,7 +169,14 @@ func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line st
 			defer wg.Done()
 			if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
 				if d := start.Add(t.offset).Sub(time.Now()); d > 0 {
-					time.Sleep(d)
+					timer := time.NewTimer(d)
+					select {
+					case <-liveContext(o).Done():
+						timer.Stop()
+						results[i] = oneFlowResult{t.idx, t.flow, t.target, "failed", livereplay.Result{}, liveContext(o).Err()}
+						return
+					case <-timer.C:
+					}
 				}
 			}
 			results[i] = runOne(t)
@@ -176,6 +184,13 @@ func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line st
 	}
 	wg.Wait()
 	return results, skipped
+}
+
+func liveContext(o liveOpts) context.Context {
+	if o.ctx != nil {
+		return o.ctx
+	}
+	return context.Background()
 }
 
 // liveAll replays every flow and prints a technical per-flow log and summary.

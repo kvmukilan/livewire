@@ -11,11 +11,12 @@ import (
 
 // Record is one captured packet with full-resolution timing and link metadata.
 type Record struct {
-	Time     time.Time     // capture time at nanosecond resolution
-	CapLen   int           // bytes captured (len(Data))
-	OrigLen  int           // original on-wire length
-	Data     []byte        // frame bytes
-	LinkType wire.LinkType // link type for this record
+	Time        time.Time     // capture time at nanosecond resolution
+	CapLen      int           // bytes captured (len(Data))
+	OrigLen     int           // original on-wire length
+	Data        []byte        // frame bytes
+	LinkType    wire.LinkType // link type for this record
+	InterfaceID uint32        // pcapng interface index (zero for classic pcap)
 }
 
 // Common errors.

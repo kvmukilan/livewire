@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 type command struct {
 	name    string
@@ -16,6 +16,7 @@ type command struct {
 
 var commands = []command{
 	{"info", "inspect a pcap/pcapng file and print a summary", cmdInfo},
+	{"analyze", "score capture replayability and explain fidelity risks", cmdAnalyze},
 	{"ifaces", "list interfaces with addresses and live-replay capability", cmdIfaces},
 	{"capture", "record live frames from an interface into a pcap", cmdCapture},
 	{"rstdrop", "drop the host's outbound RSTs to a target until Ctrl-C", cmdRstdrop},
@@ -23,6 +24,9 @@ var commands = []command{
 	{"prep", "classify packets client/server and write a cache file", cmdPrep},
 	{"replay", "stateless send: blast a capture onto an interface at a set rate", cmdReplay},
 	{"reproduce", "guided, plain-language replay of a capture against your device", cmdReproduce},
+	{"lab", "two-sided replay through a DUT with topology, faults, and PCAPNG evidence", cmdLab},
+	{"bundle", "create a redacted metadata-only support archive", cmdBundle},
+	{"tls-replay", "decrypt with a key log and re-terminate a fresh verified TLS session", cmdTLSReplay},
 	{"live", "stateful TCP replay: realign seq/ack to a live peer (dry-run or on-wire)", cmdLive},
 	{"web", "serve the browser dashboard (capture/load/replay/RST rules/SSH)", cmdWeb},
 	{"convert", "convert a pcapng file to classic pcap", cmdConvert},
@@ -54,7 +58,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "livewire %s — cross-platform stateful TCP replay\n\n", version)
+	fmt.Fprintf(os.Stderr, "livewire %s - protocol-adaptive traffic replay\n\n", version)
 	fmt.Fprintln(os.Stderr, "usage: livewire <command> [flags]")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "commands:")

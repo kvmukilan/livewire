@@ -27,11 +27,15 @@ func fprintVerdict(w io.Writer, label string, res livereplay.Result) {
 		fmt.Fprintln(w, "--------------------------------")
 	}
 	switch {
-	case out.Succeeded() && out.RepliesMatched():
+	case out.Succeeded() && !res.Verified:
+		fmt.Fprintln(w, "RESULT: EXCHANGE COMPLETED; RESPONSE EQUIVALENCE WAS NOT CHECKED.")
+		fmt.Fprintln(w, "The transport completed, but verification was disabled, so this run does not claim")
+		fmt.Fprintln(w, "that the live device behaved the same as the recording.")
+	case out.Succeeded() && res.Matched:
 		fmt.Fprintln(w, "RESULT: SAME AS THE RECORDING.")
 		fmt.Fprintln(w, "The device behaved exactly as it did when the capture was taken.")
 		fmt.Fprintln(w, "If the recording shows the problem, the problem reproduces on this device.")
-	case out.Succeeded() && !out.RepliesMatched():
+	case out.Succeeded() && !res.Matched:
 		fmt.Fprintln(w, "RESULT: DIFFERENT FROM THE RECORDING.")
 		fmt.Fprintln(w, "The exchange completed, but the device answered differently:")
 		fprintDivergences(w, out)

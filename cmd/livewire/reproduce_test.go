@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"net/netip"
 	"strings"
 	"testing"
@@ -36,6 +37,39 @@ func TestParseHostIP(t *testing.T) {
 	}
 }
 
+func TestParseReproduceArgsAcceptsCaptureBeforeOrAfterFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "capture first", args: []string{"issue.pcap", "-to", "192.0.2.50", "-strict"}},
+		{name: "flags first", args: []string{"-to", "192.0.2.50", "-strict", "issue.pcap"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
+			to := fs.String("to", "", "")
+			strict := fs.Bool("strict", false, "")
+			capture, err := parseReproduceArgs(fs, tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if capture != "issue.pcap" || *to != "192.0.2.50" || !*strict {
+				t.Fatalf("capture=%q to=%q strict=%v", capture, *to, *strict)
+			}
+		})
+	}
+}
+
+func TestParseReproduceArgsRejectsMissingAndExtraCaptures(t *testing.T) {
+	for _, args := range [][]string{nil, {"one.pcap", "two.pcap"}} {
+		fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
+		if _, err := parseReproduceArgs(fs, args); err == nil {
+			t.Fatalf("expected %v to fail", args)
+		}
+	}
+}
+
 func TestPromptChoiceDefaultAndValue(t *testing.T) {
 	stdinReader = bufio.NewReader(strings.NewReader("\n")) // empty -> default
 	if got := promptChoice("? ", 2, 5); got != 2 {
@@ -48,14 +82,14 @@ func TestPromptChoiceDefaultAndValue(t *testing.T) {
 }
 
 func TestVerdictText(t *testing.T) {
-	same := livereplay.Result{Outcome: engine.Outcome{Phase: engine.PhaseClosed}}
+	same := livereplay.Result{Outcome: engine.Outcome{Phase: engine.PhaseClosed}, Verified: true, Matched: true}
 	var b bytes.Buffer
 	fprintVerdict(&b, "", same)
 	if !strings.Contains(b.String(), "SAME AS THE RECORDING") {
 		t.Fatalf("clean match should read SAME, got:\n%s", b.String())
 	}
 
-	diff := livereplay.Result{Outcome: engine.Outcome{
+	diff := livereplay.Result{Verified: true, Matched: false, Outcome: engine.Outcome{
 		Phase: engine.PhaseClosed, ReplyMismatches: 1,
 		Mismatches: []engine.Mismatch{{Structural: true, Detail: "txid 0x7: exception 0x83"}},
 	}}
@@ -64,6 +98,13 @@ func TestVerdictText(t *testing.T) {
 	s := b.String()
 	if !strings.Contains(s, "DIFFERENT FROM THE RECORDING") || !strings.Contains(s, "exception 0x83") {
 		t.Fatalf("divergent run should read DIFFERENT and list the divergence, got:\n%s", s)
+	}
+
+	unverified := livereplay.Result{Outcome: engine.Outcome{Phase: engine.PhaseClosed}}
+	b.Reset()
+	fprintVerdict(&b, "", unverified)
+	if strings.Contains(b.String(), "SAME AS THE RECORDING") || !strings.Contains(b.String(), "WAS NOT CHECKED") {
+		t.Fatalf("unverified run must not claim a match, got:\n%s", b.String())
 	}
 
 	reset := livereplay.Result{Outcome: engine.Outcome{Phase: engine.PhaseAborted, Aborted: true, Reason: "peer sent RST"}}

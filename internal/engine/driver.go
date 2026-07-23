@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -34,8 +35,15 @@ func (o Outcome) Succeeded() bool { return o.Phase == PhaseClosed && !o.Aborted 
 // retransmit timer on a Recv timeout. maxSteps bounds the loop so a misbehaving
 // peer can't hang.
 func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome, err error) {
+	return DriveContext(context.Background(), c, b, maxSteps)
+}
+
+// DriveContext is Drive with prompt cancellation. Receive waits are sliced so
+// a stopped web/lab job cannot remain blocked for a full retransmit timeout.
+func DriveContext(ctx context.Context, c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome, err error) {
 	var armed bool
 	var pending = c.cfg.RTO
+	var deadline time.Time
 	var paceStart time.Time // wall clock of the first paced send
 
 	// Attach reply-verification results on every return path.
@@ -50,13 +58,20 @@ func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome,
 
 	apply := func(acts []Action) bool {
 		for _, a := range acts {
+			if err := ctx.Err(); err != nil {
+				out.Aborted, out.Reason, out.Phase = true, "cancelled", PhaseAborted
+				return true
+			}
 			switch a.Kind {
 			case ActSend:
 				if c.cfg.Pace {
 					if paceStart.IsZero() {
 						paceStart = b.Now()
 					}
-					preciseWait(b, paceStart.Add(a.At))
+					if !preciseWaitContext(ctx, b, paceStart.Add(a.At)) {
+						out.Aborted, out.Reason, out.Phase = true, "cancelled", PhaseAborted
+						return true
+					}
 				}
 				if err := b.Send(a.Bytes); err != nil {
 					out.Aborted, out.Reason = true, "send: "+err.Error()
@@ -65,6 +80,7 @@ func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome,
 				out.Sent++
 			case ActArmTimer:
 				armed, pending = true, a.Delay
+				deadline = b.Now().Add(a.Delay)
 			case ActLog:
 				out.Log = append(out.Log, a.Reason)
 				if strings.HasPrefix(a.Reason, "retransmit") {
@@ -89,7 +105,24 @@ func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome,
 
 	buf := make([]byte, 64*1024)
 	for step := 0; step < maxSteps; step++ {
-		n, ok, err := b.Recv(buf, pending)
+		if ctx.Err() != nil {
+			out.Aborted, out.Reason, out.Phase = true, "cancelled", PhaseAborted
+			return out, nil
+		}
+		wait := pending
+		if !armed || wait > 100*time.Millisecond {
+			wait = 100 * time.Millisecond
+		}
+		if armed {
+			remaining := deadline.Sub(b.Now())
+			if remaining < wait {
+				wait = remaining
+			}
+		}
+		if wait <= 0 {
+			wait = time.Millisecond
+		}
+		n, ok, err := b.Recv(buf, wait)
 		if err != nil {
 			return out, err
 		}
@@ -98,9 +131,11 @@ func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome,
 		case ok:
 			armed = false
 			acts = c.Poll(Event{Kind: EvRecv, Frame: append([]byte(nil), buf[:n]...), Now: b.Now()})
-		case armed:
+		case armed && !b.Now().Before(deadline):
 			armed = false
 			acts = c.Poll(Event{Kind: EvTimeout, Now: b.Now()})
+		case armed:
+			continue
 		default:
 			// Nothing to receive and no timer armed: wedged.
 			out.Aborted, out.Reason = true, fmt.Sprintf("stalled in phase %s", c.Phase())
@@ -122,11 +157,32 @@ func Drive(c *Conversation, b backend.PacketBackend, maxSteps int) (out Outcome,
 // inter-packet timing lands despite the OS scheduler's coarse sleep resolution
 // (notably ~15ms on Windows). A no-op if target is already past.
 func preciseWait(b backend.PacketBackend, target time.Time) {
+	preciseWaitContext(context.Background(), b, target)
+}
+
+func preciseWaitContext(ctx context.Context, b backend.PacketBackend, target time.Time) bool {
 	const spin = time.Millisecond
-	if d := target.Sub(b.Now()); d > spin {
-		time.Sleep(d - spin)
+	for {
+		d := target.Sub(b.Now())
+		if d <= spin {
+			break
+		}
+		chunk := d - spin
+		if chunk > 100*time.Millisecond {
+			chunk = 100 * time.Millisecond
+		}
+		t := time.NewTimer(chunk)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return false
+		case <-t.C:
+		}
 	}
 	for b.Now().Before(target) {
-		// busy-wait the remainder
+		if ctx.Err() != nil {
+			return false
+		}
 	}
+	return true
 }

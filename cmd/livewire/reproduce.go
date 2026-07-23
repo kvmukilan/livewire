@@ -2,18 +2,27 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"crypto/sha256"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/netip"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
+	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/replay"
 )
 
 // cmdReproduce is the peer-facing, (almost) zero-flag entry point: give it a
@@ -26,36 +35,75 @@ func cmdReproduce(args []string) error {
 	to := fs.String("to", "", "your device's IP address (asks if not given)")
 	underLoad := fs.Bool("under-load", false, "reproduce a timing/load issue (replay everything at the recorded speed)")
 	exactTCP := fs.Bool("exact-tcp", false, "reproduce a low-level TCP issue (send the recorded packets exactly)")
+	profileName := fs.String("profile", "functional", "replay fidelity: functional | timing | transport | wire")
 	strict := fs.Bool("strict", false, "stop at the first difference from the recording")
 	reportPath := fs.String("report", "", "where to save the shareable report (default: <capture>.report.json)")
+	actualPath := fs.String("actual-out", "", "where to save actual replay traffic (default: <capture>.actual.pcap)")
 	noGuard := fs.Bool("no-rst-guard", false, "advanced: don't suppress the host's RST (usually leave this off)")
+	udpIdle := fs.Duration("udp-idle", 30*time.Second, "split a UDP tuple into a new session after this idle interval")
+	var variables setFlags
+	fs.Var(&variables, "set", "set a run variable (repeatable name=value; secret names are redacted from reports)")
+	var rulePacks fileFlags
+	fs.Var(&rulePacks, "rules", "JSON adapter rule pack (repeatable)")
 	fs.Usage = func() {
-		fmt.Println("usage: livewire reproduce <capture.pcap> [--to <device-ip>] [--on <connection>]")
+		fmt.Println("usage: livewire reproduce <capture.pcap> [flags]")
+		fmt.Println("   or: livewire reproduce [flags] <capture.pcap>")
 		fmt.Println("\nReplay a recorded exchange against your device and report whether it")
 		fmt.Println("behaves the same. Run as Administrator (Windows) or with sudo (Linux).")
 		fmt.Println("\nIf the issue is timing-related add --under-load; for a low-level TCP")
 		fmt.Println("issue add --exact-tcp. You normally don't need anything else.")
 		fs.PrintDefaults()
 	}
-	if err := fs.Parse(args); err != nil {
+	pcapPath, err := parseReproduceArgs(fs, args)
+	if err != nil {
+		if err == errReproduceCaptureRequired {
+			fs.Usage()
+		}
 		return err
 	}
-	if fs.NArg() < 1 {
+	if pcapPath == "" {
 		fs.Usage()
 		return fmt.Errorf("give the capture file we sent you, e.g. livewire reproduce issue.pcap")
 	}
-	pcapPath := fs.Arg(0)
 
 	recs, _, err := loadRecords(pcapPath)
 	if err != nil {
 		return err
 	}
 	flows := engine.ExtractFlows(recs)
-	if len(flows) == 0 {
-		return fmt.Errorf("no TCP connections found in %s", pcapPath)
+	preflight := assessCapture(recs, flows)
+	printPreflight(preflight)
+	selectedProfile := *profileName
+	if *underLoad && strings.EqualFold(selectedProfile, "functional") {
+		selectedProfile = "timing"
 	}
-	capPort := flows[0].Server.Port
-	fmt.Printf("Loaded %s: %d connection(s), device port %d.\n", filepath.Base(pcapPath), len(flows), capPort)
+	if *exactTCP && !strings.EqualFold(selectedProfile, "wire") {
+		selectedProfile = "transport"
+	}
+	profile, err := parseFidelityProfile(selectedProfile)
+	if err != nil {
+		return err
+	}
+	replayProfile, err := replay.ParseProfile(profile.Name)
+	if err != nil {
+		return err
+	}
+	registry, err := registryWithRulePacks(rulePacks)
+	if err != nil {
+		return err
+	}
+	if *udpIdle <= 0 {
+		return fmt.Errorf("-udp-idle must be positive")
+	}
+	trace, plan, err := compileCoverageWithOptions(recs, replayProfile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
+	if err != nil {
+		return err
+	}
+	if len(plan.Entries) == 0 {
+		return fmt.Errorf("capture %s has no packets", pcapPath)
+	}
+	fmt.Printf("Loaded %s: %d session(s), %d raw frame(s).\n", filepath.Base(pcapPath), len(trace.Sessions), len(trace.Raw))
+	printCoverage(plan)
 
 	// 1) Which device? (its IP; the port comes from the capture)
 	deviceIP, err := chooseDeviceIP(*to)
@@ -70,49 +118,83 @@ func cmdReproduce(args []string) error {
 	// Run the most reliable default (adaptive + reply-checking + auto-synthesis).
 	// Scenario tuning stays opt-in via flags, suggested only if the default run
 	// doesn't reproduce the issue.
-	pace, raw := *underLoad, *exactTCP
+	pace, raw := profile.Pace, profile.RawL4
 
-	verify := engine.VerifyLenient
+	verify := profile.Verify
 	if *strict {
 		verify = engine.VerifyStrict
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	o := liveOpts{
+		ctx:    ctx,
 		target: deviceIP.String(), iface: iface, seed: 1, noGuard: *noGuard,
-		verify: verify, adaptive: true, pace: pace, rawL4: raw,
+		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: pace, rawL4: raw,
+		variables: variables,
 	}
 
-	fmt.Printf("\nReplaying against %s on %q ...\n", deviceIP, iface)
+	fmt.Printf("\nProfile: %s — %s\n", profile.Name, profile.Description)
+	fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
 	var mu sync.Mutex
 	logf := func(idx int, line string) {
+		line = redactRunText(line, variables)
 		mu.Lock()
-		if idx < 0 || len(flows) == 1 {
+		if idx < 0 || len(plan.Entries) == 1 {
 			fmt.Printf("  %s\n", line)
 		} else {
-			fmt.Printf("  [connection %d] %s\n", idx, line)
+			fmt.Printf("  [session %d] %s\n", idx, line)
 		}
 		mu.Unlock()
 	}
-	results, skipped := replayAllFlows(flows, o, logf)
+	results := executeReplayPlan(executePlanConfig{
+		Context: ctx, Trace: trace, Plan: plan, Records: recs, Registry: registry,
+		Flows: flows, Iface: iface, TargetIP: deviceIP, Variables: variables, Live: o, Log: logf,
+	})
 
 	// Verdicts and a shareable report.
 	rep := newReplayReport(o)
-	same, different, incomplete := 0, 0, 0
-	for _, r := range results {
-		rep.add(r.idx, r.flow, r.target, r.mode, r.res, r.err)
-		label := ""
-		if len(results) > 1 {
-			label = fmt.Sprintf("Connection %d (%s)", r.idx, r.target)
+	rep.AdapterVersions = adapters.VersionsForRegistry(registry)
+	rep.Preflight = &preflight
+	rep.Plan = &plan
+	rep.Limitations = plan.Limitations()
+	rep.CaptureDigest, _ = sha256File(pcapPath)
+	var actualFrames []pcapio.Record
+	same, different, incomplete, wireOnly := 0, 0, 0, 0
+	for _, result := range results {
+		target := deviceIP.String()
+		if result.Session != nil && result.Session.Server.Port != 0 {
+			target = netip.AddrPortFrom(deviceIP, result.Session.Server.Port).String()
 		}
-		if r.err != nil {
-			fmt.Printf("\n---- %s ----\nRESULT: could not run — %v\n--------------------------------\n", label, r.err)
+		rep.addPlanned(result, target)
+		actualFrames = append(actualFrames, result.TCP.Evidence...)
+		actualFrames = append(actualFrames, result.Transport.Evidence...)
+		label := fmt.Sprintf("%s (%s, %s)", result.Entry.SessionID, result.Entry.Transport, result.Entry.Mode)
+		if result.Err != nil {
+			fmt.Printf("\n---- %s ----\nRESULT: could not run — %s\n--------------------------------\n", label, redactRunText(result.Err.Error(), variables))
 			incomplete++
 			continue
 		}
-		printVerdict(label, r.res)
+		if result.Entry.Mode == replay.ModeWire {
+			fmt.Printf("\n---- %s ----\nRESULT: sent %d frame(s) at captured timing; live adaptation and response equivalence were not claimed.\n--------------------------------\n", label, result.Transport.Sent)
+			wireOnly++
+			continue
+		}
+		if result.Entry.Transport == replay.TransportTCP && result.Entry.Mode == replay.ModeStateful {
+			var verdict strings.Builder
+			fprintVerdict(&verdict, label, result.TCP)
+			fmt.Print(redactRunText(verdict.String(), variables))
+		} else {
+			fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v sent=%d received=%d\n--------------------------------\n",
+				label, result.Transport.Completed, result.Transport.Matched, result.Transport.Sent, result.Transport.Received)
+		}
+		completed, matched := result.Transport.Completed, result.Transport.Matched
+		if result.Entry.Transport == replay.TransportTCP && result.Entry.Mode == replay.ModeStateful {
+			completed, matched = result.TCP.Outcome.Succeeded(), result.TCP.Matched
+		}
 		switch {
-		case r.res.Outcome.Succeeded() && r.res.Outcome.RepliesMatched():
+		case completed && matched:
 			same++
-		case r.res.Outcome.Succeeded():
+		case completed:
 			different++
 		default:
 			incomplete++
@@ -123,17 +205,25 @@ func cmdReproduce(args []string) error {
 	if out == "" {
 		out = strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath)) + ".report.json"
 	}
+	actual := *actualPath
+	if actual == "" {
+		actual = strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath)) + ".actual.pcap"
+	}
+	if len(actualFrames) > 0 {
+		if aerr := writeFrames(actual, actualFrames, true); aerr != nil {
+			fmt.Printf("\n(could not save actual replay capture: %v)\n", aerr)
+		} else {
+			rep.ActualCapture = actual
+			fmt.Printf("\nActual replay traffic was saved to %s.\n", actual)
+		}
+	}
 	if werr := rep.write(out); werr != nil {
 		fmt.Printf("\n(could not save report: %v)\n", werr)
 	} else {
 		fmt.Printf("\nA shareable report was saved to %s — send this back so we can see what happened.\n", out)
 	}
 
-	fmt.Printf("\nSummary: %d same as recording, %d different, %d did not complete", same, different, incomplete)
-	if skipped > 0 {
-		fmt.Printf(", %d skipped", skipped)
-	}
-	fmt.Println(".")
+	fmt.Printf("\nSummary: %d same as recording, %d different, %d wire-only, %d did not complete.\n", same, different, wireOnly, incomplete)
 
 	// If the default run didn't reproduce the issue, suggest the opt-in tuning.
 	if (different+incomplete) > 0 && !pace && !raw && !*strict {
@@ -144,6 +234,50 @@ func cmdReproduce(args []string) error {
 		fmt.Println("Otherwise, send us the report file above and we'll take a look.")
 	}
 	return nil
+}
+
+var errReproduceCaptureRequired = fmt.Errorf("give the capture file we sent you, e.g. livewire reproduce issue.pcap")
+
+// parseReproduceArgs accepts both the human-friendly capture-first form shown
+// in the guided command's examples and the conventional flags-first form. The
+// standard flag package stops at the first positional argument, so without
+// this small normalization flags written after the capture would be ignored.
+func parseReproduceArgs(fs *flag.FlagSet, args []string) (string, error) {
+	capture := ""
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		capture = args[0]
+		args = args[1:]
+	}
+	if err := fs.Parse(args); err != nil {
+		return "", err
+	}
+	positionals := fs.Args()
+	if capture != "" {
+		if len(positionals) != 0 {
+			return "", fmt.Errorf("unexpected positional argument %q; provide exactly one capture", positionals[0])
+		}
+		return capture, nil
+	}
+	if len(positionals) == 0 {
+		return "", errReproduceCaptureRequired
+	}
+	if len(positionals) != 1 {
+		return "", fmt.Errorf("unexpected positional argument %q; provide exactly one capture", positionals[1])
+	}
+	return positionals[0], nil
+}
+
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return "sha256:" + fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 // subnetHasTarget reports whether any of the interface's CIDRs contains target,
