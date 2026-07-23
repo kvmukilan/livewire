@@ -2,8 +2,8 @@ package wire
 
 import "encoding/binary"
 
-// IPv4 fragmentation accessors. Only the first fragment holds the transport
-// header, so fragments must be reassembled (see internal/ipreasm) before L4.
+// Fragmentation accessors. Only the first fragment holds the transport header,
+// so fragments must be reassembled (see internal/ipreasm) before L4.
 
 // FragmentID returns the IPv4 identification field (meaningless for non-IPv4).
 func (p *Packet) FragmentID() uint16 {
@@ -20,10 +20,10 @@ func (p *Packet) fragWord() uint16 {
 
 // MoreFragments reports whether the IPv4 MF bit is set (more fragments follow).
 func (p *Packet) MoreFragments() bool {
-	if !p.isV4 {
-		return false
+	if p.isV6 {
+		return p.frag6 && p.frag6More
 	}
-	return p.fragWord()&0x2000 != 0
+	return p.isV4 && p.fragWord()&0x2000 != 0
 }
 
 // DontFragment reports whether the IPv4 DF bit is set.
@@ -37,19 +37,32 @@ func (p *Packet) DontFragment() bool {
 // FragmentOffset returns the fragment's payload offset in bytes (0 for the
 // first fragment or an unfragmented datagram).
 func (p *Packet) FragmentOffset() int {
-	if !p.isV4 {
-		return 0
+	if p.isV6 {
+		return p.frag6Offset
 	}
-	return int(p.fragWord()&0x1fff) * 8
+	if p.isV4 {
+		return int(p.fragWord()&0x1fff) * 8
+	}
+	return 0
 }
 
-// IsFragment reports whether the packet is a piece of a fragmented IPv4
-// datagram (MF set or non-zero offset).
+// IsFragment reports whether the packet carries an IPv4 fragmentation state or
+// an IPv6 Fragment extension header. Atomic IPv6 fragments are included so the
+// reassembler can remove their Fragment header before transport processing.
 func (p *Packet) IsFragment() bool {
-	if !p.isV4 {
-		return false
+	if p.isV6 {
+		return p.frag6
 	}
-	return p.MoreFragments() || p.FragmentOffset() > 0
+	return p.isV4 && (p.MoreFragments() || p.FragmentOffset() > 0)
+}
+
+// IPv6Fragment returns the fields needed to remove and reassemble an IPv6
+// Fragment extension header. headerOff and previousNextOff are frame offsets.
+func (p *Packet) IPv6Fragment() (id uint32, offset int, more bool, next uint8, headerOff, previousNextOff int, ok bool) {
+	if !p.isV6 || !p.frag6 {
+		return 0, 0, false, 0, 0, 0, false
+	}
+	return p.frag6ID, p.frag6Offset, p.frag6More, p.frag6Next, p.frag6Off, p.frag6PrevNextOff, true
 }
 
 // L3PayloadOffset returns the offset where the IP payload begins.

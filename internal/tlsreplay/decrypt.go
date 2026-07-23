@@ -7,10 +7,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
+	"sort"
+
+	"github.com/kvmukilan/livewire/internal/replay"
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 // Recovers plaintext from captured TLS records + an SSLKEYLOGFILE.
-// Handles TLS 1.2/1.3 with AES-128/256-GCM; ChaCha20-Poly1305 is rejected.
+// Handles TLS 1.2 with AES-128/256-GCM and TLS 1.3 with AES-GCM or
+// ChaCha20-Poly1305.
 
 // tlsVersion tags the record layer in use.
 type tlsVersion uint8
@@ -25,10 +30,10 @@ type suiteParams struct {
 	keyLen  int
 	sha384  bool
 	isTLS13 bool
-	chacha  bool // unsupported; flagged so we can reject cleanly
+	chacha  bool
 }
 
-// Suites we understand, plus ChaCha20 so we can reject it cleanly.
+// Suites we understand.
 var cipherSuites = map[uint16]suiteParams{
 	// TLS 1.2 AEAD (ECDHE and static-RSA key exchange).
 	0xC02F: {keyLen: 16},               // ECDHE_RSA_AES_128_GCM_SHA256
@@ -48,12 +53,30 @@ type Decryptor struct {
 	kl *KeyLog
 }
 
+// RecordCompletion returns the capture time at which the TLS record byte range
+// [start,end) became complete in its reassembled TCP direction.
+type RecordCompletion func(start, end int) (replay.CapturePoint, bool)
+
 // NewDecryptor builds a decryptor over the parsed keylog.
 func NewDecryptor(kl *KeyLog) *Decryptor { return &Decryptor{kl: kl} }
 
 // DecryptFlow recovers the application messages from one connection's two
 // reassembled record streams. Messages come back per direction, in order.
 func (d *Decryptor) DecryptFlow(c2s, s2c []byte) ([]AppMessage, error) {
+	return d.decryptFlow(c2s, s2c, nil, nil, false)
+}
+
+// DecryptFlowTimed decrypts both directions and restores their real capture
+// chronology using TCP byte-range completion times. Unlike the legacy helper,
+// it never guesses by alternation when chronology is unavailable.
+func (d *Decryptor) DecryptFlowTimed(c2s, s2c []byte, clientCompletion, serverCompletion RecordCompletion) ([]AppMessage, error) {
+	if clientCompletion == nil || serverCompletion == nil {
+		return nil, fmt.Errorf("tlsreplay: both TCP record timelines are required")
+	}
+	return d.decryptFlow(c2s, s2c, clientCompletion, serverCompletion, true)
+}
+
+func (d *Decryptor) decryptFlow(c2s, s2c []byte, clientCompletion, serverCompletion RecordCompletion, timed bool) ([]AppMessage, error) {
 	clientRandom, suite, ver, err := handshakeParams(c2s, s2c)
 	if err != nil {
 		return nil, err
@@ -61,10 +84,6 @@ func (d *Decryptor) DecryptFlow(c2s, s2c []byte) ([]AppMessage, error) {
 	sp, ok := cipherSuites[suite]
 	if !ok {
 		return nil, fmt.Errorf("tlsreplay: unsupported cipher suite 0x%04x", suite)
-	}
-	if sp.chacha {
-		return nil, fmt.Errorf("tlsreplay: ChaCha20-Poly1305 (suite 0x%04x) is not supported; "+
-			"capture with an AES-GCM suite to recover plaintext", suite)
 	}
 	crHex := hex.EncodeToString(clientRandom)
 	if !d.kl.Has(crHex) {
@@ -74,28 +93,41 @@ func (d *Decryptor) DecryptFlow(c2s, s2c []byte) ([]AppMessage, error) {
 	newHash, _ := hashForSuite(sp.sha384)
 	var out []AppMessage
 	if ver == verTLS13 {
-		cli, err := d.decrypt13(c2s, crHex, "CLIENT", sp, newHash, FromClient)
+		cli, err := d.decrypt13(c2s, crHex, "CLIENT", sp, newHash, FromClient, clientCompletion)
 		if err != nil {
 			return nil, err
 		}
-		srv, err := d.decrypt13(s2c, crHex, "SERVER", sp, newHash, FromServer)
+		srv, err := d.decrypt13(s2c, crHex, "SERVER", sp, newHash, FromServer, serverCompletion)
 		if err != nil {
 			return nil, err
 		}
 		out = append(append(out, cli...), srv...)
 	} else {
-		msgs, err := d.decrypt12(c2s, s2c, clientRandom, suite, sp, newHash)
+		msgs, err := d.decrypt12(c2s, s2c, clientRandom, suite, sp, newHash, clientCompletion, serverCompletion)
 		if err != nil {
 			return nil, err
 		}
 		out = msgs
+	}
+	if timed {
+		for _, message := range out {
+			if !message.HasCaptureTime {
+				return nil, fmt.Errorf("tlsreplay: capture chronology is incomplete for a decrypted application record")
+			}
+		}
+		sort.SliceStable(out, func(i, j int) bool {
+			if out[i].CapturedAt != out[j].CapturedAt {
+				return out[i].CapturedAt < out[j].CapturedAt
+			}
+			return out[i].CapturedPacket < out[j].CapturedPacket
+		})
 	}
 	return out, nil
 }
 
 // --- TLS 1.2 ---
 
-func (d *Decryptor) decrypt12(c2s, s2c, clientRandom []byte, suite uint16, sp suiteParams, newHash func() hash.Hash) ([]AppMessage, error) {
+func (d *Decryptor) decrypt12(c2s, s2c, clientRandom []byte, suite uint16, sp suiteParams, newHash func() hash.Hash, clientCompletion, serverCompletion RecordCompletion) ([]AppMessage, error) {
 	master, ok := d.kl.Secret(hex.EncodeToString(clientRandom), "CLIENT_RANDOM")
 	if !ok || len(master) != 48 {
 		return nil, fmt.Errorf("tlsreplay: TLS 1.2 needs a 48-byte CLIENT_RANDOM master secret in the keylog")
@@ -114,11 +146,11 @@ func (d *Decryptor) decrypt12(c2s, s2c, clientRandom []byte, suite uint16, sp su
 	cliIV := kb[2*sp.keyLen : 2*sp.keyLen+4]
 	srvIV := kb[2*sp.keyLen+4 : 2*sp.keyLen+8]
 
-	cli, err := decrypt12Dir(c2s, cliKey, cliIV, FromClient)
+	cli, err := decrypt12Dir(c2s, cliKey, cliIV, FromClient, clientCompletion)
 	if err != nil {
 		return nil, err
 	}
-	srv, err := decrypt12Dir(s2c, srvKey, srvIV, FromServer)
+	srv, err := decrypt12Dir(s2c, srvKey, srvIV, FromServer, serverCompletion)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +160,7 @@ func (d *Decryptor) decrypt12(c2s, s2c, clientRandom []byte, suite uint16, sp su
 // decrypt12Dir decrypts one direction of a TLS 1.2 GCM stream. The seq number
 // starts at 0 after ChangeCipherSpec; app_data records are returned, the
 // encrypted Finished is counted but dropped.
-func decrypt12Dir(stream, key, implicitIV []byte, role AppRole) ([]AppMessage, error) {
+func decrypt12Dir(stream, key, implicitIV []byte, role AppRole, completion RecordCompletion) ([]AppMessage, error) {
 	aead, err := newGCM(key)
 	if err != nil {
 		return nil, err
@@ -136,7 +168,11 @@ func decrypt12Dir(stream, key, implicitIV []byte, role AppRole) ([]AppMessage, e
 	var out []AppMessage
 	var seq uint64
 	encrypting := false
-	for _, rec := range splitRecords(stream) {
+	records, err := parseRecords(stream)
+	if err != nil {
+		return nil, err
+	}
+	for _, rec := range records {
 		if rec.typ == 20 { // ChangeCipherSpec: everything after is encrypted
 			encrypting = true
 			continue
@@ -160,7 +196,13 @@ func decrypt12Dir(stream, key, implicitIV []byte, role AppRole) ([]AppMessage, e
 		}
 		seq++
 		if rec.typ == 23 && len(pt) > 0 {
-			out = append(out, AppMessage{Role: role, Data: pt})
+			message := AppMessage{Role: role, Data: pt}
+			if completion != nil {
+				if point, ok := completion(rec.start, rec.end); ok {
+					message.CapturedAt, message.CapturedPacket, message.HasCaptureTime = point.At, point.PacketIndex, true
+				}
+			}
+			out = append(out, message)
 		}
 	}
 	return out, nil
@@ -168,7 +210,7 @@ func decrypt12Dir(stream, key, implicitIV []byte, role AppRole) ([]AppMessage, e
 
 // --- TLS 1.3 ---
 
-func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams, newHash func() hash.Hash, role AppRole) ([]AppMessage, error) {
+func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams, newHash func() hash.Hash, role AppRole, completion RecordCompletion) ([]AppMessage, error) {
 	appSecret, ok := d.kl.Secret(crHex, side+"_TRAFFIC_SECRET_0")
 	if !ok {
 		return nil, fmt.Errorf("tlsreplay: keylog missing %s_TRAFFIC_SECRET_0", side)
@@ -190,7 +232,11 @@ func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams,
 
 	var out []AppMessage
 	var appCtr, hsCtr uint64
-	for _, rec := range splitRecords(stream) {
+	records, err := parseRecords(stream)
+	if err != nil {
+		return nil, err
+	}
+	for _, rec := range records {
 		if rec.typ != 23 { // pre-encryption plaintext handshake records
 			continue
 		}
@@ -199,7 +245,13 @@ func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams,
 		if pt, innerType, ok := tryOpen13(appAEAD, appIV, appCtr, rec); ok {
 			appCtr++
 			if innerType == 23 && len(pt) > 0 {
-				out = append(out, AppMessage{Role: role, Data: pt})
+				message := AppMessage{Role: role, Data: pt}
+				if completion != nil {
+					if point, ok := completion(rec.start, rec.end); ok {
+						message.CapturedAt, message.CapturedPacket, message.HasCaptureTime = point.At, point.PacketIndex, true
+					}
+				}
+				out = append(out, message)
 			}
 			continue
 		}
@@ -237,6 +289,10 @@ func tryOpen13(aead cipher.AEAD, iv []byte, seq uint64, rec record) ([]byte, uin
 func tls13KeyIV(secret []byte, sp suiteParams, newHash func() hash.Hash) (cipher.AEAD, []byte, error) {
 	key := hkdfExpandLabel(newHash, secret, "key", nil, sp.keyLen)
 	iv := hkdfExpandLabel(newHash, secret, "iv", nil, 12)
+	if sp.chacha {
+		aead, err := chacha20poly1305.New(key)
+		return aead, iv, err
+	}
 	aead, err := newGCM(key)
 	return aead, iv, err
 }

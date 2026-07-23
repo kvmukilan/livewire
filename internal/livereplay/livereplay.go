@@ -4,15 +4,16 @@
 package livereplay
 
 import (
+	"context"
 	"fmt"
 	"net/netip"
-	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/hoststack"
+	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/wire"
 )
 
 // Config parameterises one live replay.
@@ -30,11 +31,73 @@ type Config struct {
 	RawL4      bool              // replay the client's frames exactly as captured (no response gating)
 }
 
+type replayGuard interface {
+	Release() error
+	Describe() string
+}
+
+type runDependencies struct {
+	openLive func(backend.LiveConfig) (*backend.LiveBackend, error)
+	armGuard func(hoststack.Rule) (replayGuard, error)
+	drive    func(context.Context, *engine.Flow, engine.Options, engine.ConvConfig, backend.PacketBackend) (engine.Outcome, uint32, error)
+}
+
+func defaultRunDependencies() runDependencies {
+	return runDependencies{
+		openLive: backend.OpenLive,
+		armGuard: func(rule hoststack.Rule) (replayGuard, error) {
+			return hoststack.Arm(rule)
+		},
+		drive: func(ctx context.Context, flow *engine.Flow, opts engine.Options, cfg engine.ConvConfig, b backend.PacketBackend) (engine.Outcome, uint32, error) {
+			conv, err := engine.NewConversation(flow, opts, cfg)
+			if err != nil {
+				return engine.Outcome{}, 0, err
+			}
+			out, err := engine.DriveContext(ctx, conv, b, 10000)
+			return out, conv.LearnedServerISN(), err
+		},
+	}
+}
+
 // Result reports the outcome of a replay.
 type Result struct {
 	Outcome          engine.Outcome
 	LearnedServerISN uint32
 	GuardArmed       bool
+	Verified         bool
+	Matched          bool
+	// Evidence is the actual post-rewrite TX and live RX traffic observed by the
+	// replay backend. Callers can persist it as a pcap for an auditable run.
+	Evidence []pcapio.Record
+}
+
+type evidenceBackend struct {
+	backend.PacketBackend
+	link   wire.LinkType
+	frames []pcapio.Record
+}
+
+func (e *evidenceBackend) record(frame []byte) {
+	b := append([]byte(nil), frame...)
+	e.frames = append(e.frames, pcapio.Record{
+		Time: e.Now(), CapLen: len(b), OrigLen: len(b), Data: b, LinkType: e.link,
+	})
+}
+
+func (e *evidenceBackend) Send(frame []byte) error {
+	if err := e.PacketBackend.Send(frame); err != nil {
+		return err
+	}
+	e.record(frame)
+	return nil
+}
+
+func (e *evidenceBackend) Recv(buf []byte, timeout time.Duration) (int, bool, error) {
+	n, ok, err := e.PacketBackend.Recv(buf, timeout)
+	if err == nil && ok {
+		e.record(buf[:n])
+	}
+	return n, ok, err
 }
 
 // SendStateless blasts a flow's captured frames onto the wire as-is, retargeting
@@ -68,6 +131,18 @@ func SendStateless(cfg Config, log func(string)) error {
 // Run executes a stateful replay of cfg.Flow against the live target, sending
 // progress and trace lines to log. It arms and releases the RST-suppression guard.
 func Run(cfg Config, log func(string)) (Result, error) {
+	return RunContext(context.Background(), cfg, log)
+}
+
+// RunContext executes a replay with cancellation propagated into the engine.
+func RunContext(ctx context.Context, cfg Config, log func(string)) (Result, error) {
+	return runContextWithDependencies(ctx, cfg, log, defaultRunDependencies())
+}
+
+func runContextWithDependencies(ctx context.Context, cfg Config, log func(string), deps runDependencies) (Result, error) {
+	if log == nil {
+		log = func(string) {}
+	}
 	f := cfg.Flow
 	if f == nil {
 		return Result{}, fmt.Errorf("livereplay: nil flow")
@@ -83,7 +158,7 @@ func Run(cfg Config, log func(string)) (Result, error) {
 	localPort := f.Client.Port
 	log(fmt.Sprintf("live stateful replay: %s -> %s:%d on %s", f.Client, cfg.TargetIP, cfg.TargetPort, cfg.Iface))
 
-	lb, err := backend.OpenLive(backend.LiveConfig{
+	lb, err := deps.openLive(backend.LiveConfig{
 		Iface: cfg.Iface, Target: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: localPort, Promisc: true,
 	})
 	if err != nil {
@@ -96,30 +171,26 @@ func Run(cfg Config, log func(string)) (Result, error) {
 
 	var res Result
 	if !cfg.NoGuard {
-		guard, gerr := hoststack.Arm(hoststack.Rule{TargetIP: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: localPort})
+		guard, gerr := deps.armGuard(hoststack.Rule{TargetIP: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: localPort})
 		if gerr != nil {
 			return Result{}, fmt.Errorf("host-RST suppression failed (%w); retry with the guard disabled to bypass "+
 				"(the host kernel may then reset the connection)", gerr)
 		}
+		defer guard.Release()
 		log("host-RST suppression armed: " + guard.Describe())
 		res.GuardArmed = true
-		defer guard.Release()
-		// Signals bypass defers, so release the guard on SIGINT/SIGTERM too —
-		// a leaked rule would break the host's own later connections.
-		stop := make(chan os.Signal, 1)
-		signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-		defer signal.Stop(stop)
-		go func() {
-			if _, ok := <-stop; ok {
-				guard.Release()
-				os.Exit(130)
-			}
-		}()
 	} else {
 		log("host-RST suppression DISABLED (-no-rst-guard): the host kernel may reset the connection")
 	}
 
-	var b backend.PacketBackend = backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
+	var wireBackend backend.PacketBackend = backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
+	evidence := &evidenceBackend{PacketBackend: wireBackend, link: wireBackend.LinkType()}
+	var b backend.PacketBackend = backend.NewTupleRewriter(evidence, backend.TupleRewrite{
+		CapturedClient: backend.TupleEndpoint{IP: f.Client.Addr, Port: f.Client.Port},
+		CapturedServer: backend.TupleEndpoint{IP: f.Server.Addr, Port: f.Server.Port},
+		LiveClient:     backend.TupleEndpoint{IP: lb.LocalIP, Port: f.Client.Port},
+		LiveServer:     backend.TupleEndpoint{IP: cfg.TargetIP, Port: cfg.TargetPort},
+	})
 	if cfg.Trace {
 		b = newTracer(b, log)
 	}
@@ -136,17 +207,16 @@ func Run(cfg Config, log func(string)) (Result, error) {
 	if cfg.RawL4 {
 		log("raw-L4: replaying the client's frames exactly as captured (retransmits, RSTs, original acks)")
 	}
-	conv, err := engine.NewConversation(f, engine.Options{Seed: cfg.Seed},
-		engine.ConvConfig{Verify: cfg.Verify, Adaptive: cfg.Adaptive, Pace: cfg.Pace, RawL4: cfg.RawL4})
-	if err != nil {
-		return Result{}, err
-	}
-	out, err := engine.Drive(conv, b, 10000)
+	out, learnedServerISN, err := deps.drive(ctx, f, engine.Options{Seed: cfg.Seed},
+		engine.ConvConfig{Verify: cfg.Verify, Adaptive: cfg.Adaptive, Pace: cfg.Pace, RawL4: cfg.RawL4}, b)
 	if err != nil {
 		return Result{}, err
 	}
 	res.Outcome = out
-	res.LearnedServerISN = conv.LearnedServerISN()
+	res.LearnedServerISN = learnedServerISN
+	res.Evidence = evidence.frames
+	res.Verified = cfg.Verify != engine.VerifyOff
+	res.Matched = res.Verified && out.RepliesMatched()
 
 	for _, line := range out.Log {
 		log("  " + line)

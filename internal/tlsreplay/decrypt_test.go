@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kvmukilan/livewire/internal/replay"
 )
 
 // recordConn wraps a net.Conn and captures the raw bytes crossing it, so a test
@@ -118,9 +120,6 @@ func decryptRoundTrip(t *testing.T, version uint16, suites []uint16) {
 
 	msgs, err := NewDecryptor(kl).DecryptFlow(c2s, s2c)
 	if err != nil {
-		if strings.Contains(err.Error(), "ChaCha20") {
-			t.Skip("environment negotiated ChaCha20; AES-GCM decryptor not exercised")
-		}
 		t.Fatalf("DecryptFlow: %v", err)
 	}
 
@@ -151,9 +150,26 @@ func TestDecryptTLS12_AES256GCM(t *testing.T) {
 }
 
 func TestDecryptTLS13(t *testing.T) {
-	// TLS 1.3 suite selection is not configurable via Config; on AES-NI hardware
-	// Go prefers AES-128-GCM. If ChaCha20 is chosen the round-trip self-skips.
+	// TLS 1.3 suite selection is not configurable via Config. The test is valid
+	// whether the runtime chooses AES-GCM or ChaCha20-Poly1305.
 	decryptRoundTrip(t, tls.VersionTLS13, nil)
+}
+
+func TestTLS13ChaChaRecord(t *testing.T) {
+	newHash, _ := hashForSuite(false)
+	aead, iv, err := tls13KeyIV(bytes.Repeat([]byte{7}, 32), cipherSuites[0x1303], newHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inner := append([]byte("hello"), byte(23))
+	rec := record{typ: 23, ver: 0x0303}
+	length := len(inner) + aead.Overhead()
+	aad := []byte{23, 3, 3, byte(length >> 8), byte(length)}
+	rec.body = aead.Seal(nil, tls13Nonce(iv, 0), inner, aad)
+	got, innerType, ok := tryOpen13(aead, iv, 0, rec)
+	if !ok || innerType != 23 || string(got) != "hello" {
+		t.Fatalf("chacha record: ok=%v type=%d plaintext=%q", ok, innerType, got)
+	}
 }
 
 func TestDecryptNoKeylogFails(t *testing.T) {
@@ -161,6 +177,36 @@ func TestDecryptNoKeylogFails(t *testing.T) {
 	empty, _ := ParseKeyLog(strings.NewReader(""))
 	if _, err := NewDecryptor(empty).DecryptFlow(c2s, s2c); err == nil {
 		t.Fatal("expected decryption to fail with no keys")
+	}
+}
+
+func TestDecryptFlowTimedMergesDirectionsByCapturePoint(t *testing.T) {
+	c2s, s2c, keylog := captureTLS(t, tls.VersionTLS12, []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256})
+	kl, err := ParseKeyLog(bytes.NewReader(keylog))
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientPoint := func(int, int) (replay.CapturePoint, bool) {
+		return replay.CapturePoint{At: 20 * time.Millisecond, PacketIndex: 20}, true
+	}
+	serverPoint := func(int, int) (replay.CapturePoint, bool) {
+		return replay.CapturePoint{At: 10 * time.Millisecond, PacketIndex: 10}, true
+	}
+	messages, err := NewDecryptor(kl).DecryptFlowTimed(c2s, s2c, clientPoint, serverPoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) < 2 || messages[0].Role != FromServer || messages[len(messages)-1].Role != FromClient {
+		t.Fatalf("timed messages=%+v", messages)
+	}
+}
+
+func TestTLSRecordParserRejectsTrailingPartialRecord(t *testing.T) {
+	if _, err := parseRecords([]byte{23, 3, 3, 0, 4, 1}); err == nil || !strings.Contains(err.Error(), "truncated TLS record body") {
+		t.Fatalf("partial record error=%v", err)
+	}
+	if _, err := parseRecords([]byte{23, 3}); err == nil || !strings.Contains(err.Error(), "truncated TLS record header") {
+		t.Fatalf("partial header error=%v", err)
 	}
 }
 

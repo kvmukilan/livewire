@@ -174,11 +174,12 @@ func (nr *NgReader) readEPB(body []byte) *Record {
 	data := make([]byte, capLen)
 	copy(data, body[20:20+capLen])
 	return &Record{
-		Time:     ticksToTime(tsHigh<<32|tsLow, iface.ticksPerSec),
-		CapLen:   capLen,
-		OrigLen:  origLen,
-		Data:     data,
-		LinkType: iface.link,
+		Time:        ticksToTime(tsHigh<<32|tsLow, iface.ticksPerSec),
+		CapLen:      capLen,
+		OrigLen:     origLen,
+		Data:        data,
+		LinkType:    iface.link,
+		InterfaceID: ifaceID,
 	}
 }
 

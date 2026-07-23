@@ -1,8 +1,7 @@
-//go:build ssh
-
 package webui
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,7 +13,7 @@ import (
 func sshEnabled() bool { return true }
 
 // handleSSH runs an SSH re-termination as a job: connect, replay the commands,
-// capture their output. Compiled only under -tags ssh.
+// and capture their output.
 func (s *Server) handleSSH(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Target   string   `json:"target"` // host:port
@@ -35,8 +34,10 @@ func (s *Server) handleSSH(w http.ResponseWriter, r *http.Request) {
 		cmds[i] = sshreplay.Command{Run: c}
 	}
 	if _, err := s.startJob("ssh", func(j *job) {
-		j.log(fmt.Sprintf("ssh re-termination -> %s as %s", req.Target, req.User))
-		res, err := sshreplay.ReTerminate(sshreplay.Config{
+		j.protectValue(req.Password)
+		j.protectValue(req.User)
+		j.log(fmt.Sprintf("ssh re-termination -> %s", req.Target))
+		res, err := sshreplay.ReTerminateContext(j.ctx, sshreplay.Config{
 			Address:  req.Target,
 			Auth:     sshreplay.Auth{User: req.User, Password: req.Password},
 			Commands: cmds,
@@ -48,8 +49,8 @@ func (s *Server) handleSSH(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for i, out := range res.Outputs {
-			j.log(fmt.Sprintf("=== %s ===", req.Commands[i]))
-			j.log(string(out))
+			sum := sha256.Sum256(out)
+			j.log(fmt.Sprintf("command %d: %d output bytes, sha256:%x (body excluded from job logs)", i, len(out), sum))
 		}
 		j.finish(true, "ssh complete")
 	}); err != nil {

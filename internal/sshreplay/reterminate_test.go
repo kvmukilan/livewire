@@ -1,11 +1,11 @@
-//go:build ssh
-
 package sshreplay
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/binary"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -17,6 +17,12 @@ import (
 // startSSHServer runs an in-process SSH server that accepts one password and
 // answers every exec request with a fixed banner.
 func startSSHServer(t *testing.T, user, pass, reply string) string {
+	t.Helper()
+	addr, _ := startSSHServerWithKey(t, user, pass, reply)
+	return addr
+}
+
+func startSSHServerWithKey(t *testing.T, user, pass, reply string) (string, ssh.PublicKey) {
 	t.Helper()
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -77,7 +83,7 @@ func startSSHServer(t *testing.T, user, pass, reply string) string {
 			}()
 		}
 	}()
-	return ln.Addr().String()
+	return ln.Addr().String(), signer.PublicKey()
 }
 
 func sendExitStatus(ch ssh.Channel, code uint32) {
@@ -128,5 +134,67 @@ func TestSSHReTerminateBadAuth(t *testing.T) {
 func TestSSHReTerminateNoCreds(t *testing.T) {
 	if _, err := ReTerminate(Config{Address: "127.0.0.1:1", Auth: Auth{User: "x"}}); err == nil {
 		t.Fatal("expected error with no credentials")
+	}
+}
+
+func TestSSHReTerminatePinsHostKey(t *testing.T) {
+	addr, hostKey := startSSHServerWithKey(t, "lab", "secret", "ok\n")
+	res, err := ReTerminate(Config{
+		Address: addr, Auth: Auth{User: "lab", Password: "secret"},
+		Commands: []Command{{Run: "show"}}, Timeout: time.Second, HostKey: hostKey,
+	})
+	if err != nil || res.HostKey == nil {
+		t.Fatalf("pinned retermination result=%+v err=%v", res, err)
+	}
+	_, wrongPrivate, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongSigner, err := ssh.NewSignerFromKey(wrongPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr, _ = startSSHServerWithKey(t, "lab", "secret", "ok\n")
+	if _, err := ReTerminate(Config{
+		Address: addr, Auth: Auth{User: "lab", Password: "secret"},
+		Commands: []Command{{Run: "show"}}, Timeout: time.Second, HostKey: wrongSigner.PublicKey(),
+	}); err == nil || !strings.Contains(err.Error(), "host key mismatch") {
+		t.Fatalf("expected host key mismatch, got %v", err)
+	}
+}
+
+func TestSSHReTerminateContextCancelsHandshake(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		conn, acceptErr := ln.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 75*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, err = ReTerminateContext(ctx, Config{
+		Address: ln.Addr().String(), Auth: Auth{User: "lab", Password: "secret"},
+		Commands: []Command{{Run: "show"}}, Timeout: 5 * time.Second,
+	})
+	if err == nil || !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected context deadline, got %v", err)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cancellation took %s", elapsed)
+	}
+	select {
+	case <-serverDone:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled SSH connection was not released")
 	}
 }

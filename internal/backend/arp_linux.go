@@ -47,7 +47,7 @@ func NextHop(ifname string, target netip.Addr) (netip.Addr, error) {
 
 // ResolveMAC returns the MAC for ip on ifname, consulting the kernel neighbour
 // table first and issuing an ARP request if the entry is missing (IPv4 only;
-// IPv6 uses NDP, deferred).
+// IPv6 uses an active Neighbor Solicitation/Advertisement exchange.
 func ResolveMAC(ifname string, ip netip.Addr) (net.HardwareAddr, error) {
 	if mac, ok := neighLookup(ip); ok {
 		return mac, nil

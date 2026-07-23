@@ -1,227 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>livewire dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Livewire Replay Studio</title>
 <style>
-  :root { --bg:#0d1117; --panel:#161b22; --border:#30363d; --fg:#c9d1d9; --accent:#2f81f7; --ok:#3fb950; --bad:#f85149; --muted:#8b949e; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
-  header { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:baseline; gap:12px; }
-  header h1 { font-size:18px; margin:0; }
-  header .sub { color:var(--muted); font-size:12px; }
-  .wrap { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px; max-width:1200px; }
-  .panel { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; }
-  .panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 10px; }
-  label { display:block; font-size:12px; color:var(--muted); margin:8px 0 3px; }
-  input, select, button { font:inherit; }
-  input, select { width:100%; padding:7px 9px; background:#0d1117; color:var(--fg); border:1px solid var(--border); border-radius:6px; }
-  input[type=checkbox] { width:auto; }
-  .row { display:flex; gap:10px; } .row > * { flex:1; }
-  button { cursor:pointer; padding:8px 14px; background:var(--accent); color:#fff; border:none; border-radius:6px; margin-top:10px; }
-  button.sec { background:#21262d; border:1px solid var(--border); color:var(--fg); }
-  button.danger { background:var(--bad); }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
-  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); }
-  th { color:var(--muted); font-weight:600; }
-  .full { grid-column:1 / -1; }
-  #log { background:#010409; border:1px solid var(--border); border-radius:6px; padding:10px; height:280px; overflow:auto; font-family:ui-monospace,Consolas,monospace; font-size:12px; white-space:pre-wrap; }
-  .status { font-size:12px; margin-left:8px; }
-  .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
-  .chip { display:inline-block; background:#21262d; border:1px solid var(--border); border-radius:12px; padding:2px 8px; font-size:11px; margin:2px 4px 2px 0; }
-  .flowsel tr { cursor:pointer; } .flowsel tr.sel td { background:#132030; }
+:root{
+  --ink:#e9f1fb;--muted:#91a0b5;--dim:#64748b;--graphite:#080d14;--navy:#0b1422;
+  --panel:#101b2a;--panel2:#132135;--line:#25364c;--line2:#314760;--cyan:#4fd1c5;
+  --blue:#65a7ff;--green:#51d88a;--amber:#f4c568;--red:#ff7b87;--violet:#b79cff;
+  --mono:"Cascadia Code","SFMono-Regular",Consolas,monospace;--sans:Inter,ui-sans-serif,system-ui,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}html{min-height:100%;background:var(--graphite)}body{margin:0;min-height:100vh;color:var(--ink);font:14px/1.45 var(--sans);background:
+radial-gradient(1000px 500px at 80% -10%,#17345c66,transparent 65%),linear-gradient(145deg,var(--graphite),var(--navy) 55%,#0a111c)}
+button,input,select,textarea{font:inherit}button,input,select,textarea{outline:none}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{box-shadow:0 0 0 3px #65a7ff55;border-color:var(--blue)}
+.shell{display:grid;grid-template-columns:272px minmax(0,1fr);min-height:100vh}.rail{position:sticky;top:0;height:100vh;padding:24px 18px;border-right:1px solid var(--line);background:#080e17e8;backdrop-filter:blur(16px);display:flex;flex-direction:column;gap:22px}
+.brand{display:flex;align-items:center;gap:12px}.mark{width:40px;height:40px;border:1px solid #4fd1c566;border-radius:12px;background:linear-gradient(140deg,#173c4a,#10243d);display:grid;place-items:center;box-shadow:inset 0 0 18px #4fd1c51a}.mark svg{width:23px}.brand h1{font-size:16px;letter-spacing:.04em;margin:0}.brand p{font:10px var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan);margin:3px 0 0}
+.steps{display:grid;gap:5px}.step{display:grid;grid-template-columns:28px 1fr;align-items:center;gap:8px;padding:9px;border-radius:9px;color:var(--muted);border:1px solid transparent}.step.active{color:var(--ink);background:#17253a;border-color:#2b415d}.step.done .n{background:#173e35;color:var(--green)}.n{display:grid;place-items:center;width:24px;height:24px;border-radius:7px;background:#152235;font:11px var(--mono)}.step small{display:block;color:var(--dim);font-size:10px}
+.railfoot{margin-top:auto;padding:12px;border:1px solid var(--line);background:#0d1724;border-radius:10px;color:var(--muted);font-size:11px}.pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);margin-right:6px}.keys{font:10px var(--mono);color:var(--dim);margin-top:8px}
+main{min-width:0;padding:26px 30px 60px}.top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:22px}.top h2{font-size:25px;line-height:1.15;letter-spacing:-.02em;margin:0}.top p{color:var(--muted);margin:6px 0 0}.jobpill{display:flex;align-items:center;gap:8px;min-width:185px;justify-content:center;padding:9px 13px;border:1px solid var(--line);border-radius:999px;background:#101a29;font:11px var(--mono);color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,.65fr);gap:16px}.card{min-width:0;border:1px solid var(--line);border-radius:14px;background:linear-gradient(160deg,#111c2bcc,#0d1724e8);box-shadow:0 18px 60px #0005;overflow:hidden}.head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;border-bottom:1px solid var(--line)}.head h3{font-size:12px;letter-spacing:.09em;text-transform:uppercase;margin:0}.head span{font:10px var(--mono);color:var(--dim)}.body{padding:16px}.span2{grid-column:1/-1}
+label{display:block;color:var(--muted);font-size:11px;margin:0 0 6px}.field{margin-bottom:13px}.row{display:flex;gap:10px}.row>.field{flex:1;min-width:0}.control{width:100%;border:1px solid var(--line);border-radius:9px;background:#09121e;color:var(--ink);padding:9px 10px}.control::placeholder{color:#56677d}textarea.control{min-height:92px;resize:vertical;font:11px/1.5 var(--mono)}
+.btn{border:1px solid #4e86c5;border-radius:9px;background:linear-gradient(#438bdc,#2f6fb8);color:white;font-weight:650;padding:9px 13px;cursor:pointer}.btn:hover{filter:brightness(1.08)}.btn.ghost{background:#111e2f;border-color:var(--line2);color:var(--ink)}.btn.stop{background:#3a2029;border-color:#7c3945;color:#ffd9dd}.btn.sm{font-size:11px;padding:7px 10px}.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toggle{display:grid;grid-template-columns:1fr 1fr;padding:3px;border:1px solid var(--line);border-radius:10px;background:#09121e}.toggle button{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:8px;cursor:pointer}.toggle button.on{background:#1a3049;color:var(--ink);box-shadow:0 2px 9px #0006}.seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{border:1px solid var(--line);border-radius:999px;background:#0b1522;color:var(--muted);padding:6px 10px;font-size:11px;cursor:pointer}.seg button.on{border-color:#468bd1;color:#dcecff;background:#173250}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.stat{padding:11px;border:1px solid var(--line);border-radius:10px;background:#0b1522}.stat b{display:block;font:19px var(--mono);font-weight:500}.stat span{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.matrix{overflow:auto;max-height:330px}table{width:100%;border-collapse:collapse;font-size:11px}th{position:sticky;top:0;background:#101b2a;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:9px;border-bottom:1px solid var(--line)}td{padding:9px;border-bottom:1px solid #1c2a3b;font-family:var(--mono);vertical-align:top}tr:hover td{background:#132237}.badge{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;border:1px solid;font:10px var(--mono)}.semantic{color:var(--green);border-color:#2a7450;background:#153427}.stateful{color:var(--blue);border-color:#356da7;background:#152d48}.wire{color:var(--amber);border-color:#80642f;background:#342916}.blocked{color:var(--red);border-color:#803c45;background:#351b22}.note{max-width:340px;white-space:normal;color:var(--muted);font-family:var(--sans)}
+.topology{position:relative;display:grid;grid-template-columns:1fr 95px 1fr;align-items:center;gap:13px;padding:18px 6px}.endpoint{border:1px solid var(--line2);border-radius:12px;background:#0c1725;padding:13px;text-align:center}.endpoint b{display:block}.endpoint small{color:var(--muted);font:10px var(--mono)}.dut{height:74px;border:1px solid #6d5b9a;border-radius:13px;background:linear-gradient(145deg,#291f43,#17233d);display:grid;place-items:center;color:#ddceff;font:11px var(--mono);box-shadow:0 0 24px #9b7be322}.wireline{position:absolute;left:24%;right:24%;height:1px;background:linear-gradient(90deg,var(--cyan),var(--violet));top:50%;z-index:-1}.arrow{color:var(--cyan);font:10px var(--mono);text-align:center;margin-top:8px}
+.timeline{height:220px;overflow:auto;background:#07101a;border:1px solid var(--line);border-radius:10px;padding:10px;font:11px/1.55 var(--mono)}.event{display:grid;grid-template-columns:78px 100px 1fr;gap:8px;padding:4px 6px;border-left:2px solid var(--line2)}.event.send{border-color:var(--blue)}.event.receive{border-color:var(--green)}.event.blocked{border-color:var(--red)}.event time{color:var(--dim)}.event .session{color:var(--cyan)}
+.artifacts{display:flex;flex-wrap:wrap;gap:8px}.artifact{display:inline-flex;align-items:center;gap:6px;color:#cfe5ff;text-decoration:none;border:1px solid var(--line2);background:#112239;border-radius:8px;padding:7px 9px;font:10px var(--mono)}button.artifact{cursor:pointer}.artifact:hover{border-color:var(--blue)}.hidden{display:none!important}.hint{color:var(--muted);font-size:11px}.error{color:var(--red)}.success{color:var(--green)}
+details{border:1px solid var(--line);border-radius:9px;background:#0b1522;margin-top:10px}summary{cursor:pointer;padding:9px 11px;color:var(--muted);font-size:11px}details .inside{padding:0 10px 10px}
+@media(max-width:980px){.shell{grid-template-columns:1fr}.rail{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:14px 18px}.steps{display:none}.railfoot{display:none}main{padding:20px}.grid{grid-template-columns:1fr}.span2{grid-column:auto}}
+@media(max-width:600px){main{padding:14px}.top{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:1fr 1fr}.row{display:block}.topology{grid-template-columns:1fr}.wireline{display:none}.event{grid-template-columns:70px 1fr}.event .message{grid-column:1/-1}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
 <body>
-<header>
-  <h1>livewire</h1>
-  <span class="sub" id="hdrsub">live replay dashboard</span>
-</header>
-<div class="wrap">
-
-  <!-- Interfaces -->
-  <div class="panel">
-    <h2>1 · Interface</h2>
-    <label>Replay / capture interface</label>
-    <select id="iface"></select>
-    <table id="addrs"><thead><tr><th>adapter</th><th>IPs</th></tr></thead><tbody></tbody></table>
+<div class="shell">
+<aside class="rail" aria-label="Replay workflow">
+  <div class="brand"><div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#4fd1c5" stroke-width="1.7"><path d="M4 7h7l2-3v16l2-5h5"/><circle cx="4" cy="7" r="1.5"/><circle cx="20" cy="15" r="1.5"/></svg></div><div><h1>LIVEWIRE</h1><p>Replay Studio 0.5</p></div></div>
+  <nav class="steps"><div class="step active" id="step1"><span class="n">01</span><div>Capture<small>select and classify</small></div></div><div class="step" id="step2"><span class="n">02</span><div>Topology<small>one-sided or DUT</small></div></div><div class="step" id="step3"><span class="n">03</span><div>Fidelity<small>driver and faults</small></div></div><div class="step" id="step4"><span class="n">04</span><div>Run<small>observe and export</small></div></div></nav>
+  <div class="railfoot"><span class="pulse"></span>Offline UI · no runtime dependencies<div class="keys">Ctrl+Enter run · Esc stop</div></div>
+</aside>
+<main>
+  <header class="top"><div><h2>Protocol-adaptive replay</h2><p>Every frame gets an explicit driver, fidelity grade, and limitation.</p></div><div class="jobpill" id="jobPill" role="status" aria-live="polite"><span class="pulse"></span><span>ready</span></div></header>
+  <div class="grid">
+    <section class="card"><div class="head"><h3>Capture & coverage</h3><span>PCAP / PCAPNG</span></div><div class="body">
+      <div class="row"><div class="field"><label for="pcap">Capture</label><select class="control" id="pcap"></select></div><div class="field" style="flex:0 0 auto;align-self:flex-end"><button class="btn ghost" id="refreshBtn">Refresh</button></div></div>
+      <div class="actions"><button class="btn" id="compileBtn">Compile replay plan</button><button class="btn ghost" id="captureToggle">New capture</button></div>
+      <details id="captureBox"><summary>Capture from an interface</summary><div class="inside"><div class="row"><div class="field"><label for="captureIface">Interface</label><select class="control iface" id="captureIface"></select></div><div class="field"><label for="capOut">Output</label><input class="control" id="capOut" value="capture.pcap"></div><div class="field"><label for="capDur">Seconds</label><input class="control" id="capDur" type="number" min="0" value="15"></div></div><button class="btn sm" id="captureBtn">Start capture</button></div></details>
+      <div class="stats" style="margin-top:15px"><div class="stat"><b id="packets">—</b><span>frames</span></div><div class="stat"><b id="sessions">—</b><span>sessions</span></div><div class="stat"><b id="semantic">—</b><span>semantic</span></div><div class="stat"><b id="blockers">—</b><span>blockers</span></div></div>
+    </div></section>
+    <section class="card"><div class="head"><h3>Execution shape</h3><span id="shapeLabel">ONE-SIDED</span></div><div class="body">
+      <div class="toggle" role="group" aria-label="Execution topology"><button class="on" data-shape="one" aria-pressed="true">One-sided target</button><button data-shape="lab" aria-pressed="false">Two-sided DUT</button></div>
+      <div class="topology" aria-label="Topology preview"><div class="wireline"></div><div class="endpoint"><b>CLIENT ACTOR</b><small id="clientCaption">capture endpoint</small></div><div class="dut" id="middleNode">TARGET</div><div class="endpoint"><b>SERVER</b><small id="serverCaption">live device</small></div></div>
+      <div id="oneFields"><div class="row"><div class="field"><label for="runIface">Interface</label><select class="control iface" id="runIface"></select></div><div class="field"><label for="targetIP">Live target IP</label><input class="control" id="targetIP" placeholder="192.168.1.50"></div></div></div>
+      <div id="labFields" class="hidden"><div class="row"><div class="field"><label for="clientIface">Client-facing NIC</label><select class="control iface" id="clientIface"></select></div><div class="field"><label for="serverIface">Server-facing NIC</label><select class="control iface" id="serverIface"></select></div></div></div>
+    </div></section>
+    <section class="card span2"><div class="head"><h3>Session coverage matrix</h3><span id="coverageState">compile a plan</span></div><div class="matrix"><table><thead><tr><th>session</th><th>protocol</th><th>driver</th><th>fidelity</th><th>adapter</th><th>packets</th><th>warning / blocker</th></tr></thead><tbody id="matrix"></tbody></table></div></section>
+    <section class="card"><div class="head"><h3>Fidelity & variables</h3><span>EXPLICIT POLICY</span></div><div class="body">
+      <div class="field"><label>Fidelity profile</label><div class="seg" id="profiles" role="group" aria-label="Fidelity profile"><button class="on" data-profile="functional" aria-pressed="true">Functional</button><button data-profile="timing" aria-pressed="false">Timing</button><button data-profile="transport" aria-pressed="false">Transport</button><button data-profile="wire" aria-pressed="false">Wire</button></div></div>
+      <div class="row"><div class="field"><label for="verify">Verification</label><select class="control" id="verify"><option value="lenient">Lenient</option><option value="strict">Strict</option><option value="off">Off</option></select></div><div class="field"><label for="udpIdle">UDP idle boundary · seconds</label><input class="control" id="udpIdle" type="number" min="0.001" step="0.1" value="30"></div></div><div class="field"><label for="variables">Run variables · name=value</label><textarea class="control" id="variables" placeholder="http.host=device.local&#10;mqtt.client_id=replay-client"></textarea></div>
+      <details><summary>Proprietary protocol rule packs</summary><div class="inside"><label for="rulePacks">One JSON object or an array of rule packs</label><textarea class="control" id="rulePacks" spellcheck="false" placeholder='{"name":"vendor-protocol","match":{"transport":"tcp","ports":[9000]},"framing":{"type":"length-field","lengthOffset":1,"lengthSize":2}}'></textarea></div></details>
+      <label><input type="checkbox" id="noGuard"> Disable host RST suppression (advanced)</label>
+      <div id="labConfig" class="hidden"><details open><summary>Topology JSON</summary><div class="inside"><textarea class="control" id="topologyJSON" spellcheck="false" aria-label="Topology JSON"></textarea></div></details><details><summary>Fault scenario JSON</summary><div class="inside"><textarea class="control" id="scenarioJSON" spellcheck="false" aria-label="Fault scenario JSON">{
+  "version": 1,
+  "seed": 1,
+  "rules": []
+}</textarea></div></details><div class="row"><div class="field"><label for="actorTimeout">Actor crossing timeout · seconds</label><input class="control" id="actorTimeout" type="number" min="0.001" step="0.1" value="2"></div></div><div class="actions" style="margin-top:8px"><button class="btn ghost sm" id="validateBtn">Validate topology & scenario</button><span class="hint" id="validateState"></span></div></div>
+      <div class="actions" style="margin-top:15px"><button class="btn" id="runBtn">Start replay</button><button class="btn stop" id="stopBtn">Stop</button><span class="hint" id="runHint">Plan must be compiled before running.</span></div>
+    </div></section>
+    <section class="card"><div class="head"><h3>Live topology & timeline</h3><span>MONOTONIC EVENTS</span></div><div class="body"><div class="timeline" id="timeline" tabindex="0" aria-live="polite"><div class="hint">Replay progress will appear here.</div></div><div class="arrow" id="metricLine">no run evidence yet</div></div></section>
+    <section class="card span2"><div class="head"><h3>Evidence & artifacts</h3><span>REDACTED REPORTS</span></div><div class="body"><div class="artifacts" id="artifacts"><span class="hint">Reports and PCAPNG evidence will appear after a run.</span></div></div></section>
   </div>
-
-  <!-- Capture -->
-  <div class="panel">
-    <h2>2 · Capture a pcap</h2>
-    <label>Output file (in server dir)</label>
-    <input id="capOut" value="cap.pcap">
-    <label>Duration (seconds, 0 = until Stop)</label>
-    <input id="capDur" type="number" value="15">
-    <div class="row">
-      <button onclick="startCapture()">Capture</button>
-      <button class="sec" onclick="stopJob()">Stop</button>
-    </div>
-  </div>
-
-  <!-- Load pcap -->
-  <div class="panel">
-    <h2>3 · Load a pcap</h2>
-    <label>Pcap file</label>
-    <div class="row">
-      <select id="pcap"></select>
-      <button class="sec" style="flex:0 0 auto;margin-top:0" onclick="refreshPcaps()">↻</button>
-    </div>
-    <button onclick="loadFlows()">Load flows</button>
-    <table class="flowsel" id="flows"><thead><tr><th>#</th><th>client → server</th><th>proto</th><th>pkts</th><th>hs</th></tr></thead><tbody></tbody></table>
-  </div>
-
-  <!-- Replay -->
-  <div class="panel">
-    <h2>4 · Replay</h2>
-    <label>Mode</label>
-    <select id="mode" onchange="onMode()">
-      <option value="stateful">Stateful (maintain seq/ack to live host)</option>
-      <option value="stateless">Stateless (blast frames as-is)</option>
-      <option value="ssh">SSH re-termination</option>
-    </select>
-    <div id="replayFields">
-      <div class="row">
-        <div><label>Target IP</label><input id="tIP" placeholder="192.168.1.50"></div>
-        <div><label>Port</label><input id="tPort" type="number" placeholder="502"></div>
-      </div>
-      <label>Flow index (−1 = auto)</label>
-      <input id="flow" type="number" value="-1">
-      <label><input type="checkbox" id="noGuard"> disable host-RST guard (host kernel may reset)</label>
-      <button onclick="startReplay()">Run replay</button>
-    </div>
-    <div id="sshFields" style="display:none">
-      <div class="row">
-        <div><label>SSH target host:port</label><input id="sshTarget" placeholder="192.168.1.50:22"></div>
-      </div>
-      <div class="row">
-        <div><label>User</label><input id="sshUser"></div>
-        <div><label>Password</label><input id="sshPass" type="password"></div>
-      </div>
-      <label>Commands (one per line)</label>
-      <input id="sshCmds" placeholder="show version">
-      <button onclick="startSSH()">Run SSH replay</button>
-      <div class="muted" id="sshNote"></div>
-    </div>
-  </div>
-
-  <!-- RST rules -->
-  <div class="panel">
-    <h2>5 · Host-RST drop rules</h2>
-    <div class="muted">Drop the host's outbound RST to a target (for scapy / manual tools). <code>live</code> does this automatically.</div>
-    <div class="row">
-      <div><label>Target IP</label><input id="rstIP" placeholder="192.168.1.50"></div>
-      <div><label>Port</label><input id="rstPort" type="number" placeholder="502"></div>
-    </div>
-    <div class="row">
-      <button onclick="rstRule('add')">Add drop rule</button>
-      <button class="danger" onclick="rstRule('del')">Remove</button>
-    </div>
-    <div id="rstList"></div>
-  </div>
-
-  <!-- Output -->
-  <div class="panel full">
-    <h2>Output <span class="status" id="jobStatus"></span></h2>
-    <div id="log"></div>
-  </div>
-
+</main>
 </div>
 <script>
-const $ = id => document.getElementById(id);
-async function api(path, body) {
-  const opt = { method: body ? 'POST' : 'GET' };
-  if (body) { opt.headers = {'Content-Type':'application/json'}; opt.body = JSON.stringify(body); }
-  const r = await fetch(path, opt);
-  const j = await r.json().catch(()=>({}));
-  if (!r.ok) throw new Error(j.error || r.statusText);
-  return j;
-}
-function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
-
-async function loadIfaces() {
-  const d = await api('/api/ifaces');
-  $('iface').innerHTML = (d.interfaces||[]).map(i =>
-    `<option value="${esc(i.value)}">${esc(i.label||i.value)}${i.ips&&i.ips.length?' — '+i.ips.join(', '):''}${i.kind==='loopback'?' [loopback]':''}</option>`).join('');
-  $('addrs').querySelector('tbody').innerHTML = (d.addrs||[]).map(a =>
-    `<tr><td>${esc(a.name)}</td><td>${(a.ips||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join('')||'<span class="muted">—</span>'}</td></tr>`).join('');
-}
-async function refreshPcaps() {
-  const d = await api('/api/pcaps');
-  $('pcap').innerHTML = (d||[]).map(p => `<option value="${esc(p.name)}">${esc(p.name)} (${p.size} B)</option>`).join('')
-    || '<option value="">(no pcaps in server dir)</option>';
-}
-let selectedFlow = -1;
-async function loadFlows() {
-  const pcap = $('pcap').value; if (!pcap) return;
-  try {
-    const flows = await api('/api/flows', {pcap});
-    const tb = $('flows').querySelector('tbody');
-    tb.innerHTML = flows.map(f =>
-      `<tr onclick="pickFlow(${f.index},'${esc(f.serverIP)}',${f.port})"><td>${f.index}</td><td>${esc(f.client)} → ${esc(f.server)}</td><td>${esc(f.proto)}</td><td>${f.packets}</td><td>${f.handshake?'✓':'—'}</td></tr>`).join('');
-    log('loaded '+flows.length+' flow(s) from '+pcap);
-  } catch(e){ log('error: '+e.message); }
-}
-function pickFlow(i, ip, port) {
-  selectedFlow = i; $('flow').value = i; $('tIP').value = ip; $('tPort').value = port;
-  document.querySelectorAll('#flows tbody tr').forEach((tr,idx)=>tr.classList.toggle('sel', idx===i));
-}
-function onMode() {
-  const ssh = $('mode').value === 'ssh';
-  $('sshFields').style.display = ssh ? 'block' : 'none';
-  $('replayFields').style.display = ssh ? 'none' : 'block';
-}
-async function startCapture() {
-  try { await api('/api/capture', {iface:$('iface').value, out:$('capOut').value, duration:+$('capDur').value}); poll(); }
-  catch(e){ log('error: '+e.message); }
-}
-async function startReplay() {
-  try {
-    await api('/api/replay', {
-      pcap:$('pcap').value, iface:$('iface').value, targetIP:$('tIP').value,
-      port:+$('tPort').value, flow:+$('flow').value, mode:$('mode').value, noGuard:$('noGuard').checked
-    });
-    poll();
-  } catch(e){ log('error: '+e.message); }
-}
-async function startSSH() {
-  try {
-    await api('/api/ssh', {target:$('sshTarget').value, user:$('sshUser').value, password:$('sshPass').value,
-      commands:$('sshCmds').value.split('\n').map(s=>s.trim()).filter(Boolean)});
-    poll();
-  } catch(e){ log('error: '+e.message); }
-}
-async function stopJob(){ await api('/api/stop', {}); }
-async function rstRule(action) {
-  try {
-    const d = await api('/api/rstrule', {action, ip:$('rstIP').value, port:+$('rstPort').value});
-    $('rstList').innerHTML = (d.rules||[]).map(r=>'<span class="chip">'+esc(r)+'</span>').join('') || '<span class="muted">no active rules</span>';
-    if (d.armed) log('RST guard armed: '+d.armed);
-  } catch(e){ log('error: '+e.message); }
-}
-function log(s){ const l=$('log'); l.textContent += s+'\n'; l.scrollTop = l.scrollHeight; }
-let lastLen = 0, polling = false;
-async function poll() {
-  if (polling) return; polling = true;
-  const tick = async () => {
-    try {
-      const s = await api('/api/status');
-      const lines = s.lines || [];
-      for (let i=lastLen; i<lines.length; i++) log(lines[i]);
-      lastLen = lines.length;
-      const st = $('jobStatus');
-      if (s.running) { st.textContent = '● '+s.kind+' running'; st.className='status'; setTimeout(tick, 500); }
-      else { polling=false; if (s.done){ st.textContent = (s.ok?'✓ ':'✗ ')+s.kind+': '+s.summary; st.className='status '+(s.ok?'ok':'bad'); } }
-    } catch(e){ polling=false; }
-  };
-  tick();
-}
-onMode(); loadIfaces(); refreshPcaps();
-fetch('/api/ssh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>{ if(r.status===501) $('sshNote').textContent='(this build lacks SSH; rebuild with -tags ssh)'; });
-setInterval(()=>{ if(!polling) poll(); }, 2000);
+const $=id=>document.getElementById(id);let shape='one',profile='functional',compiled=null,sessionData=[],lastEvent=0,pollTimer=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(path,body){const o={method:body===undefined?'GET':'POST'};if(body!==undefined){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(body)}const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j}
+function setPill(text,state='ready'){const p=$('jobPill');p.querySelector('span:last-child').textContent=text;p.style.borderColor=state==='bad'?'#803c45':state==='run'?'#356da7':'#25364c';p.querySelector('.pulse').style.background=state==='bad'?'var(--red)':state==='run'?'var(--blue)':'var(--green)'}
+function variables(){const out={};$('variables').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const i=line.indexOf('=');if(i<1)throw new Error('Variable must be name=value: '+line);out[line.slice(0,i).trim()]=line.slice(i+1)});return out}
+function rulePacks(){const raw=$('rulePacks').value.trim();if(!raw)return[];const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed:[parsed]}
+function durationMS(id){const value=Number($(id).value);if(!Number.isFinite(value)||value<=0)throw new Error(`${id} must be positive`);return Math.round(value*1000)}
+async function refresh(){const [pcaps,ifs]=await Promise.all([api('/api/pcaps'),api('/api/ifaces')]);$('pcap').innerHTML=pcaps.length?pcaps.map(p=>`<option value="${esc(p.name)}">${esc(p.name)} · ${p.size.toLocaleString()} B</option>`).join(''):'<option value="">No captures in working directory</option>';const opts=(ifs.interfaces||[]).map(i=>`<option value="${esc(i.value)}">${esc(i.label||i.value)}${i.ips?.length?' · '+esc(i.ips.join(', ')):''}</option>`).join('');document.querySelectorAll('.iface').forEach(x=>x.innerHTML=opts)}
+function renderPlan(d){compiled=d;sessionData=d.sessions||[];const e=d.plan.entries||[];$('packets').textContent=d.capture.packets;$('sessions').textContent=d.capture.sessions;$('semantic').textContent=e.filter(x=>x.mode==='semantic').length;$('blockers').textContent=e.filter(x=>x.mode==='blocked').length;$('coverageState').textContent=`${e.length} lanes · ${d.plan.profile}`;$('matrix').innerHTML=e.map(x=>{const note=(x.blockers?.[0]||x.warnings?.[0]||'');return `<tr><td>${esc(x.sessionId)}</td><td>${esc(x.transport)}</td><td><span class="badge ${esc(x.mode)}">${esc(x.driver||x.mode)}</span></td><td>${esc(x.fidelity)}</td><td>${esc(x.adapter||'—')}</td><td>${x.packetIndexes.length}</td><td class="note ${x.blockers?.length?'error':''}">${esc(note||'ready')}</td></tr>`}).join('');document.querySelectorAll('.step').forEach((x,i)=>x.classList.toggle('done',i<3));$('runHint').textContent=e.some(x=>x.mode==='blocked')?'Blocked lanes will be reported and not transmitted.':'All lanes have an explicit driver.';buildTopologyTemplate()}
+async function compile(){if(!$('pcap').value)return;setPill('compiling plan','run');try{const d=await api('/api/plan',{pcap:$('pcap').value,profile,rulePacks:rulePacks(),udpIdleMs:durationMS('udpIdle')});renderPlan(d);setPill('plan ready')}catch(e){setPill(e.message,'bad')}}
+function selectShape(next){shape=next;document.querySelectorAll('[data-shape]').forEach(b=>{const selected=b.dataset.shape===shape;b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected))});$('oneFields').classList.toggle('hidden',shape!=='one');$('labFields').classList.toggle('hidden',shape!=='lab');$('labConfig').classList.toggle('hidden',shape!=='lab');$('shapeLabel').textContent=shape==='lab'?'TWO-SIDED DUT':'ONE-SIDED';$('middleNode').textContent=shape==='lab'?'DUT':'TARGET';$('clientCaption').textContent=shape==='lab'?'client-facing NIC':'captured client';$('serverCaption').textContent=shape==='lab'?'server-facing NIC':'live device';$('noGuard').closest('label').classList.toggle('hidden',shape==='lab')}
+function selectProfile(next){profile=next;document.querySelectorAll('[data-profile]').forEach(b=>{const selected=b.dataset.profile===profile;b.classList.toggle('on',selected);b.setAttribute('aria-pressed',String(selected))});if(compiled)compile()}
+function buildTopologyTemplate(){if(!sessionData.length||$('topologyJSON').dataset.edited)return;const maps=[];const seen=new Set();sessionData.forEach(s=>[['client',s.client],['server',s.server]].forEach(([role,ep])=>{const k=role+'/'+ep.ip+'/'+(ep.port||0);if(!seen.has(k)){seen.add(k);maps.push({role,captured:ep,live:ep})}}));const t={version:1,client:{interface:$('clientIface').value,mtu:1500},server:{interface:$('serverIface').value,mtu:1500},mappings:maps};$('topologyJSON').value=JSON.stringify(t,null,2)}
+async function validateLab(){try{const topology=JSON.parse($('topologyJSON').value),scenario=JSON.parse($('scenarioJSON').value);topology.client.interface=$('clientIface').value;topology.server.interface=$('serverIface').value;await api('/api/validate',{pcap:$('pcap').value,topology,scenario});$('validateState').textContent='Valid';$('validateState').className='success'}catch(e){$('validateState').textContent=e.message;$('validateState').className='error'}}
+function addEvents(events){const box=$('timeline');if(lastEvent===0)box.innerHTML='';for(let i=lastEvent;i<events.length;i++){const e=events[i],time=new Date(e.at).toLocaleTimeString([], {hour12:false});box.insertAdjacentHTML('beforeend',`<div class="event ${esc(e.stage)}"><time>${esc(time)}</time><span class="session">${esc(e.session||e.stage)}</span><span class="message">${esc(e.message)}</span></div>`)}lastEvent=events.length;box.scrollTop=box.scrollHeight}
+let artifactItems=[];function renderArtifacts(items){artifactItems=items||[];if(!artifactItems.length){$('artifacts').innerHTML='<span class="hint">No artifacts yet.</span>';return}const links=artifactItems.map(n=>`<a class="artifact" href="/api/artifact?name=${encodeURIComponent(n)}">↧ ${esc(n)}</a>`).join('');const report=[...artifactItems].reverse().find(n=>n.endsWith('.json'));const bundle=report?'<button class="artifact" type="button" onclick="makeBundle()">◇ create redacted support bundle</button>':'';$('artifacts').innerHTML=links+bundle}
+async function makeBundle(){const report=[...artifactItems].reverse().find(n=>n.endsWith('.json'));if(!report)return;const evidence=artifactItems.filter(n=>n.endsWith('.pcap')||n.endsWith('.pcapng'));try{const d=await api('/api/bundle',{report,evidence});renderArtifacts([...artifactItems,d.name]);setPill('support bundle ready')}catch(e){setPill(e.message,'bad')}}
+async function poll(){try{const s=await api('/api/status');addEvents(s.events||[]);renderArtifacts(s.artifacts||[]);if(s.running){setPill(`${s.kind} running`,'run');pollTimer=setTimeout(poll,350)}else{pollTimer=null;if(s.done)setPill(`${s.ok?'complete':'failed'} · ${s.summary}`,s.ok?'ready':'bad')}}catch(e){pollTimer=null;setPill(e.message,'bad')}}
+async function run(){if(!compiled){await compile();if(!compiled)return}lastEvent=0;$('timeline').innerHTML='<div class="hint">Starting…</div>';$('artifacts').innerHTML='<span class="hint">Run in progress.</span>';try{if(shape==='one'){await api('/api/run',{pcap:$('pcap').value,iface:$('runIface').value,targetIP:$('targetIP').value,profile,verify:$('verify').value,noGuard:$('noGuard').checked,variables:variables(),rulePacks:rulePacks(),udpIdleMs:durationMS('udpIdle')})}else{const topology=JSON.parse($('topologyJSON').value),scenario=JSON.parse($('scenarioJSON').value);topology.client.interface=$('clientIface').value;topology.server.interface=$('serverIface').value;await api('/api/lab',{pcap:$('pcap').value,profile,topology,scenario,drainMs:250,actorTimeoutMs:durationMS('actorTimeout'),udpIdleMs:durationMS('udpIdle')})}setPill('starting','run');clearTimeout(pollTimer);poll()}catch(e){setPill(e.message,'bad')}}
+async function stop(){try{await api('/api/stop',{});setPill('cancelling','run')}catch(e){setPill(e.message,'bad')}}
+async function capture(){try{await api('/api/capture',{iface:$('captureIface').value,out:$('capOut').value,duration:+$('capDur').value});lastEvent=0;poll()}catch(e){setPill(e.message,'bad')}}
+document.querySelectorAll('[data-shape]').forEach(b=>b.onclick=()=>selectShape(b.dataset.shape));document.querySelectorAll('[data-profile]').forEach(b=>b.onclick=()=>selectProfile(b.dataset.profile));$('refreshBtn').onclick=refresh;$('compileBtn').onclick=compile;$('runBtn').onclick=run;$('stopBtn').onclick=stop;$('captureBtn').onclick=capture;$('captureToggle').onclick=()=>$('captureBox').open=!$('captureBox').open;$('validateBtn').onclick=validateLab;$('clientIface').onchange=buildTopologyTemplate;$('serverIface').onchange=buildTopologyTemplate;$('topologyJSON').oninput=()=>$('topologyJSON').dataset.edited='1';document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter'){e.preventDefault();run()}if(e.key==='Escape')stop()});
+selectShape('one');refresh().then(poll).catch(e=>setPill(e.message,'bad'));
 </script>
 </body>
 </html>

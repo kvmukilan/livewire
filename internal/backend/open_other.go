@@ -4,6 +4,7 @@ package backend
 
 import (
 	"fmt"
+	"net/netip"
 	"runtime"
 )
 
@@ -24,4 +25,8 @@ func openSender(iface string) (PacketBackend, error) {
 // openCapture: no capture backend on this OS.
 func openCapture(iface string, promisc bool) (PacketBackend, error) {
 	return nil, fmt.Errorf("backend: no capture backend on %s; use Linux or a Windows Npcap build", runtime.GOOS)
+}
+
+func resolveLink(_ string, _ netip.Addr, _ PacketBackend) ([6]byte, [6]byte, error) {
+	return [6]byte{}, [6]byte{}, fmt.Errorf("backend: no link resolver on %s", runtime.GOOS)
 }

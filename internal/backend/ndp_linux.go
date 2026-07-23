@@ -3,7 +3,6 @@
 package backend
 
 import (
-	"encoding/binary"
 	"fmt"
 	"net"
 	"net/netip"
@@ -17,8 +16,6 @@ import (
 // ICMPv6 Neighbor Solicitation to the target's solicited-node multicast group
 // and read the Neighbor Advertisement for the link-layer address. Builds the
 // whole L2 frame over an AF_PACKET raw socket, like the ARP path. Linux-only.
-
-const ethIPv6 = 0x86DD
 
 // resolveMAC6 resolves an IPv6 target's MAC via a Neighbor Solicitation.
 func resolveMAC6(ifname string, target netip.Addr, timeout time.Duration) (net.HardwareAddr, error) {
@@ -77,104 +74,6 @@ func linkLocalV6(ifi *net.Interface) (netip.Addr, error) {
 		}
 	}
 	return netip.Addr{}, fmt.Errorf("backend: interface %s has no IPv6 link-local address for NDP", ifi.Name)
-}
-
-// buildNS assembles an Ethernet/IPv6/ICMPv6 Neighbor Solicitation with the
-// source-link-layer-address option and a correct ICMPv6 checksum.
-func buildNS(srcMAC, dstMAC net.HardwareAddr, src, dst, target netip.Addr) []byte {
-	icmp := make([]byte, 32)
-	icmp[0] = 135 // Neighbor Solicitation
-	// [1] code 0, [2:4] checksum (filled below), [4:8] reserved.
-	t := target.As16()
-	copy(icmp[8:24], t[:])
-	icmp[24] = 1 // option: source link-layer address
-	icmp[25] = 1 // length in 8-octet units
-	copy(icmp[26:32], srcMAC)
-
-	sa := src.As16()
-	da := dst.As16()
-	binary.BigEndian.PutUint16(icmp[2:4], icmpv6Checksum(sa[:], da[:], icmp))
-
-	ip := make([]byte, 40)
-	ip[0] = 0x60
-	binary.BigEndian.PutUint16(ip[4:6], uint16(len(icmp)))
-	ip[6] = 58 // ICMPv6
-	ip[7] = 255
-	copy(ip[8:24], sa[:])
-	copy(ip[24:40], da[:])
-
-	eth := make([]byte, 14)
-	copy(eth[0:6], dstMAC)
-	copy(eth[6:12], srcMAC)
-	binary.BigEndian.PutUint16(eth[12:14], ethIPv6)
-	return append(append(eth, ip...), icmp...)
-}
-
-// parseNA extracts the target link-layer address from a Neighbor Advertisement
-// for wantIP.
-func parseNA(frame []byte, wantIP netip.Addr) (net.HardwareAddr, bool) {
-	const eth = 14
-	if len(frame) < eth+40+24 {
-		return nil, false
-	}
-	if binary.BigEndian.Uint16(frame[12:14]) != ethIPv6 {
-		return nil, false
-	}
-	if frame[eth]>>4 != 6 || frame[eth+6] != 58 {
-		return nil, false
-	}
-	icmp := frame[eth+40:]
-	if icmp[0] != 136 { // Neighbor Advertisement
-		return nil, false
-	}
-	var tgt [16]byte
-	copy(tgt[:], icmp[8:24])
-	if netip.AddrFrom16(tgt) != wantIP {
-		return nil, false
-	}
-	// Options follow at icmp[24:]; find the target-link-layer-address option (2).
-	opts := icmp[24:]
-	for len(opts) >= 8 {
-		otype, olen := opts[0], int(opts[1])*8
-		if olen == 0 || olen > len(opts) {
-			break
-		}
-		if otype == 2 { // target link-layer address
-			mac := make(net.HardwareAddr, 6)
-			copy(mac, opts[2:8])
-			return mac, true
-		}
-		opts = opts[olen:]
-	}
-	// Some hosts answer without the option; fall back to the NA source MAC.
-	mac := make(net.HardwareAddr, 6)
-	copy(mac, frame[6:12])
-	return mac, true
-}
-
-// icmpv6Checksum computes the ICMPv6 checksum over the IPv6 pseudo-header
-// (src, dst, upper-layer length, next header = 58) plus the ICMPv6 message.
-func icmpv6Checksum(src, dst, msg []byte) uint16 {
-	var sum uint32
-	add := func(b []byte) {
-		for i := 0; i+1 < len(b); i += 2 {
-			sum += uint32(b[i])<<8 | uint32(b[i+1])
-		}
-		if len(b)%2 == 1 {
-			sum += uint32(b[len(b)-1]) << 8
-		}
-	}
-	add(src)
-	add(dst)
-	var plen [4]byte
-	binary.BigEndian.PutUint32(plen[:], uint32(len(msg)))
-	add(plen[:])
-	add([]byte{0, 0, 0, 58}) // 3 zero bytes + next header
-	add(msg)
-	for sum>>16 != 0 {
-		sum = (sum & 0xffff) + (sum >> 16)
-	}
-	return ^uint16(sum)
 }
 
 // defaultGateway6 parses /proc/net/ipv6_route for the default route on ifname.

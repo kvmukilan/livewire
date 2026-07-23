@@ -134,27 +134,25 @@ func (p *Packet) dstIPBytes() []byte {
 	return p.Buf[p.l3Off+24 : p.l3Off+40]
 }
 
-// RecalcChecksums recomputes the IPv4 header checksum (if any) and the TCP/UDP
+// RecalcChecksums recomputes the IPv4 header checksum (if any) and the TCP/UDP/ICMP
 // checksum. Computed over IP-indicated lengths so trailing padding is excluded.
 func (p *Packet) RecalcChecksums() {
-	if p.isV4 {
-		hdr := p.Buf[p.l3Off : p.l3Off+p.l3HdrLn]
-		hdr[10], hdr[11] = 0, 0
-		binary.BigEndian.PutUint16(hdr[10:12], ipv4HeaderChecksum(hdr))
-	}
-	if !p.isTCP && !p.isUDP {
+	p.recalcIPv4Header()
+	if !p.isTCP && !p.isUDP && !p.isICMP {
 		return
 	}
 	seg := p.l4Segment()
 	if len(seg) < 8 {
 		return
 	}
-	// Zero the checksum field: TCP at offset 16, UDP at offset 6.
+	// Zero the checksum field: TCP at offset 16, UDP at offset 6, ICMP at offset 2.
 	var csumOff int
 	if p.isTCP {
 		csumOff = 16
-	} else {
+	} else if p.isUDP {
 		csumOff = 6
+	} else {
+		csumOff = 2
 	}
 	if csumOff+2 > len(seg) {
 		return
@@ -162,7 +160,10 @@ func (p *Packet) RecalcChecksums() {
 	seg[csumOff], seg[csumOff+1] = 0, 0
 
 	var pseudo uint32
-	if p.isV4 {
+	if p.isICMP && p.isV4 {
+		// ICMPv4 has no pseudo-header.
+		pseudo = 0
+	} else if p.isV4 {
 		pseudo = pseudoSumV4(p.srcIPBytes(), p.dstIPBytes(), p.proto, len(seg))
 	} else {
 		pseudo = pseudoSumV6(p.srcIPBytes(), p.dstIPBytes(), p.proto, len(seg))
@@ -174,6 +175,15 @@ func (p *Packet) RecalcChecksums() {
 	binary.BigEndian.PutUint16(seg[csumOff:csumOff+2], sum)
 }
 
+func (p *Packet) recalcIPv4Header() {
+	if !p.isV4 {
+		return
+	}
+	hdr := p.Buf[p.l3Off : p.l3Off+p.l3HdrLn]
+	hdr[10], hdr[11] = 0, 0
+	binary.BigEndian.PutUint16(hdr[10:12], ipv4HeaderChecksum(hdr))
+}
+
 // VerifyChecksums reports whether the IPv4 header and transport checksums are
 // already correct.
 func (p *Packet) VerifyChecksums() (ipOK, l4OK bool) {
@@ -183,11 +193,13 @@ func (p *Packet) VerifyChecksums() (ipOK, l4OK bool) {
 		ipOK = fold(sumBytes(hdr, 0)) == 0
 	}
 	l4OK = true
-	if p.isTCP || p.isUDP {
+	if p.isTCP || p.isUDP || p.isICMP {
 		seg := p.l4Segment()
 		if len(seg) >= 8 {
 			var pseudo uint32
-			if p.isV4 {
+			if p.isICMP && p.isV4 {
+				pseudo = 0
+			} else if p.isV4 {
 				pseudo = pseudoSumV4(p.srcIPBytes(), p.dstIPBytes(), p.proto, len(seg))
 			} else {
 				pseudo = pseudoSumV6(p.srcIPBytes(), p.dstIPBytes(), p.proto, len(seg))

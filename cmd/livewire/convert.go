@@ -14,7 +14,7 @@ func cmdConvert(args []string) error {
 	fs := flag.NewFlagSet("convert", flag.ContinueOnError)
 	inPath := fs.String("in", "", "input pcapng (or pcap) file (required)")
 	outPath := fs.String("out", "", "output classic pcap file (required)")
-	reassemble := fs.Bool("reassemble", false, "reassemble IPv4 fragments into whole datagrams")
+	reassemble := fs.Bool("reassemble", false, "reassemble IPv4 and IPv6 fragments into whole datagrams")
 	fs.Usage = func() {
 		fmt.Println("usage: livewire convert -in <in.pcapng> -out <out.pcap> [-reassemble]")
 		fs.PrintDefaults()

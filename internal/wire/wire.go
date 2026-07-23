@@ -34,8 +34,10 @@ const (
 
 // IP protocol numbers.
 const (
-	ProtoTCP uint8 = 6
-	ProtoUDP uint8 = 17
+	ProtoICMPv4 uint8 = 1
+	ProtoTCP    uint8 = 6
+	ProtoUDP    uint8 = 17
+	ProtoICMPv6 uint8 = 58
 )
 
 // IPv6 extension-header next-header values, skipped when locating L4.
@@ -78,11 +80,18 @@ type Packet struct {
 	vlanTCI   []int  // buffer offsets of each 802.1Q/QinQ TCI field
 
 	// Layer 3.
-	l3Off   int
-	l3HdrLn int
-	isV4    bool
-	isV6    bool
-	proto   uint8
+	l3Off            int
+	l3HdrLn          int
+	isV4             bool
+	isV6             bool
+	proto            uint8
+	frag6            bool
+	frag6Off         int
+	frag6PrevNextOff int
+	frag6Offset      int
+	frag6More        bool
+	frag6ID          uint32
+	frag6Next        uint8
 
 	// Layer 4.
 	l4Off      int
@@ -92,6 +101,7 @@ type Packet struct {
 	payloadLen int
 	isTCP      bool
 	isUDP      bool
+	isICMP     bool
 }
 
 // Parse decodes buf per link. The returned Packet aliases buf.
@@ -210,11 +220,12 @@ func (p *Packet) parseIPv6() error {
 	p.isV6 = true
 	p.l3HdrLn = 40
 	next := b[o+6]
+	nextOff := o + 6
 	pos := o + 40
 	// Walk extension headers to the transport header.
 	for {
 		switch next {
-		case ProtoTCP, ProtoUDP, ext6NoNextHdr:
+		case ProtoTCP, ProtoUDP, ProtoICMPv6, ext6NoNextHdr:
 			p.proto = next
 			p.l3HdrLn = pos - o
 			return nil
@@ -222,6 +233,15 @@ func (p *Packet) parseIPv6() error {
 			if len(b) < pos+8 {
 				return ErrShort
 			}
+			word := binary.BigEndian.Uint16(b[pos+2 : pos+4])
+			p.frag6 = true
+			p.frag6Off = pos
+			p.frag6PrevNextOff = nextOff
+			p.frag6Offset = int((word>>3)&0x1fff) * 8
+			p.frag6More = word&1 != 0
+			p.frag6ID = binary.BigEndian.Uint32(b[pos+4 : pos+8])
+			p.frag6Next = b[pos]
+			nextOff = pos
 			next = b[pos]
 			pos += 8
 		case ext6HopByHop, ext6Routing, ext6DestOpts, ext6AH:
@@ -233,6 +253,7 @@ func (p *Packet) parseIPv6() error {
 			if next == ext6AH {
 				adv = (hdrExtLen + 2) * 4 // AH length is in 4-byte units, minus 2
 			}
+			nextOff = pos
 			next = b[pos]
 			pos += adv
 			if pos > len(b) {
@@ -253,7 +274,7 @@ func (p *Packet) parseL4() error {
 	}
 	// Non-first IPv4 fragment (offset > 0): no transport header to parse.
 	// internal/ipreasm stitches these before the transport is read.
-	if p.isV4 && p.fragWord()&0x1fff != 0 {
+	if (p.isV4 && p.fragWord()&0x1fff != 0) || (p.isV6 && p.frag6 && p.frag6Offset != 0) {
 		p.l4Off = p.l3Off + p.l3HdrLn
 		return nil
 	}
@@ -278,8 +299,14 @@ func (p *Packet) parseL4() error {
 		}
 		p.isUDP = true
 		p.l4HdrLn = 8
+	case ProtoICMPv4, ProtoICMPv6:
+		if len(b) < o+8 {
+			return ErrShort
+		}
+		p.isICMP = true
+		p.l4HdrLn = 8
 	default:
-		return nil // non-TCP/UDP: L3 is parsed, L4 left empty
+		return nil // unknown L4: L3 is parsed and the frame remains wire-replayable
 	}
 	p.payloadOff = o + p.l4HdrLn
 	if p.payloadOff > len(b) {
@@ -333,6 +360,32 @@ func (p *Packet) IsTCP() bool { return p.isTCP }
 // IsUDP reports whether the transport layer is UDP.
 func (p *Packet) IsUDP() bool { return p.isUDP }
 
+// IsICMP reports whether the transport is ICMPv4 or ICMPv6.
+func (p *Packet) IsICMP() bool { return p.isICMP }
+
+// ICMPEcho reports whether this is an echo request/reply and returns the
+// request flag, identifier, and sequence number.
+func (p *Packet) ICMPEcho() (request bool, id, seq uint16, ok bool) {
+	if !p.isICMP || p.l4Off+8 > len(p.Buf) {
+		return false, 0, 0, false
+	}
+	typ := p.Buf[p.l4Off]
+	switch {
+	case p.proto == ProtoICMPv4 && typ == 8:
+		request, ok = true, true
+	case p.proto == ProtoICMPv4 && typ == 0:
+		ok = true
+	case p.proto == ProtoICMPv6 && typ == 128:
+		request, ok = true, true
+	case p.proto == ProtoICMPv6 && typ == 129:
+		ok = true
+	default:
+		return false, 0, 0, false
+	}
+	return request, binary.BigEndian.Uint16(p.Buf[p.l4Off+4 : p.l4Off+6]),
+		binary.BigEndian.Uint16(p.Buf[p.l4Off+6 : p.l4Off+8]), true
+}
+
 // Proto returns the IP protocol number (6 TCP, 17 UDP, ...).
 func (p *Packet) Proto() uint8 { return p.proto }
 
@@ -344,7 +397,11 @@ func (p *Packet) Payload() []byte {
 	if p.payloadOff >= len(p.Buf) {
 		return nil
 	}
-	return p.Buf[p.payloadOff:]
+	end := p.payloadOff + p.payloadLen
+	if end > len(p.Buf) {
+		end = len(p.Buf)
+	}
+	return p.Buf[p.payloadOff:end]
 }
 
 // SrcIP returns the source IP address.

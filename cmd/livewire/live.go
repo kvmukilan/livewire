@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
+	"syscall"
 
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/pcapio"
@@ -30,7 +33,7 @@ func cmdLive(args []string) error {
 	target := fs.String("target", "", "live target ip[:port] (default: the captured server endpoint)")
 	noGuard := fs.Bool("no-rst-guard", false, "do not install host-RST suppression (host kernel may reset the flow)")
 	useTUI := fs.Bool("tui", false, "render a live status dashboard instead of the per-flow text report")
-	allFlows := fs.Bool("all", false, "replay every flow: stateful where a handshake exists, stateless (raw) for the rest")
+	allFlows := fs.Bool("all", false, "replay every TCP flow statefully; failures are reported and never sent raw")
 	verify := fs.String("verify", "lenient", "check server replies against the capture: off | lenient | strict (Modbus/DNP3-aware)")
 	adaptive := fs.Bool("adaptive", true, "wait for and re-anchor on the live server's real replies so a shorter/longer answer than the capture still completes (use -adaptive=false for byte-exact replay)")
 	pace := fs.Bool("pace", false, "reproduce the capture's original inter-packet timing instead of replaying as fast as the device answers")
@@ -85,7 +88,10 @@ func cmdLive(args []string) error {
 		if err != nil {
 			return err
 		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
 		opts := liveOpts{
+			ctx:    ctx,
 			target: *target, iface: *iface, seed: *seed, noGuard: *noGuard,
 			verbose: *verbose, useTUI: *useTUI, verify: vmode, adaptive: *adaptive,
 			pace: *pace, rawL4: *rawL4, sequential: *sequential, report: *report,

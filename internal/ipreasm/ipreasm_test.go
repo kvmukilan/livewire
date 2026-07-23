@@ -136,3 +136,67 @@ func TestFragmentAccessors(t *testing.T) {
 		t.Fatal("MF/IsFragment should be true")
 	}
 }
+
+func makeIPv6Fragment(id uint32, offset int, more bool, payload []byte) []byte {
+	ip := make([]byte, 40)
+	ip[0] = 0x60
+	binary.BigEndian.PutUint16(ip[4:6], uint16(8+len(payload)))
+	ip[6], ip[7] = 44, 64
+	src := netip.MustParseAddr("2001:db8::1").As16()
+	dst := netip.MustParseAddr("2001:db8::2").As16()
+	copy(ip[8:24], src[:])
+	copy(ip[24:40], dst[:])
+	fh := make([]byte, 8)
+	fh[0] = wire.ProtoUDP
+	word := uint16(offset/8) << 3
+	if more {
+		word |= 1
+	}
+	binary.BigEndian.PutUint16(fh[2:4], word)
+	binary.BigEndian.PutUint32(fh[4:8], id)
+	eth := make([]byte, 14)
+	binary.BigEndian.PutUint16(eth[12:14], 0x86dd)
+	return append(append(append(eth, ip...), fh...), payload...)
+}
+
+func TestReassembleIPv6Fragments(t *testing.T) {
+	full := udpDatagram(1200, 5300, []byte("0123456789ABCDEF"))
+	f0 := makeIPv6Fragment(0x10203040, 0, true, full[:16])
+	f1 := makeIPv6Fragment(0x10203040, 16, false, full[16:])
+
+	p0, err := wire.Parse(f0, wire.LinkEthernet)
+	if err != nil || !p0.IsFragment() || p0.FragmentOffset() != 0 || !p0.MoreFragments() {
+		t.Fatalf("IPv6 fragment accessors: err=%v fragment=%v offset=%d more=%v", err, p0.IsFragment(), p0.FragmentOffset(), p0.MoreFragments())
+	}
+	out, dropped, err := ReassembleAll([][]byte{f1, f0}, wire.LinkEthernet)
+	if err != nil || dropped != 0 || len(out) != 1 {
+		t.Fatalf("IPv6 reassembly failed: err=%v dropped=%d out=%d", err, dropped, len(out))
+	}
+	p, err := wire.Parse(out[0], wire.LinkEthernet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.IsFragment() || !p.IsIPv6() || !p.IsUDP() {
+		t.Fatalf("unexpected rebuilt packet: fragment=%v ipv6=%v udp=%v", p.IsFragment(), p.IsIPv6(), p.IsUDP())
+	}
+	if !bytes.Equal(p.Payload(), []byte("0123456789ABCDEF")) {
+		t.Fatalf("payload=%q", p.Payload())
+	}
+	if _, l4OK := p.VerifyChecksums(); !l4OK {
+		t.Fatal("rebuilt IPv6 UDP checksum is invalid")
+	}
+}
+
+func TestConflictingFragmentOverlapRejected(t *testing.T) {
+	pieces := []piece{
+		{offset: 0, data: []byte("abcdefgh"), more: true},
+		{offset: 4, data: []byte("WXYZijkl"), more: false},
+	}
+	if _, ok := assemblePieces(pieces); ok {
+		t.Fatal("conflicting overlapping fragments must not be reassembled")
+	}
+	pieces[1].data = []byte("efghijkl")
+	if got, ok := assemblePieces(pieces); !ok || string(got) != "abcdefghijkl" {
+		t.Fatalf("identical overlap should reassemble: ok=%v data=%q", ok, got)
+	}
+}

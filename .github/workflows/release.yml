@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          check-latest: true
+          cache: true
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag -notmatch '^v(?<version>[0-9]+\.[0-9]+\.[0-9]+)$') {
+            throw "Release tag must look like v1.2.3; got $tag"
+          }
+          "version=$($Matches.version)" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        shell: pwsh
+        run: |
+          go mod verify
+          go test ./...
+          go vet ./...
+
+      - name: Build release artifacts
+        shell: pwsh
+        run: ./scripts/release.ps1 -Version "${{ steps.version.outputs.version }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: livewire-${{ steps.version.outputs.version }}
+          path: dist/v${{ steps.version.outputs.version }}/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem "dist/v${{ steps.version.outputs.version }}" -File |
+            ForEach-Object FullName
+          gh release create "${{ github.ref_name }}" `
+            @assets `
+            --verify-tag `
+            --title "Livewire ${{ github.ref_name }}" `
+            --notes-file CHANGELOG.md
