@@ -11,12 +11,18 @@ import (
 // cmdIfaces lists interfaces with addresses and live-replay capability.
 func cmdIfaces(args []string) error {
 	fs := flag.NewFlagSet("ifaces", flag.ContinueOnError)
+	// Accepted, though this command has no options, so -all-flags behaves the
+	// same way on every command rather than erroring on the one that has none.
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage: livewire ifaces")
 		fmt.Println("\nList interfaces with addresses and live-replay capability on this OS.")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if handleAllFlags(fs, *allFlags, nil) {
+		return errAllFlags
 	}
 
 	ifis, err := net.Interfaces()
@@ -29,7 +35,7 @@ func cmdIfaces(args []string) error {
 	// Windows live replay uses Npcap device names, not friendly names.
 	if runtime.GOOS == "windows" {
 		if devs, err := listPcapDevices(); err == nil && len(devs) > 0 {
-			fmt.Println("Npcap devices (pass one to -iface for live/replay):")
+			fmt.Println("Npcap devices (pass one to -i for replay):")
 			for _, d := range devs {
 				fmt.Printf("  %s\n      %s\n", d.name, d.desc)
 			}

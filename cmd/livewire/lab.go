@@ -34,7 +34,10 @@ type labReport struct {
 
 func cmdLab(args []string) error {
 	fs := flag.NewFlagSet("lab", flag.ContinueOnError)
-	inPath := fs.String("in", "", "input pcap/pcapng file (required)")
+	var inPath string
+	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file")
+	// No plain -i here: the lab drives two interfaces at once, so a single
+	// "which connection" flag would be ambiguous.
 	clientIface := fs.String("client-iface", "", "client-facing interface (overrides topology)")
 	serverIface := fs.String("server-iface", "", "server-facing interface (overrides topology)")
 	topologyPath := fs.String("topology", "", "topology JSON (required)")
@@ -45,15 +48,19 @@ func cmdLab(args []string) error {
 	actorTimeout := fs.Duration("actor-timeout", 2*time.Second, "maximum wait for preceding traffic to cross the DUT")
 	udpIdle := fs.Duration("udp-idle", 30*time.Second, "split a UDP tuple into a new session after this idle interval")
 	profileName := fs.String("profile", "timing", "requested fidelity label: functional | timing | transport | wire")
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage: livewire lab -in trace.pcap -client-iface <iface> -server-iface <iface> -topology topology.json [-scenario faults.json]")
 		fmt.Println("\nRuns coordinated client/server actors through a one-host, two-NIC DUT lab and records both sides in one PCAPNG.")
-		fs.PrintDefaults()
+		printFlags(fs, flagIn, "client-iface", "server-iface", "topology", "scenario", "evidence", "report")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *inPath == "" || *topologyPath == "" {
+	if handleAllFlags(fs, *allFlags, nil) {
+		return errAllFlags
+	}
+	if inPath == "" || *topologyPath == "" {
 		fs.Usage()
 		return fmt.Errorf("-in and -topology are required")
 	}
@@ -74,7 +81,7 @@ func cmdLab(args []string) error {
 	if err != nil {
 		return err
 	}
-	records, _, err := loadRecords(*inPath)
+	records, _, err := loadRecords(inPath)
 	if err != nil {
 		return err
 	}
@@ -95,7 +102,7 @@ func cmdLab(args []string) error {
 	}
 	printCoverage(plan)
 
-	base := strings.TrimSuffix(*inPath, filepath.Ext(*inPath))
+	base := strings.TrimSuffix(inPath, filepath.Ext(inPath))
 	if *evidencePath == "" {
 		*evidencePath = base + ".lab.pcapng"
 	}
@@ -112,7 +119,7 @@ func cmdLab(args []string) error {
 	if err := lab.WriteEvidence(*evidencePath, result, topology); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
-	digest, _ := sha256File(*inPath)
+	digest, _ := sha256File(inPath)
 	report := labReport{
 		Tool: "livewire", Version: version, CaptureDigest: digest, ReplayPlan: plan,
 		AdapterVersions: adapters.Versions(), Topology: topology, Scenario: scenario,

@@ -22,9 +22,12 @@ import (
 
 func cmdTLSReplay(args []string) error {
 	fs := flag.NewFlagSet("tls-replay", flag.ContinueOnError)
-	inPath := fs.String("in", "", "capture containing one TLS session (required)")
+	var inPath string
+	fs.StringVar(&inPath, flagIn, "", "capture containing one TLS session")
 	keylogPath := fs.String("keylog", "", "NSS SSLKEYLOGFILE matching the capture (required; never logged)")
-	target := fs.String("target", "", "fresh TLS target host:port (required)")
+	var target string
+	fs.StringVar(&target, flagTarget, "", "fresh TLS target host:port")
+	fs.StringVar(&target, "target", "", "alias for -t")
 	serverName := fs.String("server-name", "", "certificate DNS name (default: target host)")
 	caPath := fs.String("ca", "", "optional PEM CA bundle")
 	insecure := fs.Bool("insecure-skip-verify", false, "explicitly disable certificate verification (lab only)")
@@ -35,19 +38,23 @@ func cmdTLSReplay(args []string) error {
 	fs.Var(&variables, "set", "set an inner-protocol variable (repeatable name=value)")
 	var rulePacks fileFlags
 	fs.Var(&rulePacks, "rules", "JSON inner-protocol adapter rule pack (repeatable)")
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire tls-replay -in trace.pcap -keylog sslkeys.log -target host:port [-server-name name] [-set name=value]")
+		fmt.Println("usage: livewire tls-replay -in trace.pcap -keylog sslkeys.log -t host:port [-server-name name] [-set name=value]")
 		fmt.Println("\nDecrypts supported TLS 1.2/1.3 AEAD records with the supplied key log, opens a fresh verified TLS connection, and replays plaintext through the detected inner adapter.")
-		fs.PrintDefaults()
+		printFlags(fs, flagIn, "keylog", flagTarget, "server-name", "ca", "strict", "report")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *inPath == "" || *keylogPath == "" || *target == "" {
-		fs.Usage()
-		return fmt.Errorf("-in, -keylog, and -target are required")
+	if handleAllFlags(fs, *allFlags, aliasSet{"target": true}) {
+		return errAllFlags
 	}
-	records, _, err := loadRecords(*inPath)
+	if inPath == "" || *keylogPath == "" || target == "" {
+		fs.Usage()
+		return fmt.Errorf("-in, -keylog, and -t are required")
+	}
+	records, _, err := loadRecords(inPath)
 	if err != nil {
 		return err
 	}
@@ -114,13 +121,13 @@ func cmdTLSReplay(args []string) error {
 	}
 	printCoverage(plan)
 	if *reportPath == "" {
-		*reportPath = strings.TrimSuffix(*inPath, filepath.Ext(*inPath)) + ".tls.report.json"
+		*reportPath = strings.TrimSuffix(inPath, filepath.Ext(inPath)) + ".tls.report.json"
 	}
-	digest, err := sha256File(*inPath)
+	digest, err := sha256File(inPath)
 	if err != nil {
 		return fmt.Errorf("capture digest: %w", err)
 	}
-	host, _, err := net.SplitHostPort(*target)
+	host, _, err := net.SplitHostPort(target)
 	if err != nil {
 		return fmt.Errorf("invalid -target: %w", err)
 	}
@@ -150,7 +157,7 @@ func cmdTLSReplay(args []string) error {
 	if inner != nil {
 		innerName = inner.Name()
 	}
-	report := newReterminationReport("tls", digest, *target, plan, registry, variables)
+	report := newReterminationReport("tls", digest, target, plan, registry, variables)
 	report.Transformations = []string{
 		"captured TLS records decrypted with operator-supplied session secrets (secrets excluded from this report)",
 		"fresh TLS connection established to the live target",
@@ -165,7 +172,7 @@ func cmdTLSReplay(args []string) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	res, runErr := tlsreplay.ReTerminateContext(ctx, tlsreplay.ReTermConfig{Address: *target, TLSConfig: tlsCfg, Script: script, Timeout: *timeout, Verify: *strict, Adapter: inner, State: state, VerifyMode: verifyMode})
+	res, runErr := tlsreplay.ReTerminateContext(ctx, tlsreplay.ReTermConfig{Address: target, TLSConfig: tlsCfg, Script: script, Timeout: *timeout, Verify: *strict, Adapter: inner, State: state, VerifyMode: verifyMode})
 	if res != nil {
 		report.Outcome.ProtocolVersion = tlsVersionName(res.HandshakeState.Version)
 		report.Outcome.CipherSuite = tls.CipherSuiteName(res.HandshakeState.CipherSuite)

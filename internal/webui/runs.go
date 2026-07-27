@@ -18,6 +18,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 	"github.com/kvmukilan/livewire/internal/pcapio"
@@ -36,9 +37,29 @@ type adaptiveRunReq struct {
 	Variables map[string]string `json:"variables,omitempty"`
 	RulePacks []json.RawMessage `json:"rulePacks,omitempty"`
 	UDPIdleMS int               `json:"udpIdleMs,omitempty"`
+	// Attempts replays the whole plan this many times and reports how often the
+	// device behaved the same. 0 or 1 means a single run.
+	Attempts int `json:"attempts,omitempty"`
+	// GapMS is the settle time between attempts. 0 takes the default.
+	GapMS int `json:"gapMs,omitempty"`
+	// attempt is the 0-based iteration currently running. It is internal, set by
+	// the job loop, and is what varies the seed and client port per attempt.
+	attempt int `json:"-"`
 }
 
+// maxWebAttempts bounds what the dashboard will accept. The browser holds one
+// job at a time and a caller can type any number into the form, so an unbounded
+// value would pin the host on the wire with no way back but a restart.
+const maxWebAttempts = 100
+
+// defaultWebGap matches the CLI's -gap: long enough for a device to settle
+// between connections, short enough not to dominate a five-attempt run.
+const defaultWebGap = time.Second
+
 type webSessionResult struct {
+	// Attempt is the 1-based iteration this result came from, omitted for a
+	// single run so an un-repeated report is unchanged.
+	Attempt     int                 `json:"attempt,omitempty"`
 	Entry       replay.PlanEntry    `json:"entry"`
 	Completed   bool                `json:"completed"`
 	Verified    bool                `json:"verified"`
@@ -48,6 +69,16 @@ type webSessionResult struct {
 	Differences []replay.Difference `json:"differences,omitempty"`
 	Error       string              `json:"error,omitempty"`
 	Evidence    []pcapio.Record     `json:"-"`
+}
+
+// verdict reduces one session result to the shared verdict vocabulary. Wire mode
+// claims no equivalence, which is why it is reported separately rather than as a
+// pass or a failure.
+func (r webSessionResult) verdict() iterate.Verdict {
+	if r.Error != "" {
+		return iterate.Incomplete
+	}
+	return iterate.Classify(r.Completed, r.Matched, r.Entry.Mode == replay.ModeWire)
 }
 
 func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +101,14 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UDPIdleMS < 0 {
 		writeErr(w, 400, fmt.Errorf("udpIdleMs must not be negative"))
+		return
+	}
+	if req.Attempts < 0 || req.Attempts > maxWebAttempts {
+		writeErr(w, 400, fmt.Errorf("attempts must be between 1 and %d", maxWebAttempts))
+		return
+	}
+	if req.GapMS < 0 {
+		writeErr(w, 400, fmt.Errorf("gapMs must not be negative"))
 		return
 	}
 	if req.Verify == "" {
@@ -132,34 +171,66 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	for _, sess := range trace.Sessions {
 		sessions[sess.ID] = sess
 	}
-	started := time.Now()
-	results := make([]webSessionResult, len(plan.Entries))
-	run := func(i int) {
-		entry := plan.Entries[i]
-		results[i] = runWebEntry(j.ctx, j, entry, sessions[entry.SessionID], trace.Raw, flows, registry, target, req, profile, verify, verifyEngine, started)
+	gap := defaultWebGap
+	if req.GapMS > 0 {
+		gap = time.Duration(req.GapMS) * time.Millisecond
 	}
-	concurrent := profile != replay.ProfileFunctional
-	if concurrent {
-		var wg sync.WaitGroup
-		for i := range results {
-			wg.Add(1)
-			go func(i int) { defer wg.Done(); run(i) }(i)
+	runs := iterate.Plan{Times: req.Attempts, Gap: gap}.Normalize()
+
+	// The loop lives inside this one job because the server permits a single job
+	// at a time: N attempts must not be N jobs, or the second would be refused.
+	var (
+		results  []webSessionResult
+		evidence []pcapio.Record
+		ok       = true
+	)
+	attempt := func(i int) iterate.Tally {
+		// Vary what TCP uses to tell connections apart, so the device does not
+		// see attempt two as a stale duplicate of attempt one and reset it.
+		att := req
+		att.attempt = i
+		if runs.Repeats() {
+			j.progress("attempt", "", fmt.Sprintf("attempt %d of %d", i+1, runs.Times))
 		}
-		wg.Wait()
-	} else {
-		for i := range results {
-			run(i)
+		started := time.Now()
+		round := make([]webSessionResult, len(plan.Entries))
+		run := func(k int) {
+			entry := plan.Entries[k]
+			round[k] = runWebEntry(j.ctx, j, entry, sessions[entry.SessionID], trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
+			if runs.Repeats() {
+				round[k].Attempt = i + 1
+			}
 		}
+		if profile != replay.ProfileFunctional {
+			var wg sync.WaitGroup
+			for k := range round {
+				wg.Add(1)
+				go func(k int) { defer wg.Done(); run(k) }(k)
+			}
+			wg.Wait()
+		} else {
+			for k := range round {
+				run(k)
+			}
+		}
+		var tally iterate.Tally
+		for _, r := range round {
+			evidence = append(evidence, r.Evidence...)
+			if r.Error != "" || !r.Completed {
+				ok = false
+			}
+			tally.Add(r.verdict())
+		}
+		results = append(results, round...)
+		if runs.Repeats() {
+			j.progress("attempt", "", fmt.Sprintf("attempt %d of %d: %s", i+1, runs.Times, tally.Worst().Plain()))
+		}
+		return tally
 	}
-	var evidence []pcapio.Record
-	ok := true
-	for _, r := range results {
-		evidence = append(evidence, r.Evidence...)
-		if r.Error != "" || !r.Completed {
-			ok = false
-		}
-	}
-	stamp := time.Now().UTC().Format("20060102T150405Z")
+
+	per := runs.Run(j.ctx, attempt)
+	summary := iterate.Summarize(per, runs.Times)
+	stamp := time.Now().UTC().Format("20060102T150405.000Z")
 	base := strings.TrimSuffix(filepath.Base(req.Pcap), filepath.Ext(req.Pcap)) + "." + stamp
 	reportName := base + ".run.json"
 	evidenceName := base + ".actual.pcapng"
@@ -178,17 +249,33 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		ok = false
 	}
 	doc := map[string]any{
-		"tool": "livewire", "version": "0.5.0", "when": time.Now().UTC(), "plan": plan,
+		"tool": "livewire", "version": Version, "when": time.Now().UTC(), "plan": plan,
 		"adapterVersions": adapters.VersionsForRegistry(registry),
 		"captureDigest":   digest, "limitations": plan.Limitations(),
 		"target": target.String(), "interface": req.Iface, "variables": runvars.Redacted(req.Variables),
 		"results": results, "evidence": evidenceArtifact,
+	}
+	if runs.Repeats() {
+		doc["attempts"] = summary.Attempts
+		doc["outcome"] = summary
+		doc["transformations"] = []string{
+			"each attempt used a fresh client port and ISN so the device would not treat it as a duplicate connection",
+		}
 	}
 	if err := writeRedactedJSON(filepath.Join(s.dir, reportName), doc, req.Variables); err != nil {
 		j.log("report: " + err.Error())
 		ok = false
 	} else {
 		j.artifact(reportName)
+	}
+	if runs.Repeats() {
+		verdict := summary.Verdict.Plain()
+		if summary.Intermittent {
+			verdict = "INTERMITTENT"
+		}
+		j.finish(ok, fmt.Sprintf("%d attempts: %s (%d same, %d different, %d did not complete)",
+			summary.Attempts, verdict, summary.Same, summary.Different, summary.Incomplete))
+		return
 	}
 	j.finish(ok, fmt.Sprintf("%d sessions completed", len(results)))
 }
@@ -269,7 +356,8 @@ func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *r
 	}
 	res, err := livereplay.RunContext(ctx, livereplay.Config{
 		Flow: flow, Iface: req.Iface, TargetIP: target, TargetPort: session.Server.Port,
-		Seed: 1, NoGuard: req.NoGuard, Verify: verifyEngine, Adaptive: profile != replay.ProfileTransport,
+		Seed: 1 + int64(req.attempt), LocalPort: iterate.ShiftPort(flow.Client.Port, req.attempt),
+		NoGuard: req.NoGuard, Verify: verifyEngine, Adaptive: profile != replay.ProfileTransport,
 		Pace: profile == replay.ProfileTiming || profile == replay.ProfileTransport, RawL4: profile == replay.ProfileTransport,
 	}, func(line string) { j.progress("tcp", entry.SessionID, line) })
 	out.Completed, out.Verified, out.Matched, out.Sent, out.Evidence = res.Outcome.Succeeded(), res.Verified, res.Matched, res.Outcome.Sent, res.Evidence
@@ -373,7 +461,7 @@ func (s *Server) runLabJob(j *job, path string, req labRunReq) {
 	j.artifact(evidenceName)
 	digest, _ := fileSHA256(path)
 	doc := map[string]any{
-		"tool": "livewire", "version": "0.5.0", "when": time.Now().UTC(), "captureDigest": digest,
+		"tool": "livewire", "version": Version, "when": time.Now().UTC(), "captureDigest": digest,
 		"plan": plan, "adapterVersions": adapters.Versions(), "variables": map[string]string{},
 		"transformations": webLabTransformations(plan, result), "limitations": result.Limitations,
 		"topology": req.Topology, "scenario": req.Scenario, "result": result, "evidence": evidenceName,

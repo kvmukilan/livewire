@@ -8,11 +8,19 @@ import (
 	"os/signal"
 	"sort"
 	"syscall"
+	"time"
 
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/tui"
 )
+
+// liveAliases names the flags on 'live' kept only for compatibility.
+var liveAliases = aliasSet{
+	"iface": true, "target": true, "out": true,
+	"times": true, "iterations": true, "dry-run": true,
+}
 
 // isTerminal reports whether f is a TTY, to decide whether to emit ANSI colour.
 func isTerminal(f *os.File) bool {
@@ -22,15 +30,29 @@ func isTerminal(f *os.File) bool {
 
 func cmdLive(args []string) error {
 	fs := flag.NewFlagSet("live", flag.ContinueOnError)
-	inPath := fs.String("in", "", "input pcap/pcapng file (required)")
+	var inPath string
+	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file (required)")
 	dryRun := fs.Bool("dry-run", true, "simulate replay with no NIC")
+	goLive := fs.Bool(flagLive, false, "actually send on the wire instead of simulating (needs -i)")
 	mode := fs.String("mode", "both", "dry-run mode: rewrite | peer | both")
 	seed := fs.Int64("seed", 1, "seed for reproducible live ISN/timestamp selection")
-	outPath := fs.String("out", "", "write the rewritten capture to this pcap (rewrite mode)")
+	var outPath string
+	fs.StringVar(&outPath, flagOut, "", "write the rewritten capture to this pcap (rewrite mode)")
+	fs.StringVar(&outPath, "out", "", "alias for -o")
 	flowSel := fs.Int("flow", -1, "only analyze this flow index (-1 = all)")
 	verbose := fs.Bool("v", false, "print the per-packet sequence-rewrite table")
-	iface := fs.String("iface", "", "interface for live replay (real path; implies -dry-run=false)")
-	target := fs.String("target", "", "live target ip[:port] (default: the captured server endpoint)")
+	var iface string
+	fs.StringVar(&iface, flagIface, "", "network connection for live replay (implies -live)")
+	fs.StringVar(&iface, "iface", "", "alias for -i")
+	var target string
+	fs.StringVar(&target, flagTarget, "", "live target ip[:port] (default: the captured server endpoint)")
+	fs.StringVar(&target, "target", "", "alias for -t")
+	var times int
+	fs.IntVar(&times, flagCount, 1, "replay this many times and report how often the device behaved the same")
+	fs.IntVar(&times, "times", 1, "alias for -n")
+	fs.IntVar(&times, "iterations", 1, "alias for -n")
+	gap := fs.Duration("gap", time.Second, "settle time between attempts when -n is more than 1")
+	stopWhenDifferent := fs.Bool("stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
 	noGuard := fs.Bool("no-rst-guard", false, "do not install host-RST suppression (host kernel may reset the flow)")
 	useTUI := fs.Bool("tui", false, "render a live status dashboard instead of the per-flow text report")
 	allFlows := fs.Bool("all", false, "replay every TCP flow statefully; failures are reported and never sent raw")
@@ -40,25 +62,41 @@ func cmdLive(args []string) error {
 	rawL4 := fs.Bool("raw-l4", false, "replay the client's frames exactly as captured (retransmits, RSTs, original acks) instead of driving a clean state machine")
 	sequential := fs.Bool("sequential", false, "with -all, replay flows one at a time instead of concurrently")
 	report := fs.String("report", "", "write a JSON replay report (per-flow result, reply divergences, and likely-cause diagnosis) to this file")
+	allFlagsOn := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage:")
-		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-out rewritten.pcap] [-v]")
-		fmt.Println("  live:     livewire live -in <file> -iface <name> [-target ip[:port]] [-flow N] [-no-rst-guard]")
+		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-o rewritten.pcap] [-v]")
+		fmt.Println("  on-wire:  livewire live -in <file> -live -i <connection> [-t ip[:port]] [-n 5]")
 		fmt.Println("\nStateful TCP replay. Learns the live peer's ISN and realigns seq/ack per flow.")
 		fmt.Println("Protocol-agnostic (Modbus, DNP3, HTTP, ...): only TCP headers are rewritten.")
-		fs.PrintDefaults()
+		printFlags(fs, flagIn, flagLive, flagIface, flagTarget, flagCount, flagOut, "all", "mode", "flow", "report", "v")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *inPath == "" {
+	if handleAllFlags(fs, *allFlagsOn, liveAliases) {
+		return errAllFlags
+	}
+	if inPath == "" {
 		fs.Usage()
 		return fmt.Errorf("-in is required")
 	}
-	// Supplying -iface selects the real on-wire path.
-	realLive := *iface != "" || !*dryRun
+	// -live, or naming a connection, selects the real on-wire path. -dry-run=false
+	// stays supported for anyone who learned it that way.
+	realLive := iface != "" || *goLive || !*dryRun
+	if times < 1 {
+		return fmt.Errorf("-n must be at least 1")
+	}
+	if times > 1 && !realLive {
+		// The dry run is deterministic, so repeating it produces N identical
+		// reports and tells the operator nothing.
+		return fmt.Errorf("-n only applies to an on-wire replay; add -live and -i <connection>")
+	}
+	if *gap < 0 {
+		return fmt.Errorf("-gap cannot be negative")
+	}
 
-	in, err := openInput(*inPath)
+	in, err := openInput(inPath)
 	if err != nil {
 		return err
 	}
@@ -76,13 +114,13 @@ func cmdLive(args []string) error {
 
 	flows := engine.ExtractFlows(recs)
 	if len(flows) == 0 {
-		return fmt.Errorf("no TCP flows found in %s", *inPath)
+		return fmt.Errorf("no TCP flows found in %s", inPath)
 	}
-	fmt.Printf("found %d TCP flow(s) in %s\n\n", len(flows), *inPath)
+	fmt.Printf("found %d TCP flow(s) in %s\n\n", len(flows), inPath)
 
 	if realLive {
-		if *iface == "" {
-			return fmt.Errorf("live replay needs -iface (the interface to transmit on)")
+		if iface == "" {
+			return fmt.Errorf("live replay needs -i (the network connection to transmit on)")
 		}
 		vmode, err := engine.ParseVerifyMode(*verify)
 		if err != nil {
@@ -92,14 +130,12 @@ func cmdLive(args []string) error {
 		defer stop()
 		opts := liveOpts{
 			ctx:    ctx,
-			target: *target, iface: *iface, seed: *seed, noGuard: *noGuard,
+			target: target, iface: iface, seed: *seed, noGuard: *noGuard,
 			verbose: *verbose, useTUI: *useTUI, verify: vmode, adaptive: *adaptive,
 			pace: *pace, rawL4: *rawL4, sequential: *sequential, report: *report,
 		}
-		if *allFlows {
-			return liveAll(flows, opts)
-		}
-		return liveReal(flows, *flowSel, opts)
+		runs := iterate.Plan{Times: times, Gap: *gap, StopWhenDifferent: *stopWhenDifferent}
+		return liveRun(flows, *flowSel, *allFlows, runs, opts)
 	}
 
 	opts := engine.Options{Seed: *seed}
@@ -184,11 +220,11 @@ func cmdLive(args []string) error {
 		fmt.Println()
 	}
 
-	if *outPath != "" && len(allFrames) > 0 {
-		if err := writeFrames(*outPath, allFrames, in.nanos); err != nil {
+	if outPath != "" && len(allFrames) > 0 {
+		if err := writeFrames(outPath, allFrames, in.nanos); err != nil {
 			return err
 		}
-		fmt.Printf("wrote %d rewritten frames -> %s (open in Wireshark to verify seq/ack)\n", len(allFrames), *outPath)
+		fmt.Printf("wrote %d rewritten frames -> %s (open in Wireshark to verify seq/ack)\n", len(allFrames), outPath)
 	}
 
 	fmt.Printf("summary: %d/%d analyzed flow(s) maintain sequence numbers coherently\n", okCount, totalCount)

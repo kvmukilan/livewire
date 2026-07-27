@@ -124,11 +124,6 @@ func ReTerminateContext(ctx context.Context, cfg Config) (*Result, error) {
 	return res, nil
 }
 
-// runOne runs one command on a new session channel and returns its combined output.
-func runOne(client *ssh.Client, command string) ([]byte, error) {
-	return runOneContext(context.Background(), client, command)
-}
-
 func runOneContext(ctx context.Context, client *ssh.Client, command string) ([]byte, error) {
 	sess, err := client.NewSession()
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 )
 
@@ -29,57 +30,118 @@ type liveOpts struct {
 	sequential    bool   // replay -all flows one at a time instead of concurrently
 	report        string // JSON report path ("" = none)
 	variables     map[string]string
+	// portStride shifts the client port presented to the device. Repeated
+	// attempts must each look like a new connection; 0 replays the captured port.
+	portStride int
 }
 
 func (o liveOpts) config(f *engine.Flow, ip netip.Addr, port uint16) livereplay.Config {
 	return livereplay.Config{
 		Flow: f, Iface: o.iface, TargetIP: ip, TargetPort: port,
-		Seed: o.seed, NoGuard: o.noGuard, Trace: o.verbose,
+		Seed: o.seed, LocalPort: iterate.ShiftPort(f.Client.Port, o.portStride),
+		NoGuard: o.noGuard, Trace: o.verbose,
 		Verify: o.verify, Adaptive: o.adaptive, Pace: o.pace, RawL4: o.rawL4,
 	}
 }
 
-// liveReal runs a real stateful replay of one flow via the shared livereplay
-// core, adding flow/target selection and the optional TUI dashboard.
-func liveReal(flows []*engine.Flow, flowSel int, o liveOpts) error {
-	f, err := selectFlow(flows, flowSel)
-	if err != nil {
-		return err
+// liveRun performs the on-wire replay, repeating it when runs asks for more than
+// one attempt. Repetition lives here rather than around the whole command so all
+// attempts land in one report and one summary: N attempts writing the report
+// path in turn would leave only the last one on disk.
+func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o liveOpts) error {
+	runs = runs.Normalize()
+	rep := newReplayReport(o)
+	if runs.Repeats() {
+		fmt.Printf("replaying %d times, %s apart; each attempt uses a fresh client port and ISN\n", runs.Times, runs.Gap)
 	}
-	targetIP, targetPort, err := resolveTarget(o.target, f)
-	if err != nil {
-		return err
-	}
-
-	res, err := livereplay.RunContext(liveContext(o), o.config(f, targetIP, targetPort), func(line string) { fmt.Println(line) })
-	if err != nil {
-		return err
-	}
-
-	if o.useTUI {
-		out := res.Outcome
-		st := tuiFlowState{
-			Index: flowSel, Label: fmt.Sprintf("%s -> %s:%d", f.Client, targetIP, targetPort),
-			Phase: out.Phase.String(), Sent: out.Sent, Retransmits: out.Retransmits,
-			ServerISN: res.LearnedServerISN, Note: out.Reason,
+	var passErr error
+	pass := func(i int) iterate.Tally {
+		att := o
+		att.seed = o.seed + int64(i)
+		att.portStride = i
+		if runs.Repeats() {
+			rep.startAttempt(i + 1)
+			fmt.Printf("\n---- attempt %d of %d ----\n", i+1, runs.Times)
 		}
-		fmt.Println()
-		renderDashboard(o.iface, fmt.Sprintf("%s:%d", targetIP, targetPort), []tuiFlowState{st})
+		var (
+			t   iterate.Tally
+			err error
+		)
+		if all {
+			t, err = liveAllPass(flows, att, rep)
+		} else {
+			t, err = liveOnePass(flows, flowSel, att, rep)
+		}
+		if err != nil {
+			passErr = err
+		}
+		if runs.Repeats() {
+			fmt.Printf("Attempt %d of %d: %s\n", i+1, runs.Times, t.Worst().Plain())
+		}
+		return t
 	}
-	printVerdict("", res)
+
+	per := runs.Run(liveContext(o), pass)
+	if runs.Repeats() {
+		summary := iterate.Summarize(per, runs.Times)
+		rep.recordIterations(summary)
+		fmt.Print(summary.Plain())
+	}
 	if o.report != "" {
-		rep := newReplayReport(o)
-		rep.add(0, f, fmt.Sprintf("%s:%d", targetIP, targetPort), "stateful", res, nil)
 		if werr := rep.write(o.report); werr != nil {
 			fmt.Printf("report: %v\n", werr)
 		} else {
 			fmt.Printf("report written to %s\n", o.report)
 		}
 	}
-	if !res.Outcome.Succeeded() {
-		return fmt.Errorf("replay ended in phase %s: %s", res.Outcome.Phase, res.Outcome.Reason)
+	// A single pass keeps its long-standing behaviour of failing the command when
+	// the replay did not complete. A repeated run reports a rate instead, so the
+	// summary is the answer and one bad attempt is not a command failure.
+	if !runs.Repeats() {
+		return passErr
 	}
 	return nil
+}
+
+// liveOnePass runs a real stateful replay of one flow via the shared livereplay
+// core, adding flow/target selection and the optional TUI dashboard. It records
+// into rep and leaves writing it to the caller.
+func liveOnePass(flows []*engine.Flow, flowSel int, o liveOpts, rep *replayReport) (iterate.Tally, error) {
+	var tally iterate.Tally
+	f, err := selectFlow(flows, flowSel)
+	if err != nil {
+		return tally, err
+	}
+	targetIP, targetPort, err := resolveTarget(o.target, f)
+	if err != nil {
+		return tally, err
+	}
+	target := fmt.Sprintf("%s:%d", targetIP, targetPort)
+
+	res, err := livereplay.RunContext(liveContext(o), o.config(f, targetIP, targetPort), func(line string) { fmt.Println(line) })
+	if err != nil {
+		rep.add(0, f, target, "failed", res, err)
+		tally.Add(iterate.Incomplete)
+		return tally, err
+	}
+
+	if o.useTUI {
+		out := res.Outcome
+		st := tuiFlowState{
+			Index: flowSel, Label: fmt.Sprintf("%s -> %s", f.Client, target),
+			Phase: out.Phase.String(), Sent: out.Sent, Retransmits: out.Retransmits,
+			ServerISN: res.LearnedServerISN, Note: out.Reason,
+		}
+		fmt.Println()
+		renderDashboard(o.iface, target, []tuiFlowState{st})
+	}
+	printVerdict("", res)
+	rep.add(0, f, target, "stateful", res, nil)
+	tally.Add(iterate.Classify(res.Outcome.Succeeded(), res.Matched, false))
+	if !res.Outcome.Succeeded() {
+		return tally, fmt.Errorf("replay ended in phase %s: %s", res.Outcome.Phase, res.Outcome.Reason)
+	}
+	return tally, nil
 }
 
 // liveAll replays every flow as its own stateful connection, one after another.
@@ -193,8 +255,10 @@ func liveContext(o liveOpts) context.Context {
 	return context.Background()
 }
 
-// liveAll replays every flow and prints a technical per-flow log and summary.
-func liveAll(flows []*engine.Flow, o liveOpts) error {
+// liveAllPass replays every flow and prints a technical per-flow log and
+// summary. It records into rep and leaves writing it to the caller.
+func liveAllPass(flows []*engine.Flow, o liveOpts, rep *replayReport) (iterate.Tally, error) {
+	var tally iterate.Tally
 	var mu sync.Mutex // serialises stdout across concurrent flows
 	logf := func(idx int, line string) {
 		mu.Lock()
@@ -209,12 +273,12 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 
 	stateful, ok, stateless := 0, 0, 0
 	var fails []flowFail
-	rep := newReplayReport(o)
 	for _, r := range results {
 		rep.add(r.idx, r.flow, r.target, r.mode, r.res, r.err)
 		switch r.mode {
 		case "stateful":
 			stateful++
+			tally.Add(iterate.Classify(r.res.Outcome.Succeeded(), r.res.Matched, false))
 			if r.res.Outcome.Succeeded() {
 				ok++
 			} else {
@@ -222,7 +286,9 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 			}
 		case "stateless":
 			stateless++
+			tally.Add(iterate.WireOnly)
 		case "failed":
+			tally.Add(iterate.Incomplete)
 			fails = append(fails, flowFail{r.idx, "error", r.err.Error()})
 		}
 	}
@@ -234,14 +300,7 @@ func liveAll(flows []*engine.Flow, o liveOpts) error {
 		}
 	}
 	fmt.Printf("\nsummary: %d stateful (%d completed), %d stateless, %d skipped\n", stateful, ok, stateless, skipped)
-	if o.report != "" {
-		if werr := rep.write(o.report); werr != nil {
-			fmt.Printf("report: %v\n", werr)
-		} else {
-			fmt.Printf("report written to %s\n", o.report)
-		}
-	}
-	return nil
+	return tally, nil
 }
 
 func selectFlow(flows []*engine.Flow, sel int) (*engine.Flow, error) {
