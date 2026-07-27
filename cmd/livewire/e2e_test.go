@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kvmukilan/livewire/internal/classify"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
@@ -74,7 +73,7 @@ func writeHandshakePcap(t *testing.T, dir string) string {
 	return path
 }
 
-func TestE2EInfoRewritePrep(t *testing.T) {
+func TestE2EInfoRewrite(t *testing.T) {
 	dir := t.TempDir()
 	in := writeHandshakePcap(t, dir)
 
@@ -94,25 +93,6 @@ func TestE2EInfoRewritePrep(t *testing.T) {
 	}
 	// Verify the rewrite: addresses remapped, ports changed, checksums valid.
 	verifyRewrite(t, out)
-
-	// prep: auto classification -> cache with 3 client + 2 server packets.
-	cache := filepath.Join(dir, "session.cache")
-	if err := cmdPrep([]string{"-in", in, "-out", cache, "-mode", "auto"}); err != nil {
-		t.Fatalf("prep: %v", err)
-	}
-	cf, err := os.Open(cache)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cf.Close()
-	c, _, err := classify.ReadCache(cf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pri, sec, _ := c.Counts()
-	if pri != 3 || sec != 2 {
-		t.Fatalf("cache counts pri=%d sec=%d, want 3/2", pri, sec)
-	}
 }
 
 func verifyRewrite(t *testing.T, path string) {

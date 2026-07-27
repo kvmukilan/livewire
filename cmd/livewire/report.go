@@ -8,6 +8,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
@@ -15,6 +16,9 @@ import (
 
 // flowResult is one flow's outcome in a replay report.
 type flowResult struct {
+	// Attempt is the 1-based iteration this result came from, omitted for a
+	// single run so a one-shot report is byte-for-byte what it always was.
+	Attempt              int      `json:"attempt,omitempty"`
 	Flow                 int      `json:"flow"`
 	Client               string   `json:"client"`
 	Server               string   `json:"server"`
@@ -54,12 +58,38 @@ type replayReport struct {
 	Variables       map[string]string  `json:"variables,omitempty"`
 	Transformations []string           `json:"transformations"`
 	Limitations     []string           `json:"limitations,omitempty"`
-	Flows           []flowResult       `json:"flows"`
-	Sessions        []sessionResult    `json:"sessions,omitempty"`
-	secretValues    []string
+	// Attempts is how many times the replay ran, present only when it ran more
+	// than once. Outcome then reduces those attempts to one answer, including
+	// whether the device was consistent between them.
+	Attempts     int              `json:"attempts,omitempty"`
+	Outcome      *iterate.Summary `json:"outcome,omitempty"`
+	Flows        []flowResult     `json:"flows"`
+	Sessions     []sessionResult  `json:"sessions,omitempty"`
+	secretValues []string
+	// attempt is the 1-based iteration currently being recorded, stamped onto
+	// each result as it is added. Zero means a single un-repeated run.
+	attempt int
+}
+
+// startAttempt marks subsequent add/addPlanned calls as belonging to iteration n
+// (1-based). Callers that never repeat leave it alone.
+func (r *replayReport) startAttempt(n int) { r.attempt = n }
+
+// recordIterations attaches the cross-attempt answer, and records that the
+// attempts were deliberately not identical — a reader comparing the evidence
+// pcap against the capture needs to know the client port and ISN moved on
+// purpose.
+func (r *replayReport) recordIterations(s iterate.Summary) {
+	r.Attempts = s.Attempts
+	r.Outcome = &s
+	r.Transformations = append(r.Transformations,
+		"each attempt used a fresh client port and ISN so the device would not treat it as a duplicate connection")
 }
 
 type sessionResult struct {
+	// Attempt is the 1-based iteration this result came from, omitted for a
+	// single run.
+	Attempt     int                 `json:"attempt,omitempty"`
 	SessionID   string              `json:"sessionId"`
 	Protocol    replay.Transport    `json:"protocol"`
 	Driver      string              `json:"driver"`
@@ -103,6 +133,7 @@ func newReplayReport(o liveOpts) *replayReport {
 
 func (r *replayReport) addPlanned(p plannedResult, target string) {
 	sr := sessionResult{
+		Attempt:   r.attempt,
 		SessionID: p.Entry.SessionID, Protocol: p.Entry.Transport, Driver: p.Entry.Driver, Adapter: p.Entry.Adapter,
 		Mode: p.Entry.Mode, Fidelity: p.Entry.Fidelity, Target: target,
 		PacketCount: len(p.Entry.PacketIndexes), Warnings: p.Entry.Warnings, Blockers: p.Entry.Blockers,
@@ -130,7 +161,8 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 // add records one flow's result. err is non-nil when the flow could not run.
 func (r *replayReport) add(idx int, f *engine.Flow, target, mode string, res livereplay.Result, err error) {
 	fr := flowResult{
-		Flow: idx, Client: f.Client.String(), Server: f.Server.String(),
+		Attempt: r.attempt,
+		Flow:    idx, Client: f.Client.String(), Server: f.Server.String(),
 		Target: target, Mode: mode,
 	}
 	for _, cp := range f.Packets {

@@ -16,21 +16,30 @@ import (
 // external injector (scapy). Needs root (iptables) / Administrator (WinDivert).
 func cmdRstdrop(args []string) error {
 	fs := flag.NewFlagSet("rstdrop", flag.ContinueOnError)
-	ip := fs.String("ip", "", "target IP (required)")
+	var ip string
+	fs.StringVar(&ip, flagTarget, "", "target IP")
+	fs.StringVar(&ip, "ip", "", "alias for -t")
 	port := fs.Int("port", 0, "target TCP port (required)")
 	sport := fs.Int("sport", 0, "match only this source port (0 = any)")
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire rstdrop -ip <target> -port <port> [-sport <n>]")
+		fmt.Println("usage: livewire rstdrop -t <target-ip> -port <port> [-sport <n>]")
 		fmt.Println("\nDrop the host's outbound RSTs to a target until Ctrl-C.")
-		fs.PrintDefaults()
+		fmt.Println("\nYou usually do not need this: 'reproduce' and 'live' arm the same guard")
+		fmt.Println("automatically for the duration of a replay. Use it only when an external")
+		fmt.Println("injector (Scapy, a hand-rolled script) is sending the packets instead.")
+		printFlags(fs, flagTarget, "port", "sport")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	addr, err := netip.ParseAddr(*ip)
+	if handleAllFlags(fs, *allFlags, aliasSet{"ip": true}) {
+		return errAllFlags
+	}
+	addr, err := netip.ParseAddr(ip)
 	if err != nil {
 		fs.Usage()
-		return fmt.Errorf("invalid -ip %q", *ip)
+		return fmt.Errorf("invalid -t %q", ip)
 	}
 	if *port <= 0 || *port > 65535 {
 		fs.Usage()

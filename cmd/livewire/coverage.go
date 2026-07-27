@@ -39,10 +39,6 @@ type analysisDocument struct {
 	AdapterVersions map[string]string `json:"adapterVersions"`
 }
 
-func compileCoverage(records []*pcapio.Record, profile replay.Profile, registry *replay.Registry) (*replay.Trace, replay.ReplayPlan, error) {
-	return compileCoverageWithOptions(records, profile, registry, replay.ExtractOptions{})
-}
-
 func compileCoverageWithOptions(records []*pcapio.Record, profile replay.Profile, registry *replay.Registry, opts replay.ExtractOptions) (*replay.Trace, replay.ReplayPlan, error) {
 	if registry == nil {
 		registry = adapters.DefaultRegistry()

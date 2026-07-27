@@ -37,20 +37,28 @@ func TestParseHostIP(t *testing.T) {
 	}
 }
 
-func TestParseReproduceArgsAcceptsCaptureBeforeOrAfterFlags(t *testing.T) {
+// The capture may be written before the flags, after them, or passed as -in.
+// A peer copies the command from an email, so all three have to work — and a
+// flag written after the capture must not be silently dropped, which is what
+// the bare flag package would do.
+func TestParseCaptureArgsAcceptsCaptureAnywhere(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
 	}{
 		{name: "capture first", args: []string{"issue.pcap", "-to", "192.0.2.50", "-strict"}},
 		{name: "flags first", args: []string{"-to", "192.0.2.50", "-strict", "issue.pcap"}},
+		{name: "in flag", args: []string{"-in", "issue.pcap", "-to", "192.0.2.50", "-strict"}},
+		{name: "in flag last", args: []string{"-to", "192.0.2.50", "-strict", "-in", "issue.pcap"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
+			var in string
+			fs.StringVar(&in, "in", "", "")
 			to := fs.String("to", "", "")
 			strict := fs.Bool("strict", false, "")
-			capture, err := parseReproduceArgs(fs, tt.args)
+			capture, err := parseCaptureArgs(fs, tt.args, &in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -61,12 +69,42 @@ func TestParseReproduceArgsAcceptsCaptureBeforeOrAfterFlags(t *testing.T) {
 	}
 }
 
-func TestParseReproduceArgsRejectsMissingAndExtraCaptures(t *testing.T) {
-	for _, args := range [][]string{nil, {"one.pcap", "two.pcap"}} {
+func TestParseCaptureArgsRejectsTwoCaptures(t *testing.T) {
+	cases := [][]string{
+		{"one.pcap", "two.pcap"},
+		{"one.pcap", "-in", "two.pcap"},
+	}
+	for _, args := range cases {
 		fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
-		if _, err := parseReproduceArgs(fs, args); err == nil {
+		var in string
+		fs.StringVar(&in, "in", "", "")
+		if _, err := parseCaptureArgs(fs, args, &in); err == nil {
 			t.Fatalf("expected %v to fail", args)
 		}
+	}
+}
+
+// No capture is not an error here: the caller prints its own usage and a
+// tailored message, which reads better than a parse failure.
+func TestParseCaptureArgsWithNoCaptureReturnsEmpty(t *testing.T) {
+	fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
+	var in string
+	fs.StringVar(&in, "in", "", "")
+	capture, err := parseCaptureArgs(fs, nil, &in)
+	if err != nil || capture != "" {
+		t.Fatalf("capture=%q err=%v, want empty and nil", capture, err)
+	}
+}
+
+// The same file named twice the same way is the operator being explicit, not a
+// mistake, so it must not be rejected.
+func TestParseCaptureArgsToleratesTheSameCaptureTwice(t *testing.T) {
+	fs := flag.NewFlagSet("reproduce-test", flag.ContinueOnError)
+	var in string
+	fs.StringVar(&in, "in", "", "")
+	capture, err := parseCaptureArgs(fs, []string{"issue.pcap", "-in", "issue.pcap"}, &in)
+	if err != nil || capture != "issue.pcap" {
+		t.Fatalf("capture=%q err=%v", capture, err)
 	}
 }
 

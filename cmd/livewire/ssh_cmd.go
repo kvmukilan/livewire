@@ -19,14 +19,6 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Registers itself at init to keep the command's credential-heavy flags
-// separate from the common command table.
-func init() {
-	commands = append(commands, command{
-		"ssh-replay", "re-terminate an SSH session against a live device", cmdSSHReplay,
-	})
-}
-
 type multiFlag []string
 
 func (m *multiFlag) String() string     { return fmt.Sprintf("%d command(s)", len(*m)) }
@@ -34,8 +26,11 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func cmdSSHReplay(args []string) error {
 	fs := flag.NewFlagSet("ssh-replay", flag.ContinueOnError)
-	inPath := fs.String("in", "", "capture containing one SSH session (required)")
-	target := fs.String("target", "", "live device host:port (required)")
+	var inPath string
+	fs.StringVar(&inPath, flagIn, "", "capture containing one SSH session")
+	var target string
+	fs.StringVar(&target, flagTarget, "", "live device host:port")
+	fs.StringVar(&target, "target", "", "alias for -t")
 	user := fs.String("user", "", "SSH username (required)")
 	pass := fs.String("pass", "", "SSH password (or use -key)")
 	keyPath := fs.String("key", "", "path to a PEM private key (alternative to -pass)")
@@ -46,18 +41,22 @@ func cmdSSHReplay(args []string) error {
 	var expects multiFlag
 	fs.Var(&cmds, "cmd", "a command to run on the device (repeatable)")
 	fs.Var(&expects, "expect", "required output substring for the corresponding command (repeat for every -cmd)")
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire ssh-replay -in trace.pcap -target host:port -user U (-pass P | -key file) -cmd '...' [-expect '...']")
+		fmt.Println("usage: livewire ssh-replay -in trace.pcap -t host:port -user U (-pass P | -key file) -cmd '...' [-expect '...']")
 		fmt.Println("\nAccounts for the captured SSH lane, opens a fresh authenticated SSH connection, and replays the supplied command/expect script.")
 		fmt.Println("Captured SSH ciphertext cannot be replayed directly; supply the operations to reproduce.")
-		fs.PrintDefaults()
+		printFlags(fs, flagIn, flagTarget, "user", "pass", "key", "host-key", "cmd", "expect", "report")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *inPath == "" || *target == "" || *user == "" {
+	if handleAllFlags(fs, *allFlags, aliasSet{"target": true}) {
+		return errAllFlags
+	}
+	if inPath == "" || target == "" || *user == "" {
 		fs.Usage()
-		return fmt.Errorf("-in, -target, and -user are required")
+		return fmt.Errorf("-in, -t, and -user are required")
 	}
 	if len(cmds) == 0 {
 		return fmt.Errorf("at least one -cmd is required")
@@ -69,7 +68,7 @@ func cmdSSHReplay(args []string) error {
 		return fmt.Errorf("provide exactly one of -pass or -key")
 	}
 
-	records, _, err := loadRecords(*inPath)
+	records, _, err := loadRecords(inPath)
 	if err != nil {
 		return err
 	}
@@ -92,9 +91,9 @@ func cmdSSHReplay(args []string) error {
 	}
 	printCoverage(plan)
 	if *reportPath == "" {
-		*reportPath = strings.TrimSuffix(*inPath, filepath.Ext(*inPath)) + ".ssh.report.json"
+		*reportPath = strings.TrimSuffix(inPath, filepath.Ext(inPath)) + ".ssh.report.json"
 	}
-	digest, err := sha256File(*inPath)
+	digest, err := sha256File(inPath)
 	if err != nil {
 		return fmt.Errorf("capture digest: %w", err)
 	}
@@ -130,7 +129,7 @@ func cmdSSHReplay(args []string) error {
 		}
 	}
 
-	report := newReterminationReport("ssh", digest, *target, plan, nil, nil, append([]string{*user, *pass}, expects...)...)
+	report := newReterminationReport("ssh", digest, target, plan, nil, nil, append([]string{*user, *pass}, expects...)...)
 	report.Transformations = []string{
 		"captured SSH ciphertext not reused or interpreted as commands",
 		"fresh SSHv2 connection authenticated with operator-supplied credentials (credentials excluded from this report)",
@@ -146,7 +145,7 @@ func cmdSSHReplay(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	res, runErr := sshreplay.ReTerminateContext(ctx, sshreplay.Config{
-		Address: *target, Auth: auth, Commands: commandsList, Timeout: *timeout,
+		Address: target, Auth: auth, Commands: commandsList, Timeout: *timeout,
 		Verify: len(expects) > 0, HostKey: pinnedHostKey,
 	})
 	if res != nil {

@@ -23,12 +23,18 @@ type Config struct {
 	TargetIP   netip.Addr
 	TargetPort uint16
 	Seed       int64
-	NoGuard    bool              // skip host-RST suppression
-	Trace      bool              // emit a per-frame TX/RX trace
-	Verify     engine.VerifyMode // check live replies against the capture
-	Adaptive   bool              // re-anchor the ACK clock on the live server's real output
-	Pace       bool              // reproduce the capture's original inter-packet timing
-	RawL4      bool              // replay the client's frames exactly as captured (no response gating)
+	// LocalPort overrides the client port presented to the device. 0 means use
+	// the capture's client port, which is the faithful choice for a single
+	// replay. Repeating a replay must vary it: an identical 4-tuple sent again
+	// lands in the device's TIME_WAIT state and gets reset, which would look
+	// like a failure to reproduce rather than the artefact it is.
+	LocalPort uint16
+	NoGuard   bool              // skip host-RST suppression
+	Trace     bool              // emit a per-frame TX/RX trace
+	Verify    engine.VerifyMode // check live replies against the capture
+	Adaptive  bool              // re-anchor the ACK clock on the live server's real output
+	Pace      bool              // reproduce the capture's original inter-packet timing
+	RawL4     bool              // replay the client's frames exactly as captured (no response gating)
 }
 
 type replayGuard interface {
@@ -100,34 +106,6 @@ func (e *evidenceBackend) Recv(buf []byte, timeout time.Duration) (int, bool, er
 	return n, ok, err
 }
 
-// SendStateless blasts a flow's captured frames onto the wire as-is, retargeting
-// only the layer-2 addresses. Used for flows that can't be replayed statefully
-// (no handshake to anchor). The device won't form a connection from these — they
-// carry mid-stream sequence numbers — but the frames go out.
-func SendStateless(cfg Config, log func(string)) error {
-	f := cfg.Flow
-	if f == nil {
-		return fmt.Errorf("livereplay: nil flow")
-	}
-	lb, err := backend.OpenLive(backend.LiveConfig{
-		Iface: cfg.Iface, Target: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: f.Client.Port, Promisc: true,
-	})
-	if err != nil {
-		return err
-	}
-	defer lb.Backend.Close()
-	b := backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
-	n := 0
-	for _, cp := range f.Packets {
-		if err := b.Send(cp.Rec.Data); err != nil {
-			return err
-		}
-		n++
-	}
-	log(fmt.Sprintf("stateless: sent %d frame(s)", n))
-	return nil
-}
-
 // Run executes a stateful replay of cfg.Flow against the live target, sending
 // progress and trace lines to log. It arms and releases the RST-suppression guard.
 func Run(cfg Config, log func(string)) (Result, error) {
@@ -156,6 +134,10 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 		f = sf
 	}
 	localPort := f.Client.Port
+	if cfg.LocalPort != 0 {
+		localPort = cfg.LocalPort
+		log(fmt.Sprintf("using local port %d instead of the captured %d so a repeated replay isn't reset as a duplicate connection", localPort, f.Client.Port))
+	}
 	log(fmt.Sprintf("live stateful replay: %s -> %s:%d on %s", f.Client, cfg.TargetIP, cfg.TargetPort, cfg.Iface))
 
 	lb, err := deps.openLive(backend.LiveConfig{
@@ -188,7 +170,7 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 	var b backend.PacketBackend = backend.NewTupleRewriter(evidence, backend.TupleRewrite{
 		CapturedClient: backend.TupleEndpoint{IP: f.Client.Addr, Port: f.Client.Port},
 		CapturedServer: backend.TupleEndpoint{IP: f.Server.Addr, Port: f.Server.Port},
-		LiveClient:     backend.TupleEndpoint{IP: lb.LocalIP, Port: f.Client.Port},
+		LiveClient:     backend.TupleEndpoint{IP: lb.LocalIP, Port: localPort},
 		LiveServer:     backend.TupleEndpoint{IP: cfg.TargetIP, Port: cfg.TargetPort},
 	})
 	if cfg.Trace {

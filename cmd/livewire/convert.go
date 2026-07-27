@@ -12,22 +12,29 @@ import (
 
 func cmdConvert(args []string) error {
 	fs := flag.NewFlagSet("convert", flag.ContinueOnError)
-	inPath := fs.String("in", "", "input pcapng (or pcap) file (required)")
-	outPath := fs.String("out", "", "output classic pcap file (required)")
+	var inPath string
+	fs.StringVar(&inPath, flagIn, "", "input pcapng (or pcap) file")
+	var outPath string
+	fs.StringVar(&outPath, flagOut, "", "output classic pcap file")
+	fs.StringVar(&outPath, "out", "", "alias for -o")
 	reassemble := fs.Bool("reassemble", false, "reassemble IPv4 and IPv6 fragments into whole datagrams")
+	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire convert -in <in.pcapng> -out <out.pcap> [-reassemble]")
-		fs.PrintDefaults()
+		fmt.Println("usage: livewire convert -in <in.pcapng> -o <out.pcap> [-reassemble]")
+		printFlags(fs, flagIn, flagOut, "reassemble")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *inPath == "" || *outPath == "" {
+	if handleAllFlags(fs, *allFlags, aliasSet{"out": true}) {
+		return errAllFlags
+	}
+	if inPath == "" || outPath == "" {
 		fs.Usage()
-		return fmt.Errorf("-in and -out are required")
+		return fmt.Errorf("-in and -o are required")
 	}
 
-	in, err := openInput(*inPath)
+	in, err := openInput(inPath)
 	if err != nil {
 		return err
 	}
@@ -37,7 +44,7 @@ func cmdConvert(args []string) error {
 		return pcapio.ErrMixedLinks
 	}
 
-	outFile, err := os.Create(*outPath)
+	outFile, err := os.Create(outPath)
 	if err != nil {
 		return err
 	}
@@ -90,6 +97,6 @@ func cmdConvert(args []string) error {
 			return err
 		}
 	}
-	fmt.Printf("converted %d packets -> %s (link %s, nanosecond timestamps)\n", n, *outPath, linkName(link))
+	fmt.Printf("converted %d packets -> %s (link %s, nanosecond timestamps)\n", n, outPath, linkName(link))
 	return nil
 }

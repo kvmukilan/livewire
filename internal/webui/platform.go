@@ -180,7 +180,7 @@ func (s *Server) handleBundle(w http.ResponseWriter, r *http.Request) {
 	base := strings.TrimSuffix(req.Report, filepath.Ext(req.Report))
 	name := base + "." + time.Now().UTC().Format("20060102T150405.000000000Z") + ".support.zip"
 	manifest, err := supportbundle.Create(supportbundle.Options{
-		ReportPath: reportPath, EvidencePaths: evidencePaths, OutputPath: filepath.Join(s.dir, name), Version: "0.5.0",
+		ReportPath: reportPath, EvidencePaths: evidencePaths, OutputPath: filepath.Join(s.dir, name), Version: Version,
 	})
 	if err != nil {
 		writeErr(w, 400, err)

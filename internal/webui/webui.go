@@ -19,6 +19,12 @@ import (
 	"github.com/kvmukilan/livewire/internal/hoststack"
 )
 
+// Version is the livewire version stamped into web-generated reports. The `web`
+// command sets it from the CLI's version constant so dashboard reports never
+// drift from the binary's real version. Defaulted so tests and direct use of
+// the package still emit a sensible value.
+var Version = "0.6.0"
+
 // Server holds dashboard state: the pcap working dir, the running job, and armed RST guards.
 type Server struct {
 	dir string

@@ -1,19 +1,17 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
-	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/replay"
 )
 
-// cmdAnalyze performs the same replayability preflight used by reproduce,
-// without opening a network interface or contacting a device.
+// cmdAnalyze is the compatibility entry point for the merged 'check' command: it
+// prints the replayability assessment alone, exactly as it always has, without
+// opening a network interface or contacting a device.
 func cmdAnalyze(args []string) error {
 	fs := flag.NewFlagSet("analyze", flag.ContinueOnError)
 	inPath := fs.String("in", "", "input pcap/pcapng file (required)")
@@ -24,8 +22,10 @@ func cmdAnalyze(args []string) error {
 	fs.Var(&rulePacks, "rules", "JSON adapter rule pack (repeatable)")
 	fs.Usage = func() {
 		fmt.Println("usage: livewire analyze -in <capture.pcap> [-json assessment.json]")
+		fmt.Println("\n'analyze' is now part of 'check', which also summarises what the capture")
+		fmt.Println("holds. This spelling keeps working and prints the assessment only.")
 		fmt.Println("\nChecks capture completeness and reports replay fidelity risks without using the network.")
-		fs.PrintDefaults()
+		printFlags(fs, "in", "json", "profile")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -34,12 +34,15 @@ func cmdAnalyze(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-in is required")
 	}
+	if *udpIdle <= 0 {
+		return fmt.Errorf("-udp-idle must be positive")
+	}
 	recs, _, err := loadRecords(*inPath)
 	if err != nil {
 		return err
 	}
-	r := assessCapture(recs, engine.ExtractFlows(recs))
-	printPreflight(r)
+	assessment := assessCapture(recs, engine.ExtractFlows(recs))
+	printPreflight(assessment)
 	profile, err := replay.ParseProfile(*profileName)
 	if err != nil {
 		return err
@@ -48,20 +51,13 @@ func cmdAnalyze(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *udpIdle <= 0 {
-		return fmt.Errorf("-udp-idle must be positive")
-	}
 	_, plan, err := compileCoverageWithOptions(recs, profile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
 	if err != nil {
 		return fmt.Errorf("compile coverage: %w", err)
 	}
 	printCoverage(plan)
 	if *jsonPath != "" {
-		b, err := json.MarshalIndent(analysisDocument{Preflight: r, Coverage: plan, AdapterVersions: adapters.VersionsForRegistry(registry)}, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(*jsonPath, append(b, '\n'), 0o644); err != nil {
+		if err := writeAssessment(*jsonPath, assessment, plan, registry); err != nil {
 			return err
 		}
 		fmt.Printf("Assessment written to %s\n", *jsonPath)

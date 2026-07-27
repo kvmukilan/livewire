@@ -26,5 +26,11 @@ QUICKSTART.md
 # internal reference, not distributed (documented in DOCUMENTATION.md instead)
 REPRODUCE.md
 
-# release artifacts
-dist/
+# release artifacts: intermediate build output stays out of the repository, but a
+# tagged release folder is committed so the published binaries are browsable here
+# as well as on the Releases page. Order matters — these negations must follow the
+# *.exe rule above, since git applies the last pattern that matches, and the
+# directory has to be re-included before anything inside it can be.
+dist/*
+!dist/v0.6.0/
+!dist/v0.6.0/**
