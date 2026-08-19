@@ -20,7 +20,7 @@ unverified boundaries and are not presented as completed validation.
 | FTP/FTPS | Command/reply adapter, multiline replies, strict/lenient comparison, coordinated active/passive IPv4/IPv6 groups, transfer digest verification, explicit/implicit TLS recovery and fresh verified live TLS |
 | Exact-once planning | `ModeCoordinated` with related control/data session IDs and capture coverage validation |
 | Shared execution | CLI and dashboard share bounded capture loading, planning, FTP execution, redaction, finalization, and report primitives |
-| Release supply chain | Go 1.26.7 builder, pinned dependencies/actions/tools, deterministic multi-platform builds and ZIP, CycloneDX SBOM, checksums, byte comparison, and GitHub build provenance |
+| Release supply chain | Go 1.26.7 builder, omitted environment-dependent build ID, pinned dependencies/actions/tools, deterministic multi-platform builds and ZIP, CycloneDX SBOM, checksums, byte comparison, and GitHub build provenance |
 
 HTTP/2 and HTTP/3 semantic replay remain deliberately deferred.
 

@@ -57,6 +57,8 @@ All notable changes to Livewire are documented here.
 - Release builds use Go 1.26.7. Compatibility CI covers Go 1.25.14, 1.26.7, and
   1.27.x; dependencies are pinned to x/crypto 0.55.0, x/net 0.58.0, x/sys
   0.47.0, x/term 0.45.0, and x/text 0.41.0.
+- Release binaries omit Go's environment-dependent build ID while retaining
+  module metadata, making clean-runner and local output byte-identical.
 
 ### Fixed
 
