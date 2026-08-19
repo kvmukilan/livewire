@@ -62,13 +62,13 @@ jobs:
           go test -shuffle=on -count=20 ./internal/webui
       - name: Fuzz smoke
         run: |
-          go test ./internal/adapters -run='^$' -fuzz=FuzzBuiltInDecoders -fuzztime=5s
-          go test ./internal/adapters -run='^$' -fuzz=FuzzRulePackCompiler -fuzztime=5s
-          go test ./internal/lab -run='^$' -fuzz=FuzzScenarioParsing -fuzztime=5s
-          go test ./internal/tlsreplay -run='^$' -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=5s
-          go test ./internal/replay -run='^$' -fuzz=FuzzTraceExtractionCoverage -fuzztime=5s
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzIPv6FragmentReassembly -fuzztime=5s
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzMalformedFragmentFrames -fuzztime=5s
+          go test ./internal/adapters -run='^$' -fuzz=FuzzBuiltInDecoders -fuzztime=5s -parallel=1
+          go test ./internal/adapters -run='^$' -fuzz=FuzzRulePackCompiler -fuzztime=5s -parallel=1
+          go test ./internal/lab -run='^$' -fuzz=FuzzScenarioParsing -fuzztime=5s -parallel=1
+          go test ./internal/tlsreplay -run='^$' -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=5s -parallel=1
+          go test ./internal/replay -run='^$' -fuzz=FuzzTraceExtractionCoverage -fuzztime=5s -parallel=1
+          go test ./internal/ipreasm -run='^$' -fuzz=FuzzIPv6FragmentReassembly -fuzztime=5s -parallel=1
+          go test ./internal/ipreasm -run='^$' -fuzz=FuzzMalformedFragmentFrames -fuzztime=5s -parallel=1
       - name: Coverage floors
         shell: bash
         run: |

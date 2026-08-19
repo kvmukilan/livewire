@@ -56,7 +56,10 @@ func FuzzMalformedFragmentFrames(f *testing.F) {
 	f.Add(makeIPv6Fragment(7, 0, true, full[:16]), makeIPv6Fragment(7, 16, false, full[16:]))
 	f.Add([]byte{0, 1, 2}, []byte{3, 4, 5})
 	f.Fuzz(func(t *testing.T, first, second []byte) {
-		if len(first)+len(second) > 1<<20 {
+		// Keep smoke inputs within the maximum IPv6 packet scale. Larger byte
+		// slices cannot represent one frame and make fuzz-worker shutdown timing
+		// depend on runner load instead of parser behavior.
+		if len(first)+len(second) > 1<<16 {
 			t.Skip()
 		}
 		_, _, _ = ReassembleAll([][]byte{first, second}, wire.LinkEthernet)
