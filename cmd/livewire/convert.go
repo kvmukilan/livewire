@@ -1,16 +1,17 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/kvmukilan/livewire/internal/ipreasm"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
-func cmdConvert(args []string) error {
+func cmdConvert(args []string) (retErr error) {
 	fs := flag.NewFlagSet("convert", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcapng (or pcap) file")
@@ -38,17 +39,15 @@ func cmdConvert(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
 	if in.isNg && in.ngMixed != nil && in.ngMixed() {
 		return pcapio.ErrMixedLinks
 	}
 
-	outFile, err := os.Create(outPath)
+	af, err := orchestration.CreateArtifact(outPath)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
 
 	var w *pcapio.Writer
 	var link wire.LinkType
@@ -58,7 +57,7 @@ func cmdConvert(args []string) error {
 	err = in.eachRecord(func(rec *pcapio.Record) error {
 		if w == nil {
 			link = rec.LinkType
-			w, err = pcapio.NewWriter(outFile, link, true)
+			w, err = pcapio.NewWriter(af, link, true)
 			if err != nil {
 				return err
 			}
@@ -96,6 +95,9 @@ func cmdConvert(args []string) error {
 		if err := w.Flush(); err != nil {
 			return err
 		}
+	}
+	if err := af.Commit(); err != nil {
+		return err
 	}
 	fmt.Printf("converted %d packets -> %s (link %s, nanosecond timestamps)\n", n, outPath, linkName(link))
 	return nil

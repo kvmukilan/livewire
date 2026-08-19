@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
 	"strings"
 	"time"
 
@@ -10,6 +8,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/livereplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
 )
@@ -146,6 +145,15 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 		for _, d := range p.TCP.Outcome.Mismatches {
 			sr.Differences = append(sr.Differences, replay.Difference{Field: "tcp-response", Actual: d.Detail, Structural: d.Structural})
 		}
+	} else if p.Entry.Mode == replay.ModeCoordinated && p.Entry.Adapter == "ftp" {
+		sr.Completed = p.FTP.Completed
+		sr.Verified = r.Verify != string(replay.VerifyOff)
+		sr.Matched = p.FTP.Completed && len(p.FTP.Differences) == 0
+		for _, transfer := range p.FTP.Transfers {
+			sr.Matched = sr.Matched && transfer.Matched
+		}
+		sr.Sent, sr.Received = p.FTP.Commands, p.FTP.Replies
+		sr.Differences = append(sr.Differences, p.FTP.Differences...)
 	} else {
 		sr.Completed, sr.Matched = p.Transport.Completed, p.Transport.Matched
 		sr.Verified = p.Transport.Verified
@@ -218,12 +226,5 @@ func diagnose(out engine.Outcome, mode string) string {
 }
 
 func (r *replayReport) write(path string) error {
-	b, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return err
-	}
-	for _, secret := range r.secretValues {
-		b = []byte(strings.ReplaceAll(string(b), secret, "[REDACTED]"))
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return orchestration.WriteJSON(path, r, runvars.NewRedactor(nil, r.secretValues...))
 }

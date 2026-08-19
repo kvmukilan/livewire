@@ -476,14 +476,6 @@ func (p *Packet) Window() uint16 {
 	return binary.BigEndian.Uint16(p.Buf[p.l4Off+14 : p.l4Off+16])
 }
 
-// tcpOptions returns the TCP option bytes (between the fixed header and payload).
-func (p *Packet) tcpOptions() []byte {
-	if !p.isTCP || p.l4HdrLn <= 20 {
-		return nil
-	}
-	return p.Buf[p.l4Off+20 : p.l4Off+p.l4HdrLn]
-}
-
 // SegmentLen returns the segment's sequence-space length: payload bytes plus
 // one each for SYN and FIN.
 func (p *Packet) SegmentLen() uint32 {

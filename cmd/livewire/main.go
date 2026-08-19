@@ -6,9 +6,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+
+	"github.com/kvmukilan/livewire/internal/buildinfo"
 )
 
-const version = "0.6.0"
+var version = buildinfo.Version
 
 // cmdGroup decides whether a command appears at the front door. The tool has
 // sixteen commands but a field engineer only ever needs five of them, and a flat
@@ -64,6 +66,8 @@ var commands = []command{
 		summary: "convert a pcapng file to classic pcap"},
 	{name: "tls-replay", group: groupAdvanced, run: cmdTLSReplay,
 		summary: "decrypt with a key log and re-terminate a fresh verified TLS session"},
+	{name: "ftp-replay", group: groupAdvanced, run: cmdFTPReplay,
+		summary: "coordinate FTP/FTPS control and negotiated data connections"},
 	{name: "ssh-replay", group: groupAdvanced, run: cmdSSHReplay,
 		summary: "re-terminate an SSH session against a live device"},
 	{name: "bundle", group: groupAdvanced, run: cmdBundle,

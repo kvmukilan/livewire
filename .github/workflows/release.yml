@@ -7,18 +7,20 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
-    name: Build and publish release
+    name: Verify and publish release
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          go-version: "1.25.x"
-          check-latest: true
+          fetch-depth: 0
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version: "1.26.7"
           cache: true
 
       - name: Derive version from tag
@@ -31,33 +33,97 @@ jobs:
           }
           "version=$($Matches.version)" >> $env:GITHUB_OUTPUT
 
-      - name: Test
+      - name: Verify source
         shell: pwsh
         run: |
           go mod verify
-          go test ./...
+          go test -count=1 ./...
           go vet ./...
 
-      - name: Build release artifacts
+      - name: Regenerate release artifacts
         shell: pwsh
-        run: ./scripts/release.ps1 -Version "${{ steps.version.outputs.version }}"
+        run: ./scripts/release.ps1 -Version "${{ steps.version.outputs.version }}" -OutputRoot "dist-verify"
 
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+      - name: Byte-compare committed artifacts
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $expected = (Resolve-Path "dist/v$version").Path
+          $actual = (Resolve-Path "dist-verify/v$version").Path
+          $expectedFiles = Get-ChildItem $expected -File | Sort-Object Name
+          $actualFiles = Get-ChildItem $actual -File | Sort-Object Name
+          $names = Compare-Object $expectedFiles.Name $actualFiles.Name
+          if ($names) { throw "Artifact name mismatch: $($names | Out-String)" }
+          foreach ($file in $expectedFiles) {
+            $rebuilt = Join-Path $actual $file.Name
+            $want = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
+            $got = (Get-FileHash $rebuilt -Algorithm SHA256).Hash
+            if ($want -ne $got) { throw "Non-reproducible artifact: $($file.Name)" }
+          }
+
+      - name: Validate SBOM and ZIP
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $dir = "dist/v$version"
+          $bom = Get-Content "$dir/livewire-$version.cdx.json" -Raw | ConvertFrom-Json
+          if ($bom.bomFormat -ne "CycloneDX" -or $bom.specVersion -ne "1.6" -or -not $bom.components) {
+            throw "CycloneDX SBOM validation failed"
+          }
+          $zipDir = Join-Path $env:RUNNER_TEMP "zip-smoke"
+          Expand-Archive "$dir/livewire-$version-windows-amd64.zip" $zipDir
+          & "$zipDir/livewire.exe" version
+          if ($LASTEXITCODE -ne 0) { throw "Windows ZIP smoke test failed" }
+
+      - name: Extract v0.7.0 release notes
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $text = Get-Content CHANGELOG.md -Raw
+          $match = [regex]::Match($text, "(?ms)^## \[$([regex]::Escape($version))\].*?(?=^## \[|\z)")
+          if (-not $match.Success) { throw "No changelog section for $version" }
+          [IO.File]::WriteAllText("release-notes.md", $match.Value.Trim() + "`n", [Text.UTF8Encoding]::new($false))
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: livewire-${{ steps.version.outputs.version }}
           path: dist/v${{ steps.version.outputs.version }}/*
           if-no-files-found: error
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-amd64
+            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-arm64
+            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.exe
+            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.zip
+            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}.cdx.json
+            dist/v${{ steps.version.outputs.version }}/SHA256SUMS
 
       - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $assets = Get-ChildItem "dist/v${{ steps.version.outputs.version }}" -File |
-            ForEach-Object FullName
-          gh release create "${{ github.ref_name }}" `
-            @assets `
-            --verify-tag `
-            --title "Livewire ${{ github.ref_name }}" `
-            --notes-file CHANGELOG.md
+          $version = "${{ steps.version.outputs.version }}"
+          $assets = Get-ChildItem "dist/v$version" -File | Sort-Object Name | ForEach-Object FullName
+          gh release create "${{ github.ref_name }}" @assets --verify-tag --title "Livewire ${{ github.ref_name }}" --notes-file release-notes.md
+
+      - name: Verify published assets and checksums
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $download = Join-Path $env:RUNNER_TEMP "release-download"
+          New-Item -ItemType Directory -Path $download | Out-Null
+          gh release download "${{ github.ref_name }}" --dir $download
+          $published = Get-ChildItem $download -File | Sort-Object Name
+          $committed = Get-ChildItem "dist/v$version" -File | Sort-Object Name
+          if (Compare-Object $committed.Name $published.Name) { throw "Published asset list differs from committed assets" }
+          foreach ($line in Get-Content (Join-Path $download "SHA256SUMS")) {
+            if ($line -notmatch '^(?<hash>[0-9a-f]{64})  (?<name>.+)$') { throw "Malformed checksum line: $line" }
+            $actual = (Get-FileHash (Join-Path $download $Matches.name) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $Matches.hash) { throw "Published checksum mismatch for $($Matches.name)" }
+          }

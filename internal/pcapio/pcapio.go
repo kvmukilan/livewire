@@ -24,4 +24,6 @@ var (
 	ErrBadMagic   = errors.New("pcapio: unrecognized file magic")
 	ErrTruncated  = errors.New("pcapio: truncated file")
 	ErrMixedLinks = errors.New("pcapio: capture mixes link types; cannot flatten")
+	ErrInvalid    = errors.New("pcapio: invalid capture")
+	ErrLimit      = errors.New("pcapio: capture limit exceeded")
 )

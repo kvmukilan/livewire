@@ -45,13 +45,15 @@ func cmdRstdrop(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("invalid -port %d", *port)
 	}
+	if *sport < 0 || *sport > 65535 {
+		fs.Usage()
+		return fmt.Errorf("invalid -sport %d", *sport)
+	}
 
 	guard, err := hoststack.Arm(hoststack.Rule{TargetIP: addr, TargetPort: uint16(*port), LocalPort: uint16(*sport)})
 	if err != nil {
 		return err
 	}
-	defer guard.Release()
-
 	fmt.Printf("armed: %s\n", guard.Describe())
 	fmt.Println("dropping host RSTs — press Ctrl-C to remove the rule")
 
@@ -59,5 +61,5 @@ func cmdRstdrop(args []string) error {
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	<-ch
 	fmt.Println("\nremoving rule")
-	return nil
+	return guard.Release()
 }

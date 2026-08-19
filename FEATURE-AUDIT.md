@@ -1,4 +1,9 @@
-# Livewire Feature Audit (v0.5.0)
+# Livewire Feature Audit (historical v0.5.0 review)
+
+> Historical record: this document describes the v0.5.0 command surface and
+> its follow-up cleanup. For the current v0.7.0 security, FTP/FTPS, CI, and
+> release disposition, see `RELEASE_AUDIT.md`; code pointers below are not a
+> current inventory.
 
 **Scope:** every user-facing command in `cmd/livewire/` and every package under
 `internal/`, judged against the project's own bar — *works for a non-technical

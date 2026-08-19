@@ -8,7 +8,9 @@ package sshreplay
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"time"
 
@@ -56,14 +58,14 @@ func ReTerminate(cfg Config) (*Result, error) {
 // ReTerminateContext is ReTerminate with cancellation spanning the TCP dial,
 // SSH handshake, channel creation, and every command. The owned connection is
 // closed when the context ends so a stopped job cannot strand blocked SSH I/O.
-func ReTerminateContext(ctx context.Context, cfg Config) (*Result, error) {
+func ReTerminateContext(ctx context.Context, cfg Config) (res *Result, retErr error) {
 	if cfg.Auth.User == "" {
 		return nil, fmt.Errorf("sshreplay: a username is required")
 	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	res := &Result{}
+	res = &Result{}
 	hostKeyCB := ssh.HostKeyCallback(func(_ string, _ net.Addr, key ssh.PublicKey) error {
 		res.HostKey = key
 		if cfg.HostKey != nil && !bytes.Equal(key.Marshal(), cfg.HostKey.Marshal()) {
@@ -88,26 +90,53 @@ func ReTerminateContext(ctx context.Context, cfg Config) (*Result, error) {
 	if err != nil {
 		return res, fmt.Errorf("sshreplay: fresh TCP connection to %s failed: %w", cfg.Address, sshContextError(ctx, err))
 	}
+	rawOwned := true
+	defer func() {
+		if rawOwned {
+			if err := raw.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				retErr = errors.Join(retErr, fmt.Errorf("sshreplay: close fresh TCP connection: %w", err))
+			}
+		}
+	}()
 	cancelWatchDone := make(chan struct{})
+	cancelWatchResult := make(chan error, 1)
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = raw.Close()
+			err := raw.Close()
+			if errors.Is(err, net.ErrClosed) {
+				err = nil
+			}
+			cancelWatchResult <- err
 		case <-cancelWatchDone:
+			cancelWatchResult <- nil
 		}
 	}()
-	defer close(cancelWatchDone)
+	defer func() {
+		close(cancelWatchDone)
+		if err := <-cancelWatchResult; err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("sshreplay: close cancelled TCP connection: %w", err))
+		}
+	}()
 	if cfg.Timeout > 0 {
-		_ = raw.SetDeadline(time.Now().Add(cfg.Timeout))
+		if err := raw.SetDeadline(time.Now().Add(cfg.Timeout)); err != nil {
+			return res, fmt.Errorf("sshreplay: set handshake deadline: %w", err)
+		}
 	}
 	conn, chans, reqs, err := ssh.NewClientConn(raw, cfg.Address, ccfg)
 	if err != nil {
-		_ = raw.Close()
 		return res, fmt.Errorf("sshreplay: fresh SSH handshake/auth to %s failed: %w", cfg.Address, sshContextError(ctx, err))
 	}
-	_ = raw.SetDeadline(time.Time{})
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		return res, fmt.Errorf("sshreplay: clear handshake deadline: %w", err)
+	}
 	client := ssh.NewClient(conn, chans, reqs)
-	defer client.Close()
+	rawOwned = false
+	defer func() {
+		if err := client.Close(); !expectedSSHClose(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("sshreplay: close fresh SSH connection: %w", err))
+		}
+	}()
 
 	for i, cmd := range cfg.Commands {
 		out, err := runOneContext(ctx, client, cmd.Run)
@@ -124,12 +153,24 @@ func ReTerminateContext(ctx context.Context, cfg Config) (*Result, error) {
 	return res, nil
 }
 
-func runOneContext(ctx context.Context, client *ssh.Client, command string) ([]byte, error) {
+func runOneContext(ctx context.Context, client *ssh.Client, command string) (out []byte, retErr error) {
 	sess, err := client.NewSession()
 	if err != nil {
 		return nil, sshContextError(ctx, err)
 	}
-	defer sess.Close()
+	closed := false
+	closeSession := func() error {
+		if closed {
+			return nil
+		}
+		closed = true
+		return sess.Close()
+	}
+	defer func() {
+		if err := closeSession(); !expectedSSHClose(err) {
+			retErr = errors.Join(retErr, fmt.Errorf("close SSH session: %w", err))
+		}
+	}()
 	type result struct {
 		out []byte
 		err error
@@ -141,12 +182,18 @@ func runOneContext(ctx context.Context, client *ssh.Client, command string) ([]b
 	}()
 	select {
 	case <-ctx.Done():
-		_ = sess.Close()
+		closeErr := closeSession()
 		<-done
-		return nil, ctx.Err()
+		return nil, errors.Join(ctx.Err(), closeErr)
 	case got := <-done:
 		return got.out, got.err
 	}
+}
+
+// The SSH package reports EOF when the remote side has already completed the
+// channel close handshake. That is a successful terminal state, not lost I/O.
+func expectedSSHClose(err error) bool {
+	return err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed)
 }
 
 func sshContextError(ctx context.Context, fallback error) error {

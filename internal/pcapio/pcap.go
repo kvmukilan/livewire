@@ -3,7 +3,9 @@ package pcapio
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/wire"
@@ -23,16 +25,23 @@ type Reader struct {
 	nanos    bool
 	linkType wire.LinkType
 	snaplen  uint32
+	limits   Limits
 }
 
 // NewReader reads the 24-byte global header and returns a streaming Reader.
 func NewReader(r io.Reader) (*Reader, error) {
+	return NewReaderWithLimits(r, DefaultLimits())
+}
+
+// NewReaderWithLimits reads a classic pcap header using explicit safety bounds.
+func NewReaderWithLimits(r io.Reader, limits Limits) (*Reader, error) {
+	limits = limits.normalized()
 	br := bufio.NewReaderSize(r, 1<<16)
 	hdr := make([]byte, 24)
 	if _, err := io.ReadFull(br, hdr); err != nil {
 		return nil, err
 	}
-	rd := &Reader{r: br}
+	rd := &Reader{r: br, limits: limits}
 	switch m := binary.LittleEndian.Uint32(hdr[0:4]); m {
 	case magicMicros:
 		rd.bo, rd.nanos = binary.LittleEndian, false
@@ -49,6 +58,9 @@ func NewReader(r io.Reader) (*Reader, error) {
 		}
 	}
 	rd.snaplen = rd.bo.Uint32(hdr[16:20])
+	if rd.snaplen == 0 || uint64(rd.snaplen) > uint64(limits.MaxRecordBytes) {
+		return nil, fmt.Errorf("%w: snaplen %d exceeds allowed record size %d", ErrLimit, rd.snaplen, limits.MaxRecordBytes)
+	}
 	rd.linkType = wire.LinkType(rd.bo.Uint32(hdr[20:24]))
 	return rd, nil
 }
@@ -63,12 +75,28 @@ func (r *Reader) Nanosecond() bool { return r.nanos }
 func (r *Reader) Read() (*Record, error) {
 	hdr := make([]byte, 16)
 	if _, err := io.ReadFull(r.r, hdr); err != nil {
-		return nil, err // io.EOF at a clean record boundary
+		if err == io.EOF {
+			return nil, io.EOF
+		}
+		return nil, ErrTruncated
 	}
 	tsSec := r.bo.Uint32(hdr[0:4])
 	tsFrac := r.bo.Uint32(hdr[4:8])
 	capLen := r.bo.Uint32(hdr[8:12])
 	origLen := r.bo.Uint32(hdr[12:16])
+	if capLen > r.snaplen || uint64(capLen) > uint64(r.limits.MaxRecordBytes) {
+		return nil, fmt.Errorf("%w: captured length %d exceeds snaplen/limit", ErrLimit, capLen)
+	}
+	if origLen < capLen {
+		return nil, fmt.Errorf("%w: original length %d is smaller than captured length %d", ErrInvalid, origLen, capLen)
+	}
+	fracLimit := uint32(1_000_000)
+	if r.nanos {
+		fracLimit = 1_000_000_000
+	}
+	if tsFrac >= fracLimit {
+		return nil, fmt.Errorf("%w: timestamp fraction %d is out of range", ErrInvalid, tsFrac)
+	}
 
 	nsec := int64(tsFrac)
 	if !r.nanos {
@@ -117,8 +145,15 @@ func NewWriter(w io.Writer, link wire.LinkType, nanos bool) (*Writer, error) {
 
 // Write appends one record.
 func (w *Writer) Write(rec *Record) error {
+	if rec == nil {
+		return fmt.Errorf("pcapio: nil record")
+	}
 	hdr := make([]byte, 16)
-	w.bo.PutUint32(hdr[0:4], uint32(rec.Time.Unix()))
+	seconds := rec.Time.Unix()
+	if seconds < 0 || seconds > math.MaxUint32 {
+		return fmt.Errorf("pcapio: timestamp seconds %d cannot be represented", seconds)
+	}
+	w.bo.PutUint32(hdr[0:4], uint32(seconds))
 	frac := uint32(rec.Time.Nanosecond())
 	if !w.nanos {
 		frac /= 1000
@@ -128,9 +163,15 @@ func (w *Writer) Write(rec *Record) error {
 	if capLen == 0 {
 		capLen = len(rec.Data)
 	}
+	if capLen != len(rec.Data) || capLen < 0 || uint64(capLen) > math.MaxUint32 {
+		return fmt.Errorf("pcapio: captured length %d does not match %d data bytes", capLen, len(rec.Data))
+	}
 	origLen := rec.OrigLen
 	if origLen == 0 {
 		origLen = capLen
+	}
+	if origLen < capLen || origLen < 0 || uint64(origLen) > math.MaxUint32 {
+		return fmt.Errorf("pcapio: invalid original length %d for captured length %d", origLen, capLen)
 	}
 	w.bo.PutUint32(hdr[8:12], uint32(capLen))
 	w.bo.PutUint32(hdr[12:16], uint32(origLen))

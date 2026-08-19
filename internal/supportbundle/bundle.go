@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/runvars"
+	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
 const maxReportBytes = 16 << 20
@@ -41,7 +43,9 @@ type Manifest struct {
 
 type Options struct {
 	ReportPath    string
+	ReportData    []byte
 	EvidencePaths []string
+	Evidence      []EvidenceReference
 	OutputPath    string
 	Version       string
 }
@@ -49,7 +53,7 @@ type Options struct {
 var inlineSecret = regexp.MustCompile(`(?i)(authorization|proxy-authorization|password|passwd|token|secret|cookie)(\s*[:=]\s*)([^,;\s"\\]+)`)
 
 func Create(opts Options) (Manifest, error) {
-	if opts.ReportPath == "" || opts.OutputPath == "" {
+	if opts.ReportPath == "" && opts.ReportData == nil || opts.OutputPath == "" {
 		return Manifest{}, fmt.Errorf("support bundle: report and output paths are required")
 	}
 	if _, err := os.Stat(opts.OutputPath); err == nil {
@@ -57,9 +61,15 @@ func Create(opts Options) (Manifest, error) {
 	} else if !os.IsNotExist(err) {
 		return Manifest{}, err
 	}
-	reportBytes, err := readLimited(opts.ReportPath, maxReportBytes)
-	if err != nil {
-		return Manifest{}, err
+	reportBytes := opts.ReportData
+	if reportBytes == nil {
+		var err error
+		reportBytes, err = readLimited(opts.ReportPath, maxReportBytes)
+		if err != nil {
+			return Manifest{}, err
+		}
+	} else if len(reportBytes) > maxReportBytes {
+		return Manifest{}, fmt.Errorf("support bundle: report exceeds %d bytes", maxReportBytes)
 	}
 	dec := json.NewDecoder(bytes.NewReader(reportBytes))
 	dec.UseNumber()
@@ -79,9 +89,10 @@ func Create(opts Options) (Manifest, error) {
 	if report["replayPlan"] == nil && report["plan"] == nil {
 		return Manifest{}, fmt.Errorf("support bundle: report has no replay plan")
 	}
+	secretValues := collectSecretValues(report)
 	report = sanitizeMap(report)
 	ensureReportSections(report)
-	sanitized, err := json.MarshalIndent(report, "", "  ")
+	sanitized, err := runvars.NewRedactor(nil, secretValues...).MarshalIndent(report, "", "  ")
 	if err != nil {
 		return Manifest{}, err
 	}
@@ -95,6 +106,7 @@ func Create(opts Options) (Manifest, error) {
 		ReportSHA256: fmt.Sprintf("sha256:%x", reportDigest), CaptureDigest: fmt.Sprint(report["captureDigest"]),
 		SecurityLimitations: []string{"packet evidence is referenced by digest only and is not embedded because captures may contain application credentials"},
 	}
+	manifest.Evidence = append(manifest.Evidence, opts.Evidence...)
 	for _, path := range opts.EvidencePaths {
 		ref, err := evidenceReference(path)
 		if err != nil {
@@ -113,14 +125,37 @@ func Create(opts Options) (Manifest, error) {
 	return manifest, nil
 }
 
+func collectSecretValues(value any) []string {
+	var secrets []string
+	var walk func(any)
+	walk = func(value any) {
+		switch value := value.(type) {
+		case map[string]any:
+			for key, child := range value {
+				if runvars.IsSecret(key) {
+					if text, ok := child.(string); ok && text != "" && text != "[REDACTED]" {
+						secrets = append(secrets, text)
+					}
+				}
+				walk(child)
+			}
+		case []any:
+			for _, child := range value {
+				walk(child)
+			}
+		}
+	}
+	walk(value)
+	return secrets
+}
+
 func readLimited(path string, limit int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 	b, err := io.ReadAll(io.LimitReader(f, limit+1))
-	if err != nil {
+	if err = errors.Join(err, f.Close()); err != nil {
 		return nil, err
 	}
 	if int64(len(b)) > limit {
@@ -181,32 +216,30 @@ func evidenceReference(path string) (EvidenceReference, error) {
 	if err != nil {
 		return EvidenceReference{}, err
 	}
-	defer f.Close()
-	info, err := f.Stat()
+	ref, refErr := Reference(filepath.Base(path), f)
+	if err := errors.Join(refErr, f.Close()); err != nil {
+		return EvidenceReference{}, err
+	}
+	return ref, nil
+}
+
+// Reference hashes an evidence stream without embedding its packet bytes.
+func Reference(name string, r io.Reader) (EvidenceReference, error) {
+	h := sha256.New()
+	size, err := io.Copy(h, r)
 	if err != nil {
 		return EvidenceReference{}, err
 	}
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return EvidenceReference{}, err
-	}
-	return EvidenceReference{Name: filepath.Base(path), SHA256: fmt.Sprintf("sha256:%x", h.Sum(nil)), Size: info.Size(), Included: false}, nil
+	return EvidenceReference{Name: filepath.Base(name), SHA256: fmt.Sprintf("sha256:%x", h.Sum(nil)), Size: size, Included: false}, nil
 }
 
 func writeArchive(path string, report, manifest []byte) (err error) {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".livewire-support-*.tmp")
+	af, err := securefile.Create(path)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	defer func() {
-		_ = tmp.Close()
-		if err != nil {
-			_ = os.Remove(tmpName)
-		}
-	}()
-	zw := zip.NewWriter(tmp)
+	defer func() { err = errors.Join(err, af.Abort()) }()
+	zw := zip.NewWriter(af)
 	for name, data := range map[string][]byte{"report.json": report, "manifest.json": manifest} {
 		w, createErr := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate})
 		if createErr != nil {
@@ -219,11 +252,5 @@ func writeArchive(path string, report, manifest []byte) (err error) {
 	if err := zw.Close(); err != nil {
 		return err
 	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpName, path)
+	return af.Commit()
 }

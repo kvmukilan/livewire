@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -54,6 +55,12 @@ func cmdTLSReplay(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-in, -keylog, and -t are required")
 	}
+	if err := validateNetworkTarget(target, "-target"); err != nil {
+		return err
+	}
+	if *timeout <= 0 || *timeout > 10*time.Minute {
+		return fmt.Errorf("-timeout must be greater than zero and at most 10m")
+	}
 	records, _, err := loadRecords(inPath)
 	if err != nil {
 		return err
@@ -79,9 +86,8 @@ func cmdTLSReplay(args []string) error {
 	if err != nil {
 		return err
 	}
-	keylog, err := tlsreplay.ParseKeyLog(kf)
-	_ = kf.Close()
-	if err != nil {
+	keylog, parseErr := tlsreplay.ParseKeyLog(kf)
+	if err := errors.Join(parseErr, kf.Close()); err != nil {
 		return err
 	}
 	messages, err := tlsreplay.NewDecryptor(keylog).DecryptFlowTimed(

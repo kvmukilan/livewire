@@ -152,14 +152,6 @@ func DriveContext(ctx context.Context, c *Conversation, b backend.PacketBackend,
 	return out, nil
 }
 
-// preciseWait blocks until the backend clock reaches target. It sleeps for the
-// bulk of the wait, then busy-spins the final ~1ms so sub-millisecond
-// inter-packet timing lands despite the OS scheduler's coarse sleep resolution
-// (notably ~15ms on Windows). A no-op if target is already past.
-func preciseWait(b backend.PacketBackend, target time.Time) {
-	preciseWaitContext(context.Background(), b, target)
-}
-
 func preciseWaitContext(ctx context.Context, b backend.PacketBackend, target time.Time) bool {
 	const spin = time.Millisecond
 	for {

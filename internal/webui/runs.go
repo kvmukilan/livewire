@@ -1,26 +1,26 @@
 package webui
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
-	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/livereplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
@@ -103,12 +103,20 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("udpIdleMs must not be negative"))
 		return
 	}
+	if req.UDPIdleMS > int(time.Hour/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("udpIdleMs must not exceed 3600000"))
+		return
+	}
 	if req.Attempts < 0 || req.Attempts > maxWebAttempts {
 		writeErr(w, 400, fmt.Errorf("attempts must be between 1 and %d", maxWebAttempts))
 		return
 	}
 	if req.GapMS < 0 {
 		writeErr(w, 400, fmt.Errorf("gapMs must not be negative"))
+		return
+	}
+	if req.GapMS > int(10*time.Minute/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("gapMs must not exceed 600000"))
 		return
 	}
 	if req.Verify == "" {
@@ -142,7 +150,7 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	j.protectVariables(req.Variables)
-	records, _, err := loadPcap(path)
+	records, _, err := s.loadPcap(path)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "load failed")
@@ -192,27 +200,13 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		if runs.Repeats() {
 			j.progress("attempt", "", fmt.Sprintf("attempt %d of %d", i+1, runs.Times))
 		}
-		started := time.Now()
-		round := make([]webSessionResult, len(plan.Entries))
-		run := func(k int) {
-			entry := plan.Entries[k]
-			round[k] = runWebEntry(j.ctx, j, entry, sessions[entry.SessionID], trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
+		round := orchestration.ExecutePlan(j.ctx, trace, plan, func(runCtx context.Context, k int, entry replay.PlanEntry, session *replay.Session, started time.Time) webSessionResult {
+			result := runWebEntry(runCtx, j, entry, session, sessions, trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
 			if runs.Repeats() {
-				round[k].Attempt = i + 1
+				result.Attempt = i + 1
 			}
-		}
-		if profile != replay.ProfileFunctional {
-			var wg sync.WaitGroup
-			for k := range round {
-				wg.Add(1)
-				go func(k int) { defer wg.Done(); run(k) }(k)
-			}
-			wg.Wait()
-		} else {
-			for k := range round {
-				run(k)
-			}
-		}
+			return result
+		})
 		var tally iterate.Tally
 		for _, r := range round {
 			evidence = append(evidence, r.Evidence...)
@@ -238,18 +232,19 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	if len(evidence) > 0 {
 		if err := writeWebEvidence(filepath.Join(s.dir, evidenceName), req.Iface, evidence); err != nil {
 			j.log("evidence: " + err.Error())
+			ok = false
 		} else {
 			j.artifact(evidenceName)
 			evidenceArtifact = evidenceName
 		}
 	}
-	digest, digestErr := fileSHA256(path)
+	digest, digestErr := s.fileSHA256(path)
 	if digestErr != nil {
 		j.log("capture digest: " + digestErr.Error())
 		ok = false
 	}
 	doc := map[string]any{
-		"tool": "livewire", "version": Version, "when": time.Now().UTC(), "plan": plan,
+		"tool": "livewire", "version": s.version, "when": time.Now().UTC(), "plan": plan,
 		"adapterVersions": adapters.VersionsForRegistry(registry),
 		"captureDigest":   digest, "limitations": plan.Limitations(),
 		"target": target.String(), "interface": req.Iface, "variables": runvars.Redacted(req.Variables),
@@ -280,8 +275,8 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	j.finish(ok, fmt.Sprintf("%d sessions completed", len(results)))
 }
 
-func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *replay.Session, raw []replay.Event, flows []*engine.Flow, registry *replay.Registry, target netip.Addr, req adaptiveRunReq, profile replay.Profile, verify replay.VerifyMode, verifyEngine engine.VerifyMode, started time.Time) webSessionResult {
-	out := webSessionResult{Entry: entry}
+func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *replay.Session, sessions map[string]*replay.Session, raw []replay.Event, flows []*engine.Flow, registry *replay.Registry, target netip.Addr, req adaptiveRunReq, profile replay.Profile, verify replay.VerifyMode, verifyEngine engine.VerifyMode, started time.Time) (out webSessionResult) {
+	out = webSessionResult{Entry: entry}
 	if entry.Mode == replay.ModeBlocked {
 		out.Error = strings.Join(entry.Blockers, "; ")
 		j.progress("blocked", entry.SessionID, entry.SessionID+": "+out.Error)
@@ -297,7 +292,16 @@ func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *r
 			out.Error = err.Error()
 			return out
 		}
-		defer b.Close()
+		backendOpen := true
+		defer func() {
+			if !backendOpen {
+				return
+			}
+			if err := b.Close(); err != nil {
+				out.Error = errors.Join(errorString(out.Error), fmt.Errorf("close wire backend: %w", err)).Error()
+				out.Completed = false
+			}
+		}()
 		for _, e := range events {
 			if !waitWeb(ctx, started.Add(e.At)) {
 				out.Error = "cancelled"
@@ -311,6 +315,11 @@ func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *r
 			out.Evidence = append(out.Evidence, pcapio.Record{Time: b.Now(), Data: frame, CapLen: len(frame), OrigLen: len(frame), LinkType: b.LinkType()})
 			out.Sent++
 		}
+		if err := b.Close(); err != nil {
+			out.Error = fmt.Errorf("close wire backend: %w", err).Error()
+			return out
+		}
+		backendOpen = false
 		out.Completed = true
 		out.Verified = false
 		out.Matched = false
@@ -319,6 +328,34 @@ func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *r
 	}
 	if session == nil || session.Server.IP.Is4() != target.Is4() {
 		out.Error = "missing session or target address family mismatch"
+		return out
+	}
+	if entry.Mode == replay.ModeCoordinated && entry.Adapter == "ftp" {
+		script, err := ftpreplay.BuildScript(session, nil)
+		if err != nil {
+			out.Error = err.Error()
+			return out
+		}
+		data := make([]*replay.Session, 0, len(entry.RelatedSessionIDs))
+		for _, id := range entry.RelatedSessionIDs {
+			if related := sessions[id]; related != nil {
+				data = append(data, related)
+			}
+		}
+		res, err := ftpreplay.RunContext(ctx, ftpreplay.Config{
+			Control: session, Data: data, Address: netip.AddrPortFrom(target, session.Server.Port).String(), Script: script,
+			Variables: req.Variables, Timeout: 30 * time.Second, Verify: verify,
+			Progress: func(line string) { j.progress("ftp", entry.SessionID, line) },
+		})
+		out.Completed, out.Verified = res.Completed, verify != replay.VerifyOff
+		out.Matched = res.Completed && len(res.Differences) == 0
+		for _, transfer := range res.Transfers {
+			out.Matched = out.Matched && transfer.Matched
+		}
+		out.Sent, out.Received, out.Differences = res.Commands, res.Replies, res.Differences
+		if err != nil {
+			out.Error = err.Error()
+		}
 		return out
 	}
 	if entry.Mode == replay.ModeSemantic && session.Transport == replay.TransportTCP {
@@ -368,6 +405,13 @@ func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *r
 		out.Error = err.Error()
 	}
 	return out
+}
+
+func errorString(message string) error {
+	if message == "" {
+		return nil
+	}
+	return errors.New(message)
 }
 
 func findWebFlow(flows []*engine.Flow, s *replay.Session) *engine.Flow {
@@ -429,6 +473,18 @@ func (s *Server) handleLab(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("udpIdleMs must not be negative"))
 		return
 	}
+	if req.UDPIdleMS > int(time.Hour/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("udpIdleMs must not exceed 3600000"))
+		return
+	}
+	if req.DrainMS < 0 || req.DrainMS > int(5*time.Minute/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("drainMs must be between 0 and 300000"))
+		return
+	}
+	if req.ActorTimeoutMS < 0 || req.ActorTimeoutMS > int(10*time.Minute/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("actorTimeoutMs must be between 0 and 600000"))
+		return
+	}
 	if _, err := s.startJob("dut-lab", func(j *job) { s.runLabJob(j, path, req) }); err != nil {
 		writeErr(w, 409, err)
 		return
@@ -437,7 +493,7 @@ func (s *Server) handleLab(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runLabJob(j *job, path string, req labRunReq) {
-	records, _, err := loadPcap(path)
+	records, _, err := s.loadPcap(path)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "load failed")
@@ -459,9 +515,14 @@ func (s *Server) runLabJob(j *job, path string, req labRunReq) {
 		return
 	}
 	j.artifact(evidenceName)
-	digest, _ := fileSHA256(path)
+	digest, digestErr := s.fileSHA256(path)
+	if digestErr != nil {
+		j.log("capture digest: " + digestErr.Error())
+		j.finish(false, "capture digest failed")
+		return
+	}
 	doc := map[string]any{
-		"tool": "livewire", "version": Version, "when": time.Now().UTC(), "captureDigest": digest,
+		"tool": "livewire", "version": s.version, "when": time.Now().UTC(), "captureDigest": digest,
 		"plan": plan, "adapterVersions": adapters.Versions(), "variables": map[string]string{},
 		"transformations": webLabTransformations(plan, result), "limitations": result.Limitations,
 		"topology": req.Topology, "scenario": req.Scenario, "result": result, "evidence": evidenceName,
@@ -503,38 +564,29 @@ func webLabTransformations(plan replay.ReplayPlan, result lab.Result) []string {
 	return out
 }
 
-func fileSHA256(path string) (string, error) {
-	f, err := os.Open(path)
+func (s *Server) fileSHA256(path string) (string, error) {
+	f, err := s.openRootedPath(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
+	_, copyErr := io.Copy(h, f)
+	if err := errors.Join(copyErr, f.Close()); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("sha256:%x", h.Sum(nil)), nil
 }
 
 func writeRedactedJSON(path string, value any, variables map[string]string) error {
-	b, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	for key, value := range variables {
-		if runvars.IsSecret(key) && value != "" {
-			b = bytes.ReplaceAll(b, []byte(value), []byte("[REDACTED]"))
-		}
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return orchestration.WriteJSON(path, value, runvars.NewRedactor(variables))
 }
 
-func writeWebEvidence(path, iface string, records []pcapio.Record) error {
-	f, err := os.Create(path)
+func writeWebEvidence(path, iface string, records []pcapio.Record) (retErr error) {
+	af, err := orchestration.CreateArtifact(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
 	links := []wire.LinkType{}
 	ids := map[wire.LinkType]uint32{}
 	for _, rec := range records {
@@ -547,7 +599,7 @@ func writeWebEvidence(path, iface string, records []pcapio.Record) error {
 	for i, link := range links {
 		interfaces[i] = pcapio.NgInterface{Name: iface, LinkType: link}
 	}
-	w, err := pcapio.NewNgWriter(f, interfaces)
+	w, err := pcapio.NewNgWriter(af, interfaces)
 	if err != nil {
 		return err
 	}
@@ -557,5 +609,8 @@ func writeWebEvidence(path, iface string, records []pcapio.Record) error {
 			return err
 		}
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	return af.Commit()
 }

@@ -5,6 +5,7 @@ package livereplay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
@@ -117,7 +118,7 @@ func RunContext(ctx context.Context, cfg Config, log func(string)) (Result, erro
 	return runContextWithDependencies(ctx, cfg, log, defaultRunDependencies())
 }
 
-func runContextWithDependencies(ctx context.Context, cfg Config, log func(string), deps runDependencies) (Result, error) {
+func runContextWithDependencies(ctx context.Context, cfg Config, log func(string), deps runDependencies) (result Result, retErr error) {
 	if log == nil {
 		log = func(string) {}
 	}
@@ -146,7 +147,11 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 	if err != nil {
 		return Result{}, err
 	}
-	defer lb.Backend.Close()
+	defer func() {
+		if err := lb.Backend.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close live backend: %w", err))
+		}
+	}()
 	if caps := lb.Backend.Caps(); !caps.Has(backend.CanReceive | backend.StatefulSafe) {
 		return Result{}, fmt.Errorf("backend lacks CanReceive|StatefulSafe; stateful replay cannot proceed")
 	}
@@ -158,7 +163,11 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 			return Result{}, fmt.Errorf("host-RST suppression failed (%w); retry with the guard disabled to bypass "+
 				"(the host kernel may then reset the connection)", gerr)
 		}
-		defer guard.Release()
+		defer func() {
+			if err := guard.Release(); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("release host-RST suppression: %w", err))
+			}
+		}()
 		log("host-RST suppression armed: " + guard.Describe())
 		res.GuardArmed = true
 	} else {

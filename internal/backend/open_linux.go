@@ -3,6 +3,7 @@
 package backend
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -20,18 +21,15 @@ func openLive(cfg LiveConfig) (*LiveBackend, error) {
 	}
 	nextHop, err := NextHop(cfg.Iface, cfg.Target)
 	if err != nil {
-		af.Close()
-		return nil, err
+		return nil, errors.Join(err, af.Close())
 	}
 	nhMAC, err := ResolveMAC(cfg.Iface, nextHop)
 	if err != nil {
-		af.Close()
-		return nil, err
+		return nil, errors.Join(err, af.Close())
 	}
 	localMAC, err := LocalMAC(cfg.Iface)
 	if err != nil {
-		af.Close()
-		return nil, err
+		return nil, errors.Join(err, af.Close())
 	}
 
 	proto := cfg.Protocol
@@ -62,8 +60,7 @@ func openLive(cfg LiveConfig) (*LiveBackend, error) {
 
 	localIP, err := localIPForTarget(cfg.Iface, cfg.Target)
 	if err != nil {
-		af.Close()
-		return nil, err
+		return nil, errors.Join(err, af.Close())
 	}
 	lb := &LiveBackend{Backend: af, LocalIP: localIP}
 	if len(localMAC) == 6 {
@@ -72,8 +69,7 @@ func openLive(cfg LiveConfig) (*LiveBackend, error) {
 	if len(nhMAC) == 6 {
 		copy(lb.NextHopMAC[:], nhMAC)
 	} else {
-		af.Close()
-		return nil, fmt.Errorf("backend: resolved next-hop MAC has unexpected length %d", len(nhMAC))
+		return nil, errors.Join(fmt.Errorf("backend: resolved next-hop MAC has unexpected length %d", len(nhMAC)), af.Close())
 	}
 	return lb, nil
 }

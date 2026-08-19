@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -90,8 +91,14 @@ func cmdReproduce(args []string) error {
 	if times < 1 {
 		return fmt.Errorf("-n must be at least 1")
 	}
+	if times > maxReplayAttempts {
+		return fmt.Errorf("-n must not exceed %d", maxReplayAttempts)
+	}
 	if *gap < 0 {
 		return fmt.Errorf("-gap cannot be negative")
+	}
+	if *gap > 10*time.Minute {
+		return fmt.Errorf("-gap must not exceed 10m")
 	}
 
 	recs, _, err := loadRecords(pcapPath)
@@ -122,8 +129,8 @@ func cmdReproduce(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *udpIdle <= 0 {
-		return fmt.Errorf("-udp-idle must be positive")
+	if *udpIdle <= 0 || *udpIdle > time.Hour {
+		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
 	trace, plan, err := compileCoverageWithOptions(recs, replayProfile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
 	if err != nil {
@@ -274,8 +281,10 @@ func cmdReproduce(args []string) error {
 	if actual == "" {
 		actual = strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath)) + ".actual.pcap"
 	}
+	var artifactErrs []error
 	if len(actualFrames) > 0 {
 		if aerr := writeFrames(actual, actualFrames, true); aerr != nil {
+			artifactErrs = append(artifactErrs, fmt.Errorf("save actual replay capture: %w", aerr))
 			fmt.Printf("\n(could not save actual replay capture: %v)\n", aerr)
 		} else {
 			rep.ActualCapture = actual
@@ -283,6 +292,7 @@ func cmdReproduce(args []string) error {
 		}
 	}
 	if werr := rep.write(out); werr != nil {
+		artifactErrs = append(artifactErrs, fmt.Errorf("save replay report: %w", werr))
 		fmt.Printf("\n(could not save report: %v)\n", werr)
 	} else {
 		fmt.Printf("\nA shareable report was saved to %s — send this back so we can see what happened.\n", out)
@@ -307,7 +317,7 @@ func cmdReproduce(args []string) error {
 		fmt.Println("  - to flag every small difference:    add  -strict")
 		fmt.Println("Otherwise, send us the report file above and we'll take a look.")
 	}
-	return nil
+	return errors.Join(artifactErrs...)
 }
 
 var errReproduceCaptureRequired = fmt.Errorf("give the capture file we sent you, e.g. livewire reproduce issue.pcap")
@@ -342,6 +352,21 @@ func sessionVerdict(result plannedResult, variables map[string]string) (iterate.
 		default:
 			return v, ""
 		}
+	}
+	if result.Entry.Mode == replay.ModeCoordinated && result.Entry.Adapter == "ftp" {
+		matched := result.FTP.Completed && len(result.FTP.Differences) == 0
+		for _, transfer := range result.FTP.Transfers {
+			matched = matched && transfer.Matched
+		}
+		v := iterate.Classify(result.FTP.Completed, matched, false)
+		if v == iterate.Different && len(result.FTP.Differences) > 0 {
+			d := result.FTP.Differences[0]
+			return v, redactRunText(fmt.Sprintf("%s: expected %s, got %s", d.Field, d.Expected, d.Actual), variables)
+		}
+		if v == iterate.Different {
+			return v, "FTP data length or digest differs from the capture"
+		}
+		return v, ""
 	}
 	v := iterate.Classify(completed, matched, false)
 	if v == iterate.Different && len(result.Transport.Differences) > 0 {
@@ -382,6 +407,13 @@ func printSessionResult(result plannedResult, variables map[string]string) {
 		var verdict strings.Builder
 		fprintVerdict(&verdict, label, result.TCP)
 		fmt.Print(redactRunText(verdict.String(), variables))
+	case result.Entry.Mode == replay.ModeCoordinated && result.Entry.Adapter == "ftp":
+		matched := result.FTP.Completed && len(result.FTP.Differences) == 0
+		for _, transfer := range result.FTP.Transfers {
+			matched = matched && transfer.Matched
+		}
+		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v commands=%d replies=%d transfers=%d\n--------------------------------\n",
+			label, result.FTP.Completed, matched, result.FTP.Commands, result.FTP.Replies, len(result.FTP.Transfers))
 	default:
 		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v sent=%d received=%d\n--------------------------------\n",
 			label, result.Transport.Completed, result.Transport.Matched, result.Transport.Sent, result.Transport.Received)
@@ -405,12 +437,17 @@ func planBlockers(plan replay.ReplayPlan) []string {
 	return out
 }
 
-func sha256File(path string) (string, error) {
+func sha256File(path string) (digest string, retErr error) {
+	// #nosec G703 -- the CLI intentionally hashes an operator-selected local capture; dashboard paths use os.Root.
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close capture after hashing: %w", err))
+		}
+	}()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err

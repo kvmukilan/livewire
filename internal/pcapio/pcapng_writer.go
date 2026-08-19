@@ -76,16 +76,28 @@ func appendNgOption(dst []byte, code uint16, value []byte) []byte {
 }
 
 func (w *NgWriter) Write(rec *Record) error {
-	if rec == nil || int(rec.InterfaceID) >= len(w.ifaces) {
+	if rec == nil {
+		return fmt.Errorf("pcapio: nil pcapng record")
+	}
+	if int(rec.InterfaceID) >= len(w.ifaces) {
 		return fmt.Errorf("pcapio: invalid pcapng interface %d", rec.InterfaceID)
 	}
-	capLen := len(rec.Data)
-	if rec.CapLen > 0 && rec.CapLen < capLen {
-		capLen = rec.CapLen
+	capLen := rec.CapLen
+	if capLen == 0 {
+		capLen = len(rec.Data)
+	}
+	if capLen != len(rec.Data) || capLen < 0 || uint64(capLen) > uint64(^uint32(0)) {
+		return fmt.Errorf("pcapio: captured length %d does not match %d data bytes", capLen, len(rec.Data))
 	}
 	origLen := rec.OrigLen
 	if origLen == 0 {
-		origLen = len(rec.Data)
+		origLen = capLen
+	}
+	if origLen < capLen || origLen < 0 || uint64(origLen) > uint64(^uint32(0)) {
+		return fmt.Errorf("pcapio: invalid original length %d", origLen)
+	}
+	if rec.Time.Unix() < 0 {
+		return fmt.Errorf("pcapio: negative timestamps are not supported")
 	}
 	ticks := uint64(rec.Time.Unix())*1_000_000_000 + uint64(rec.Time.Nanosecond())
 	body := make([]byte, 20)

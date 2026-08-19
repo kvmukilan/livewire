@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -66,7 +67,7 @@ func ReTerminate(cfg ReTermConfig) (*ReTermResult, error) {
 // ReTerminateContext is ReTerminate with prompt cancellation for dialing,
 // handshaking, reads, and writes. Cancellation closes the owned connection so
 // blocked network I/O cannot outlive a stopped replay job.
-func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (*ReTermResult, error) {
+func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResult, retErr error) {
 	if cfg.TLSConfig == nil {
 		return nil, fmt.Errorf("tlsreplay: nil TLSConfig; a fresh client handshake is required")
 	}
@@ -79,24 +80,41 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (*ReTermResult, e
 		return nil, fmt.Errorf("tlsreplay: fresh connection to %s failed: %w", cfg.Address, replayContextError(ctx, err))
 	}
 	conn := tls.Client(raw, cfg.TLSConfig)
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			retErr = errors.Join(retErr, fmt.Errorf("tlsreplay: close fresh connection: %w", err))
+		}
+	}()
 	cancelWatchDone := make(chan struct{})
+	cancelWatchResult := make(chan error, 1)
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = raw.Close()
+			err := raw.Close()
+			if errors.Is(err, net.ErrClosed) {
+				err = nil
+			}
+			cancelWatchResult <- err
 		case <-cancelWatchDone:
+			cancelWatchResult <- nil
 		}
 	}()
-	defer close(cancelWatchDone)
+	defer func() {
+		close(cancelWatchDone)
+		if err := <-cancelWatchResult; err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("tlsreplay: close cancelled connection: %w", err))
+		}
+	}()
 	if cfg.Timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(cfg.Timeout))
+		if err := conn.SetDeadline(time.Now().Add(cfg.Timeout)); err != nil {
+			return nil, fmt.Errorf("tlsreplay: set connection deadline: %w", err)
+		}
 	}
 	if err := conn.HandshakeContext(ctx); err != nil {
 		return nil, fmt.Errorf("tlsreplay: fresh handshake to %s failed: %w", cfg.Address, replayContextError(ctx, err))
 	}
 
-	res := &ReTermResult{HandshakeState: conn.ConnectionState()}
+	res = &ReTermResult{HandshakeState: conn.ConnectionState()}
 	if cfg.State == nil {
 		cfg.State = &replay.RuntimeState{Variables: map[string]string{}, Learned: map[string][]byte{}}
 	}
@@ -169,7 +187,9 @@ func readLiveResponse(conn net.Conn, expected []byte, expectedMessages, peers []
 		if step.After(deadline) {
 			step = deadline
 		}
-		_ = conn.SetReadDeadline(step)
+		if err := conn.SetReadDeadline(step); err != nil && !errors.Is(err, io.ErrClosedPipe) && !errors.Is(err, net.ErrClosed) {
+			return nil, fmt.Errorf("set inner response read deadline: %w", err)
+		}
 		n, readErr := conn.Read(tmp)
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)

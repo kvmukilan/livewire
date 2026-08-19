@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/iterate"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/tui"
 )
@@ -87,6 +89,9 @@ func cmdLive(args []string) error {
 	if times < 1 {
 		return fmt.Errorf("-n must be at least 1")
 	}
+	if times > maxReplayAttempts {
+		return fmt.Errorf("-n must not exceed %d", maxReplayAttempts)
+	}
 	if times > 1 && !realLive {
 		// The dry run is deterministic, so repeating it produces N identical
 		// reports and tells the operator nothing.
@@ -95,13 +100,14 @@ func cmdLive(args []string) error {
 	if *gap < 0 {
 		return fmt.Errorf("-gap cannot be negative")
 	}
+	if *gap > 10*time.Minute {
+		return fmt.Errorf("-gap must not exceed 10m")
+	}
 
 	in, err := openInput(inPath)
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
 	var recs []*pcapio.Record
 	if err := in.eachRecord(func(rec *pcapio.Record) error {
 		// Copy: parsing/rewriting aliases Data and we keep every record.
@@ -261,14 +267,14 @@ func printRewriteTable(rep *engine.RewriteReport) {
 	}
 }
 
-func writeFrames(path string, frames []pcapio.Record, nanos bool) error {
+func writeFrames(path string, frames []pcapio.Record, nanos bool) (retErr error) {
 	sort.SliceStable(frames, func(i, j int) bool { return frames[i].Time.Before(frames[j].Time) })
-	f, err := os.Create(path)
+	af, err := orchestration.CreateArtifact(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	w, err := pcapio.NewWriter(f, frames[0].LinkType, nanos)
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
+	w, err := pcapio.NewWriter(af, frames[0].LinkType, nanos)
 	if err != nil {
 		return err
 	}
@@ -277,5 +283,8 @@ func writeFrames(path string, frames []pcapio.Record, nanos bool) error {
 			return err
 		}
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	return af.Commit()
 }

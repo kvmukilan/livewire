@@ -1,7 +1,11 @@
+# Release inputs and checksum-covered text must have identical bytes on every
+# platform. Binary formats are detected automatically and remain untouched.
+* text=auto eol=lf
+
 # Shell scripts must stay LF or they break on the Linux lab box.
 *.sh text eol=lf
 
 # Go tooling is LF-native; keep the tree consistent regardless of dev OS.
 *.go text eol=lf
 go.mod text eol=lf
-*.md text
+*.md text eol=lf

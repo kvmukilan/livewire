@@ -5,6 +5,7 @@
 package hoststack
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -55,7 +56,7 @@ func Arm(r Rule) (*Guard, error) {
 		return nil, err
 	}
 	if err := s.Arm(); err != nil {
-		return nil, err
+		return nil, errors.Join(err, s.Disarm())
 	}
 	return &Guard{s: s, armed: true}, nil
 }

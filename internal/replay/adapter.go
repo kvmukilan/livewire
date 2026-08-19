@@ -45,6 +45,23 @@ type Adapter interface {
 	Compare(expected, actual Message, mode VerifyMode) []Difference
 }
 
+// SessionGroup describes one application exchange that spans multiple
+// transport sessions. FTP uses it to bind negotiated data connections to the
+// control connection that owns them.
+type SessionGroup struct {
+	ID                string
+	ControlSessionID  string
+	RelatedSessionIDs []string
+	Warnings          []string
+	Blockers          []string
+}
+
+// CoordinatedAdapter discovers protocol-owned multi-session groups.
+type CoordinatedAdapter interface {
+	Adapter
+	DiscoverGroups(*Trace) []SessionGroup
+}
+
 // ExchangeAwareAdapter is an optional extension for protocols whose framing
 // depends on the opposite half of the exchange. HTTP HEAD and successful
 // CONNECT responses are the canonical examples: their Content-Length does not
@@ -161,6 +178,29 @@ func (r *Registry) ByName(name string) Adapter {
 		}
 	}
 	return nil
+}
+
+func (r *Registry) CoordinatedGroups(trace *Trace) map[string]struct {
+	Adapter string
+	Group   SessionGroup
+} {
+	out := map[string]struct {
+		Adapter string
+		Group   SessionGroup
+	}{}
+	for _, adapter := range r.adapters {
+		coordinator, ok := adapter.(CoordinatedAdapter)
+		if !ok {
+			continue
+		}
+		for _, group := range coordinator.DiscoverGroups(trace) {
+			out[group.ControlSessionID] = struct {
+				Adapter string
+				Group   SessionGroup
+			}{Adapter: adapter.Name(), Group: group}
+		}
+	}
+	return out
 }
 
 func (m Message) String() string {

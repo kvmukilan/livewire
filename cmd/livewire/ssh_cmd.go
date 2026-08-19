@@ -58,6 +58,12 @@ func cmdSSHReplay(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-in, -t, and -user are required")
 	}
+	if err := validateNetworkTarget(target, "-target"); err != nil {
+		return err
+	}
+	if *timeout <= 0 || *timeout > 10*time.Minute {
+		return fmt.Errorf("-timeout must be greater than zero and at most 10m")
+	}
 	if len(cmds) == 0 {
 		return fmt.Errorf("at least one -cmd is required")
 	}

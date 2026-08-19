@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"github.com/kvmukilan/livewire/internal/wire"
+	"golang.org/x/sys/windows"
 )
 
 // The Windows live backend drives Npcap through its libpcap-compatible
@@ -18,31 +20,64 @@ import (
 // only the runtime DLL. Windows counterpart of the Linux AF_PACKET backend.
 
 var (
-	wpcap           = syscall.NewLazyDLL("wpcap.dll")
-	procOpenLive    = wpcap.NewProc("pcap_open_live")
-	procSendpacket  = wpcap.NewProc("pcap_sendpacket")
-	procNextEx      = wpcap.NewProc("pcap_next_ex")
-	procClose       = wpcap.NewProc("pcap_close")
-	procFindAllDevs = wpcap.NewProc("pcap_findalldevs")
-	procFreeAllDevs = wpcap.NewProc("pcap_freealldevs")
-	procDatalink    = wpcap.NewProc("pcap_datalink")
-
-	kernel32            = syscall.NewLazyDLL("kernel32.dll")
-	procSetDllDirectory = kernel32.NewProc("SetDllDirectoryW")
+	wpcapOnce       sync.Once
+	wpcapLoadErr    error
+	wpcap           *windows.LazyDLL
+	procOpenLive    *windows.LazyProc
+	procSendpacket  *windows.LazyProc
+	procNextEx      *windows.LazyProc
+	procClose       *windows.LazyProc
+	procFindAllDevs *windows.LazyProc
+	procFreeAllDevs *windows.LazyProc
+	procDatalink    *windows.LazyProc
 )
 
-// ensureNpcapSearchPath makes wpcap.dll loadable when Npcap was installed
-// without "WinPcap API-compatible mode", which puts the DLLs in
-// %WINDIR%\System32\Npcap instead of on the search path. Also lets wpcap.dll
-// find its Packet.dll. No-op if the directory is absent.
-func ensureNpcapSearchPath() {
-	dir := filepath.Join(os.Getenv("WINDIR"), "System32", "Npcap")
-	if _, err := os.Stat(dir); err != nil {
-		return
-	}
-	if p, err := syscall.UTF16PtrFromString(dir); err == nil {
-		procSetDllDirectory.Call(uintptr(unsafe.Pointer(p)))
-	}
+// loadNpcap loads wpcap from the trusted system Npcap directory and restricts
+// dependent-DLL resolution to system, application, and explicitly added paths.
+func loadNpcap() error {
+	wpcapOnce.Do(func() {
+		windowsDir, err := windows.GetSystemWindowsDirectory()
+		if err != nil {
+			wpcapLoadErr = err
+			return
+		}
+		dir := filepath.Join(windowsDir, "System32", "Npcap")
+		path := filepath.Join(dir, "wpcap.dll")
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			wpcapLoadErr = fmt.Errorf("trusted Npcap DLL was not found at %s", path)
+			return
+		}
+		if err := windows.SetDefaultDllDirectories(windows.LOAD_LIBRARY_SEARCH_SYSTEM32 | windows.LOAD_LIBRARY_SEARCH_APPLICATION_DIR | windows.LOAD_LIBRARY_SEARCH_USER_DIRS); err != nil {
+			wpcapLoadErr = err
+			return
+		}
+		p, err := windows.UTF16PtrFromString(dir)
+		if err != nil {
+			wpcapLoadErr = err
+			return
+		}
+		cookie, err := windows.AddDllDirectory(p)
+		if err != nil {
+			wpcapLoadErr = err
+			return
+		}
+		// The directory intentionally remains registered for the process lifetime.
+		_ = cookie
+		wpcap = windows.NewLazyDLL(path)
+		if err := wpcap.Load(); err != nil {
+			wpcapLoadErr = err
+			return
+		}
+		procOpenLive = wpcap.NewProc("pcap_open_live")
+		procSendpacket = wpcap.NewProc("pcap_sendpacket")
+		procNextEx = wpcap.NewProc("pcap_next_ex")
+		procClose = wpcap.NewProc("pcap_close")
+		procFindAllDevs = wpcap.NewProc("pcap_findalldevs")
+		procFreeAllDevs = wpcap.NewProc("pcap_freealldevs")
+		procDatalink = wpcap.NewProc("pcap_datalink")
+	})
+	return wpcapLoadErr
 }
 
 // Npcap is a PacketBackend over an Npcap/libpcap capture handle.
@@ -58,8 +93,7 @@ type Npcap struct {
 // "\Device\NPF_{GUID}" form that `livewire ifaces` prints), with a short read
 // timeout so Recv can honour deadlines.
 func OpenNpcap(device string, promisc bool) (*Npcap, error) {
-	ensureNpcapSearchPath()
-	if err := wpcap.Load(); err != nil {
+	if err := loadNpcap(); err != nil {
 		return nil, fmt.Errorf("backend: wpcap.dll not loadable — install Npcap (https://npcap.com) "+
 			"in WinPcap API-compatible mode: %w", err)
 	}
@@ -162,8 +196,7 @@ type PcapDevice struct {
 // net.Interfaces names can't be opened directly on Windows, so the ifaces
 // command uses these device names.
 func ListPcapDevices() ([]PcapDevice, error) {
-	ensureNpcapSearchPath()
-	if err := wpcap.Load(); err != nil {
+	if err := loadNpcap(); err != nil {
 		return nil, fmt.Errorf("backend: wpcap.dll not loadable — install Npcap: %w", err)
 	}
 	var alldevs unsafe.Pointer

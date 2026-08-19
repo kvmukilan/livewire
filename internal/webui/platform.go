@@ -2,9 +2,9 @@ package webui
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -49,7 +49,7 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	records, _, err := loadPcap(path)
+	records, _, err := s.loadPcap(path)
 	if err != nil {
 		writeErr(w, 400, err)
 		return
@@ -61,6 +61,10 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UDPIdleMS < 0 {
 		writeErr(w, 400, fmt.Errorf("udpIdleMs must not be negative"))
+		return
+	}
+	if req.UDPIdleMS > int(time.Hour/time.Millisecond) {
+		writeErr(w, 400, fmt.Errorf("udpIdleMs must not exceed 3600000"))
 		return
 	}
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
@@ -108,7 +112,7 @@ func (s *Server) handleValidate(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, 400, err)
 				return
 			}
-			records, _, err := loadPcap(path)
+			records, _, err := s.loadPcap(path)
 			if err != nil {
 				writeErr(w, 400, err)
 				return
@@ -139,13 +143,19 @@ func (s *Server) handleArtifact(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("unsupported artifact type"))
 		return
 	}
-	path := filepath.Join(s.dir, name)
-	if _, err := os.Stat(path); err != nil {
+	f, err := s.root.Open(name)
+	if err != nil {
+		writeErr(w, 404, fmt.Errorf("artifact not found"))
+		return
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
 		writeErr(w, 404, fmt.Errorf("artifact not found"))
 		return
 	}
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", name))
-	http.ServeFile(w, r, path)
+	http.ServeContent(w, r, name, info.ModTime(), f)
 }
 
 type bundleReq struct {
@@ -167,20 +177,44 @@ func (s *Server) handleBundle(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("report must be a JSON artifact name"))
 		return
 	}
-	reportPath := filepath.Join(s.dir, req.Report)
-	var evidencePaths []string
+	reportPath, err := s.existingArtifactPath(req.Report, ".json")
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	var evidence []supportbundle.EvidenceReference
 	for _, name := range req.Evidence {
 		lower := strings.ToLower(name)
 		if filepath.Base(name) != name || !strings.HasSuffix(lower, ".pcap") && !strings.HasSuffix(lower, ".pcapng") {
 			writeErr(w, 400, fmt.Errorf("invalid evidence artifact %q", name))
 			return
 		}
-		evidencePaths = append(evidencePaths, filepath.Join(s.dir, name))
+		path, err := s.existingArtifactPath(name, ".pcap", ".pcapng")
+		if err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		f, err := s.openRootedPath(path)
+		if err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		ref, refErr := supportbundle.Reference(name, f)
+		if err := errors.Join(refErr, f.Close()); err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		evidence = append(evidence, ref)
+	}
+	reportData, err := s.readRootedBytes(reportPath, 16<<20)
+	if err != nil {
+		writeErr(w, 400, err)
+		return
 	}
 	base := strings.TrimSuffix(req.Report, filepath.Ext(req.Report))
 	name := base + "." + time.Now().UTC().Format("20060102T150405.000000000Z") + ".support.zip"
 	manifest, err := supportbundle.Create(supportbundle.Options{
-		ReportPath: reportPath, EvidencePaths: evidencePaths, OutputPath: filepath.Join(s.dir, name), Version: Version,
+		ReportData: reportData, Evidence: evidence, OutputPath: filepath.Join(s.dir, name), Version: s.version,
 	})
 	if err != nil {
 		writeErr(w, 400, err)
@@ -193,4 +227,30 @@ func (s *Server) handleBundle(w http.ResponseWriter, r *http.Request) {
 		currentJob.artifact(name)
 	}
 	writeJSON(w, map[string]any{"name": name, "manifest": manifest})
+}
+
+func (s *Server) existingArtifactPath(name string, suffixes ...string) (string, error) {
+	if name == "" || filepath.Base(name) != name {
+		return "", fmt.Errorf("invalid artifact name")
+	}
+	lower := strings.ToLower(name)
+	allowed := false
+	for _, suffix := range suffixes {
+		allowed = allowed || strings.HasSuffix(lower, suffix)
+	}
+	if !allowed {
+		return "", fmt.Errorf("unsupported artifact type")
+	}
+	f, err := s.root.Open(name)
+	if err != nil {
+		return "", err
+	}
+	info, err := f.Stat()
+	if err = errors.Join(err, f.Close()); err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("artifact is not a regular file")
+	}
+	return filepath.Join(s.dir, name), nil
 }
