@@ -67,6 +67,20 @@ func DetectTLS(clientPayload []byte) TLSInfo {
 	return info
 }
 
+// FindTLS locates the first complete TLS record in a stream. It is used for
+// explicit protocol upgrades such as FTP AUTH TLS, where cleartext precedes the
+// ClientHello.
+func FindTLS(stream []byte) (int, TLSInfo) {
+	for i := 0; i+5 <= len(stream); i++ {
+		rec, ok := ParseTLSRecord(stream[i:])
+		if !ok || rec.Length == 0 || i+5+rec.Length > len(stream) {
+			continue
+		}
+		return i, DetectTLS(stream[i:])
+	}
+	return -1, TLSInfo{}
+}
+
 // parseClientHello pulls the SNI (extension 0) and ALPN (extension 16) from a
 // ClientHello. Detection is best-effort: truncation just stops parsing.
 func parseClientHello(hs []byte, info *TLSInfo) {

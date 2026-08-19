@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
+<meta name="livewire-csrf" content="__LIVEWIRE_CSRF__">
 <title>Livewire Replay Studio</title>
 <style>
 :root{
@@ -78,7 +79,8 @@ details{border:1px solid var(--line);border-radius:9px;background:#0b1522;margin
 <script>
 const $=id=>document.getElementById(id);let shape='one',profile='functional',compiled=null,sessionData=[],lastEvent=0,pollTimer=null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,body){const o={method:body===undefined?'GET':'POST'};if(body!==undefined){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(body)}const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j}
+const csrf=document.querySelector('meta[name="livewire-csrf"]').content;
+async function api(path,body){const o={method:body===undefined?'GET':'POST'};if(body!==undefined){o.headers={'Content-Type':'application/json','X-Livewire-CSRF':csrf};o.body=JSON.stringify(body)}const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.statusText);return j}
 function setPill(text,state='ready'){const p=$('jobPill');p.querySelector('span:last-child').textContent=text;p.style.borderColor=state==='bad'?'#803c45':state==='run'?'#356da7':'#25364c';p.querySelector('.pulse').style.background=state==='bad'?'var(--red)':state==='run'?'var(--blue)':'var(--green)'}
 function variables(){const out={};$('variables').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const i=line.indexOf('=');if(i<1)throw new Error('Variable must be name=value: '+line);out[line.slice(0,i).trim()]=line.slice(i+1)});return out}
 function rulePacks(){const raw=$('rulePacks').value.trim();if(!raw)return[];const parsed=JSON.parse(raw);return Array.isArray(parsed)?parsed:[parsed]}

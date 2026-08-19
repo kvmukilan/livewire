@@ -23,9 +23,10 @@ func execRunner(name string, args ...string) ([]byte, error) {
 // iptablesSuppressor drops outbound RSTs to the target via an iptables/ip6tables
 // OUTPUT rule. Needs root (CAP_NET_ADMIN).
 type iptablesSuppressor struct {
-	rule Rule
-	bin  string
-	run  runner
+	rule  Rule
+	bin   string
+	run   runner
+	armed bool
 }
 
 func newSuppressor(r Rule) (Suppressor, error) {
@@ -39,10 +40,15 @@ func (s *iptablesSuppressor) Arm() error {
 	if out, err := s.run(s.bin, iptablesArgs(s.rule, "-I")...); err != nil {
 		return fmt.Errorf("hoststack: installing RST-drop rule failed (%s): %w", strings.TrimSpace(string(out)), err)
 	}
+	s.armed = true
 	return nil
 }
 
 func (s *iptablesSuppressor) Disarm() error {
+	if !s.armed {
+		return nil
+	}
+	s.armed = false
 	// Delete the same rule; ignore "doesn't exist" so double-cleanup is safe.
 	if out, err := s.run(s.bin, iptablesArgs(s.rule, "-D")...); err != nil {
 		msg := strings.ToLower(string(out))

@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
-	"sync"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/livereplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 )
@@ -21,6 +22,7 @@ type plannedResult struct {
 	Session   *replay.Session
 	Transport replay.TransportResult
 	TCP       livereplay.Result
+	FTP       ftpreplay.Result
 	Err       error
 }
 
@@ -48,34 +50,9 @@ func executeReplayPlan(cfg executePlanConfig) []plannedResult {
 	if cfg.Log == nil {
 		cfg.Log = func(int, string) {}
 	}
-	sessions := map[string]*replay.Session{}
-	for _, s := range cfg.Trace.Sessions {
-		sessions[s.ID] = s
-	}
-	results := make([]plannedResult, len(cfg.Plan.Entries))
-	started := time.Now()
-	run := func(i int, entry replay.PlanEntry) {
-		s := sessions[entry.SessionID]
-		results[i] = runPlanEntry(cfg, entry, s, started)
-	}
-
-	concurrent := cfg.Plan.Profile == replay.ProfileTiming || cfg.Plan.Profile == replay.ProfileTransport || cfg.Plan.Profile == replay.ProfileWire
-	if !concurrent {
-		for i, entry := range cfg.Plan.Entries {
-			run(i, entry)
-		}
-		return results
-	}
-	var wg sync.WaitGroup
-	for i, entry := range cfg.Plan.Entries {
-		wg.Add(1)
-		go func(i int, entry replay.PlanEntry) {
-			defer wg.Done()
-			run(i, entry)
-		}(i, entry)
-	}
-	wg.Wait()
-	return results
+	return orchestration.ExecutePlan(cfg.Context, cfg.Trace, cfg.Plan, func(_ context.Context, _ int, entry replay.PlanEntry, session *replay.Session, started time.Time) plannedResult {
+		return runPlanEntry(cfg, entry, session, started)
+	})
 }
 
 func runPlanEntry(cfg executePlanConfig, entry replay.PlanEntry, s *replay.Session, started time.Time) plannedResult {
@@ -99,6 +76,31 @@ func runPlanEntry(cfg executePlanConfig, entry replay.PlanEntry, s *replay.Sessi
 	}
 	if s.Server.IP.Is4() != cfg.TargetIP.Is4() {
 		r.Err = fmt.Errorf("session uses %s but target %s has a different address family", s.Server.IP, cfg.TargetIP)
+		return r
+	}
+	if entry.Mode == replay.ModeCoordinated && entry.Adapter == "ftp" {
+		script, err := ftpreplay.BuildScript(s, nil)
+		if err != nil {
+			r.Err = err
+			return r
+		}
+		byID := map[string]*replay.Session{}
+		for _, session := range cfg.Trace.Sessions {
+			byID[session.ID] = session
+		}
+		data := make([]*replay.Session, 0, len(entry.RelatedSessionIDs))
+		for _, id := range entry.RelatedSessionIDs {
+			if related := byID[id]; related != nil {
+				data = append(data, related)
+			}
+		}
+		address := netip.AddrPortFrom(cfg.TargetIP, s.Server.Port).String()
+		r.FTP, r.Err = ftpreplay.RunContext(cfg.Context, ftpreplay.Config{
+			Control: s, Data: data, Address: address, Script: script,
+			Variables: cfg.Variables, Timeout: 30 * time.Second,
+			Verify:   replay.VerifyMode(cfg.Live.verify.String()),
+			Progress: func(line string) { cfg.Log(planLogIndex(entry), line) },
+		})
 		return r
 	}
 	verify := replay.VerifyMode(cfg.Live.verify.String())
@@ -143,14 +145,20 @@ func runPlanEntry(cfg executePlanConfig, entry replay.PlanEntry, s *replay.Sessi
 	return r
 }
 
-func runWireEvents(ctx context.Context, iface string, entry replay.PlanEntry, events []replay.Event, started time.Time, logf func(int, string)) (replay.TransportResult, error) {
-	res := replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeWire, Fidelity: replay.FidelityWire, Verified: false, Matched: false}
+func runWireEvents(ctx context.Context, iface string, entry replay.PlanEntry, events []replay.Event, started time.Time, logf func(int, string)) (res replay.TransportResult, retErr error) {
+	res = replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeWire, Fidelity: replay.FidelityWire, Verified: false, Matched: false}
 	b, err := backend.OpenSender(iface)
 	if err != nil {
 		res.Error = err.Error()
 		return res, err
 	}
-	defer b.Close()
+	defer func() {
+		if err := b.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close wire backend: %w", err))
+			res.Completed = false
+			res.Error = retErr.Error()
+		}
+	}()
 	for _, e := range events {
 		if !waitPlanOffset(ctx, started, e.At) {
 			res.Error = "cancelled"

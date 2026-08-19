@@ -3,9 +3,14 @@
 package hoststack
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"syscall"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // WinDivert layer/flag constants (2.x). DROP mode discards matching packets in
@@ -19,33 +24,48 @@ const (
 var invalidHandle = ^uintptr(0)
 
 // winDivertSuppressor drops host RSTs to the target via the WinDivert driver,
-// loaded lazily from a DLL so livewire stays cgo-free and builds without
-// WinDivert present. Windows analogue of the Linux iptables rule.
+// loaded only by absolute executable-directory path with restricted dependency
+// search flags. Livewire stays cgo-free and builds without WinDivert present.
 type winDivertSuppressor struct {
 	rule   Rule
 	filter string
-	dll    *syscall.LazyDLL
-	open   *syscall.LazyProc
-	closeP *syscall.LazyProc
+	dll    *windows.DLL
+	open   *windows.Proc
+	closeP *windows.Proc
 	handle uintptr
 }
 
 func newSuppressor(r Rule) (Suppressor, error) {
-	dll := syscall.NewLazyDLL("WinDivert.dll")
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("hoststack: resolve executable path: %w", err)
+	}
+	dllPath := filepath.Join(filepath.Dir(exe), "WinDivert.dll")
+	info, err := os.Lstat(dllPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("hoststack: trusted WinDivert.dll not found beside executable: %s", dllPath)
+	}
+	handle, err := windows.LoadLibraryEx(dllPath, 0, windows.LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|windows.LOAD_LIBRARY_SEARCH_SYSTEM32)
+	if err != nil {
+		return nil, fmt.Errorf("hoststack: load trusted WinDivert DLL: %w", err)
+	}
+	dll := &windows.DLL{Name: dllPath, Handle: handle}
+	open, openErr := dll.FindProc("WinDivertOpen")
+	closeP, closeErr := dll.FindProc("WinDivertClose")
+	if err := errors.Join(openErr, closeErr); err != nil {
+		return nil, errors.Join(err, dll.Release())
+	}
 	return &winDivertSuppressor{
 		rule:   r,
 		filter: winDivertFilter(r),
 		dll:    dll,
-		open:   dll.NewProc("WinDivertOpen"),
-		closeP: dll.NewProc("WinDivertClose"),
+		open:   open,
+		closeP: closeP,
 		handle: invalidHandle,
 	}, nil
 }
 
 func (s *winDivertSuppressor) Arm() error {
-	if err := s.dll.Load(); err != nil {
-		return fmt.Errorf("hoststack: WinDivert.dll could not be loaded — place WinDivert.dll and WinDivert64.sys beside livewire.exe (from the WinDivert distribution) and run as Administrator: %w", err)
-	}
 	filterPtr, err := syscall.BytePtrFromString(s.filter)
 	if err != nil {
 		return err
@@ -64,15 +84,21 @@ func (s *winDivertSuppressor) Arm() error {
 }
 
 func (s *winDivertSuppressor) Disarm() error {
-	if s.handle == invalidHandle {
-		return nil
+	var errs []error
+	if s.handle != invalidHandle {
+		r, _, callErr := s.closeP.Call(s.handle)
+		s.handle = invalidHandle
+		if r == 0 {
+			errs = append(errs, fmt.Errorf("hoststack: WinDivertClose failed: %v", callErr))
+		}
 	}
-	r, _, callErr := s.closeP.Call(s.handle)
-	s.handle = invalidHandle
-	if r == 0 {
-		return fmt.Errorf("hoststack: WinDivertClose failed: %v", callErr)
+	if s.dll != nil {
+		if err := s.dll.Release(); err != nil {
+			errs = append(errs, err)
+		}
+		s.dll = nil
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (s *winDivertSuppressor) Describe() string {

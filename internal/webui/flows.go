@@ -31,7 +31,7 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	recs, _, err := loadPcap(path)
+	recs, _, err := s.loadPcap(path)
 	if err != nil {
 		writeErr(w, 400, err)
 		return

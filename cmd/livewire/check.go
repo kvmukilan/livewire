@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
 // cmdCheck answers both questions a peer has about a capture before touching the
@@ -49,8 +49,8 @@ func cmdCheck(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("give the capture file to check, e.g. livewire check issue.pcap")
 	}
-	if *udpIdle <= 0 {
-		return fmt.Errorf("-udp-idle must be positive")
+	if *udpIdle <= 0 || *udpIdle > time.Hour {
+		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
 
 	// Pass one: what is in the file.
@@ -59,7 +59,6 @@ func cmdCheck(args []string) error {
 		return err
 	}
 	stats, err := scanCapture(in, *details)
-	in.Close()
 	if err != nil {
 		return err
 	}
@@ -117,7 +116,7 @@ func writeAssessment(path string, assessment preflightReport, plan replay.Replay
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return securefile.WriteFileAtomic(path, append(b, '\n'))
 }
 
 // parseCaptureArgs accepts the capture either as a bare argument or via -in,

@@ -1,14 +1,56 @@
 package replay
 
-import "net/netip"
+import (
+	"net/netip"
+	"sort"
+)
 
 func BuildPlan(t *Trace, profile Profile, registry *Registry) ReplayPlan {
 	if registry == nil {
 		registry = NewRegistry()
 	}
 	p := ReplayPlan{Profile: profile, Packets: t.Packets}
+	groups := registry.CoordinatedGroups(t)
+	groupMembers := map[string]bool{}
+	if profile == ProfileFunctional || profile == ProfileTiming {
+		for _, item := range groups {
+			for _, id := range item.Group.RelatedSessionIDs {
+				groupMembers[id] = true
+			}
+		}
+	}
+	sessions := map[string]*Session{}
+	for _, session := range t.Sessions {
+		sessions[session.ID] = session
+	}
 	for _, s := range t.Sessions {
+		if groupMembers[s.ID] {
+			continue
+		}
 		e := PlanEntry{SessionID: s.ID, Transport: s.Transport, PacketIndexes: packetIndexes(s.Events), Warnings: append([]string(nil), s.Warnings...), Blockers: append([]string(nil), s.Blockers...)}
+		if item, ok := groups[s.ID]; ok && (profile == ProfileFunctional || profile == ProfileTiming) {
+			e.Adapter = item.Adapter
+			e.Driver = item.Adapter + "-coordinator"
+			e.Mode = ModeCoordinated
+			e.Fidelity = FidelitySemantic
+			e.RelatedSessionIDs = append([]string(nil), item.Group.RelatedSessionIDs...)
+			e.Warnings = append(e.Warnings, item.Group.Warnings...)
+			e.Blockers = append(e.Blockers, item.Group.Blockers...)
+			for _, id := range item.Group.RelatedSessionIDs {
+				if related := sessions[id]; related != nil {
+					e.PacketIndexes = append(e.PacketIndexes, packetIndexes(related.Events)...)
+					e.Warnings = append(e.Warnings, related.Warnings...)
+					e.Blockers = append(e.Blockers, related.Blockers...)
+				}
+			}
+			sort.Ints(e.PacketIndexes)
+			e.Transformations = []string{"control and negotiated data sessions coordinated by " + item.Adapter}
+			if len(e.Blockers) > 0 {
+				e.Driver, e.Mode, e.Fidelity = "none", ModeBlocked, FidelityBlocked
+			}
+			p.Entries = append(p.Entries, e)
+			continue
+		}
 		if eventsTruncated(s.Events) {
 			e.Blockers = append(e.Blockers, "capture contains snaplen-truncated frames; missing bytes cannot be replayed")
 		}

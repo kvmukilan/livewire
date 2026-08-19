@@ -15,6 +15,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
 type labReport struct {
@@ -85,8 +86,14 @@ func cmdLab(args []string) error {
 	if err != nil {
 		return err
 	}
-	if *udpIdle <= 0 {
-		return fmt.Errorf("-udp-idle must be positive")
+	if *udpIdle <= 0 || *udpIdle > time.Hour {
+		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
+	}
+	if *drain < 0 || *drain > 5*time.Minute {
+		return fmt.Errorf("-drain must be between 0 and 5m")
+	}
+	if *actorTimeout <= 0 || *actorTimeout > 10*time.Minute {
+		return fmt.Errorf("-actor-timeout must be greater than zero and at most 10m")
 	}
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{UDPIdle: *udpIdle})
 	if err := topology.ValidateTrace(trace); err != nil {
@@ -130,7 +137,7 @@ func cmdLab(args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(*reportPath, append(b, '\n'), 0o644); err != nil {
+	if err := securefile.WriteFileAtomic(*reportPath, append(b, '\n')); err != nil {
 		return err
 	}
 	fmt.Printf("\nEvidence: %s\nReport: %s\n", *evidencePath, *reportPath)

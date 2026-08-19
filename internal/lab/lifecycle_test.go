@@ -16,6 +16,7 @@ type countedLabBackend struct {
 	backend.PacketBackend
 	closes   atomic.Int32
 	failSend bool
+	closeErr error
 }
 
 func (b *countedLabBackend) Send(frame []byte) error {
@@ -27,7 +28,7 @@ func (b *countedLabBackend) Send(frame []byte) error {
 
 func (b *countedLabBackend) Close() error {
 	b.closes.Add(1)
-	return b.PacketBackend.Close()
+	return errors.Join(b.PacketBackend.Close(), b.closeErr)
 }
 
 func (b *countedLabBackend) LinkType() wire.LinkType { return b.PacketBackend.LinkType() }
@@ -38,9 +39,11 @@ func TestRunContextClosesOwnedLabBackendsOnEveryExit(t *testing.T) {
 		ctx       func() context.Context
 		failSend  bool
 		panicRun  bool
+		failClose bool
 		wantError bool
 	}{
 		{name: "success", ctx: context.Background},
+		{name: "close error", ctx: context.Background, failClose: true, wantError: true},
 		{name: "send error", ctx: context.Background, failSend: true, wantError: true},
 		{name: "cancellation", ctx: func() context.Context { ctx, cancel := context.WithCancel(context.Background()); cancel(); return ctx }, wantError: true},
 		{name: "progress panic", ctx: context.Background, panicRun: true},
@@ -53,7 +56,12 @@ func TestRunContextClosesOwnedLabBackendsOnEveryExit(t *testing.T) {
 			}
 			base := sim.Backends()
 			all := []*countedLabBackend{
-				{PacketBackend: base.ClientTX, failSend: tt.failSend},
+				{PacketBackend: base.ClientTX, failSend: tt.failSend, closeErr: func() error {
+					if tt.failClose {
+						return errors.New("injected close failure")
+					}
+					return nil
+				}()},
 				{PacketBackend: base.ClientRX},
 				{PacketBackend: base.ServerTX},
 				{PacketBackend: base.ServerRX},

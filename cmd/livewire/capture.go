@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/backend"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 )
 
@@ -17,7 +19,7 @@ var captureAliases = aliasSet{"iface": true, "out": true, "count": true}
 
 // cmdCapture records live frames from an interface into a pcap, stopping on
 // -count, -duration, or Ctrl-C.
-func cmdCapture(args []string) error {
+func cmdCapture(args []string) (retErr error) {
 	fs := flag.NewFlagSet("capture", flag.ContinueOnError)
 	var iface string
 	fs.StringVar(&iface, flagIface, "", "network connection to record from (see 'livewire ifaces')")
@@ -48,28 +50,49 @@ func cmdCapture(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-i (which connection) and -o (where to save) are required")
 	}
+	if count < 0 {
+		return fmt.Errorf("-n cannot be negative")
+	}
+	if *dur < 0 || *dur > 24*time.Hour {
+		return fmt.Errorf("-duration must be between 0 and 24h")
+	}
 
 	snd, err := backend.OpenCapture(iface, *promisc)
 	if err != nil {
 		return err
 	}
-	defer snd.Close()
+	backendOpen := true
+	defer func() {
+		if backendOpen {
+			retErr = errors.Join(retErr, snd.Close())
+		}
+	}()
 
-	f, err := os.Create(outPath)
+	af, err := orchestration.CreateArtifact(outPath)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	w, err := pcapio.NewWriter(f, snd.LinkType(), true)
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
+	w, err := pcapio.NewWriter(af, snd.LinkType(), true)
 	if err != nil {
 		return err
 	}
-	defer w.Flush()
+	finish := func() error {
+		if err := w.Flush(); err != nil {
+			return err
+		}
+		if err := snd.Close(); err != nil {
+			return fmt.Errorf("close capture backend: %w", err)
+		}
+		backendOpen = false
+		return af.Commit()
+	}
 
 	stop := make(chan os.Signal, 1)
 	// SIGTERM as well as Ctrl-C: a capture is often started by a supervisor or a
 	// script, and losing the buffered tail on shutdown loses the evidence.
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stop)
 	deadline := time.Time{}
 	if *dur > 0 {
 		deadline = time.Now().Add(*dur)
@@ -82,12 +105,12 @@ func cmdCapture(args []string) error {
 		select {
 		case <-stop:
 			fmt.Printf("\nstopped: captured %d packet(s)\n", n)
-			return w.Flush()
+			return finish()
 		default:
 		}
 		if !deadline.IsZero() && time.Now().After(deadline) {
 			fmt.Printf("duration elapsed: captured %d packet(s)\n", n)
-			return w.Flush()
+			return finish()
 		}
 		nn, ok, err := snd.Recv(buf, 500*time.Millisecond)
 		if err != nil {
@@ -103,7 +126,7 @@ func cmdCapture(args []string) error {
 		n++
 		if count > 0 && n >= count {
 			fmt.Printf("captured %d packet(s)\n", n)
-			return w.Flush()
+			return finish()
 		}
 	}
 }

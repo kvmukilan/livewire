@@ -1,21 +1,18 @@
 package webui
 
 import (
-	"bufio"
 	"context"
-	"encoding/binary"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/netip"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/livereplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/runvars"
 	"github.com/kvmukilan/livewire/internal/stateless"
@@ -37,6 +34,9 @@ type job struct {
 	stop   chan struct{}
 	ctx    context.Context
 	cancel context.CancelFunc
+	done   chan struct{}
+	once   sync.Once
+	final  sync.Once
 }
 
 type jobEvent struct {
@@ -82,10 +82,7 @@ func (j *job) protectValue(value string) {
 }
 
 func (j *job) scrubLocked(line string) string {
-	for _, secret := range j.secrets {
-		line = strings.ReplaceAll(line, secret, "[REDACTED]")
-	}
-	return line
+	return runvars.NewRedactor(nil, j.secrets...).Text(line)
 }
 
 func (j *job) artifact(name string) {
@@ -95,11 +92,41 @@ func (j *job) artifact(name string) {
 }
 
 func (j *job) finish(ok bool, summary string) {
-	j.mu.Lock()
-	j.Running, j.Done, j.OK, j.Summary = false, true, ok, summary
-	j.mu.Unlock()
+	j.once.Do(func() {
+		j.mu.Lock()
+		j.Done, j.OK, j.Summary = true, ok, j.scrubLocked(summary)
+		j.mu.Unlock()
+	})
+}
+
+// finalize marks the worker as stopped only after its function and every
+// deferred resource cleanup have returned. Shutdown waits on done, so this is
+// the lifecycle boundary that proves no backend or temporary artifact remains.
+func (j *job) finalize() {
+	j.final.Do(func() {
+		j.mu.Lock()
+		j.Running = false
+		j.mu.Unlock()
+		if j.cancel != nil {
+			j.cancel()
+		}
+		if j.done != nil {
+			close(j.done)
+		}
+	})
+}
+
+func (j *job) stopNow() {
+	if j == nil {
+		return
+	}
 	if j.cancel != nil {
 		j.cancel()
+	}
+	select {
+	case <-j.stop:
+	default:
+		close(j.stop)
 	}
 }
 
@@ -123,8 +150,11 @@ func (s *Server) startJob(kind string, fn func(j *job)) (*job, error) {
 	if s.job != nil && s.job.Running {
 		return nil, fmt.Errorf("a %s job is already running; stop it first", s.job.Kind)
 	}
+	if s.closed {
+		return nil, fmt.Errorf("dashboard is shutting down")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	j := &job{Kind: kind, Running: true, stop: make(chan struct{}), ctx: ctx, cancel: cancel}
+	j := &job{Kind: kind, Running: true, stop: make(chan struct{}), ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	s.job = j
 	go func() {
 		defer func() {
@@ -132,6 +162,8 @@ func (s *Server) startJob(kind string, fn func(j *job)) (*job, error) {
 				j.log(fmt.Sprintf("panic: %v", r))
 				j.finish(false, "internal error")
 			}
+			j.finish(false, "job exited without a completion result")
+			j.finalize()
 		}()
 		fn(j)
 	}()
@@ -150,18 +182,16 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	var req struct{}
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, 400, err)
+		return
+	}
 	s.mu.Lock()
 	j := s.job
 	s.mu.Unlock()
 	if j != nil && j.Running && j.stop != nil {
-		if j.cancel != nil {
-			j.cancel()
-		}
-		select {
-		case <-j.stop:
-		default:
-			close(j.stop)
-		}
+		j.stopNow()
 	}
 	writeJSON(w, map[string]any{"ok": true})
 }
@@ -184,7 +214,11 @@ func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("iface and out are required"))
 		return
 	}
-	out, err := s.pcapPath(req.Out)
+	if req.Duration < 0 || req.Duration > 86_400 {
+		writeErr(w, 400, fmt.Errorf("duration must be between 0 and 86400 seconds"))
+		return
+	}
+	out, err := s.pcapOutputPath(req.Out)
 	if err != nil {
 		writeErr(w, 400, err)
 		return
@@ -204,15 +238,28 @@ func (s *Server) runCapture(j *job, iface, out string, dur int) {
 		j.finish(false, "open failed")
 		return
 	}
-	defer b.Close()
-	f, err := os.Create(out)
+	backendOpen := true
+	defer func() {
+		if backendOpen {
+			if err := b.Close(); err != nil {
+				j.log("close capture backend: " + err.Error())
+				j.finish(false, "backend close failed")
+			}
+		}
+	}()
+	af, err := orchestration.CreateArtifact(out)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "create failed")
 		return
 	}
-	defer f.Close()
-	wr, err := pcapio.NewWriter(f, b.LinkType(), true)
+	defer func() {
+		if err := af.Abort(); err != nil {
+			j.log("discard partial capture: " + err.Error())
+			j.finish(false, "artifact cleanup failed")
+		}
+	}()
+	wr, err := pcapio.NewWriter(af, b.LinkType(), true)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "writer failed")
@@ -225,30 +272,50 @@ func (s *Server) runCapture(j *job, iface, out string, dur int) {
 	}
 	buf := make([]byte, 65536)
 	n := 0
+	complete := func(summary string) {
+		if err := wr.Flush(); err != nil {
+			j.log("flush capture: " + err.Error())
+			j.finish(false, "flush failed")
+			return
+		}
+		if err := b.Close(); err != nil {
+			j.log("close capture backend: " + err.Error())
+			j.finish(false, "backend close failed")
+			return
+		}
+		backendOpen = false
+		if err := af.Commit(); err != nil {
+			j.log("publish capture: " + err.Error())
+			j.finish(false, "publish failed")
+			return
+		}
+		j.finish(true, summary)
+	}
 	for {
 		select {
-		case <-j.stop:
-			wr.Flush()
-			j.finish(true, fmt.Sprintf("stopped: %d packets", n))
+		case <-j.ctx.Done():
+			complete(fmt.Sprintf("stopped: %d packets", n))
 			return
 		default:
 		}
 		if !deadline.IsZero() && time.Now().After(deadline) {
-			wr.Flush()
-			j.finish(true, fmt.Sprintf("done: %d packets in %ds", n, dur))
+			complete(fmt.Sprintf("done: %d packets in %ds", n, dur))
 			return
 		}
 		nn, ok, err := b.Recv(buf, 500*time.Millisecond)
 		if err != nil {
 			j.log(err.Error())
-			wr.Flush()
 			j.finish(false, "recv error")
 			return
 		}
 		if !ok {
 			continue
 		}
-		wr.Write(&pcapio.Record{Time: b.Now(), Data: append([]byte(nil), buf[:nn]...), CapLen: nn, OrigLen: nn, LinkType: b.LinkType()})
+		if err := wr.Write(&pcapio.Record{Time: b.Now(), Data: append([]byte(nil), buf[:nn]...), CapLen: nn, OrigLen: nn, LinkType: b.LinkType()}); err != nil {
+			j.log(err.Error())
+			j.finish(false, "write error")
+			return
+		}
 		n++
 		if n%10 == 0 {
 			j.log(fmt.Sprintf("%d packets", n))
@@ -284,6 +351,10 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("iface is required"))
 		return
 	}
+	if req.Port < 0 || req.Port > 65535 {
+		writeErr(w, 400, fmt.Errorf("port must be between 1 and 65535 when supplied"))
+		return
+	}
 	if _, err := s.startJob("replay", func(j *job) { s.runReplay(j, path, req) }); err != nil {
 		writeErr(w, 409, err)
 		return
@@ -292,7 +363,7 @@ func (s *Server) handleReplay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runReplay(j *job, path string, req replayReq) {
-	recs, _, err := loadPcap(path)
+	recs, _, err := s.loadPcap(path)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "load failed")
@@ -350,14 +421,31 @@ func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
 		j.finish(false, "open failed")
 		return
 	}
-	defer snd.Close()
+	backendOpen := true
+	defer func() {
+		if backendOpen {
+			if err := snd.Close(); err != nil {
+				j.log("close replay backend: " + err.Error())
+				j.finish(false, "backend close failed")
+			}
+		}
+	}()
+	complete := func(summary string) {
+		if err := snd.Close(); err != nil {
+			j.log("close replay backend: " + err.Error())
+			j.finish(false, "backend close failed")
+			return
+		}
+		backendOpen = false
+		j.finish(true, summary)
+	}
 	sched := stateless.Schedule(recs, stateless.Pace{})
 	j.log(fmt.Sprintf("stateless replay: %d frames", len(recs)))
 	start := time.Now()
 	for i, rec := range recs {
 		select {
 		case <-j.stop:
-			j.finish(true, fmt.Sprintf("stopped after %d frames", i))
+			complete(fmt.Sprintf("stopped after %d frames", i))
 			return
 		default:
 		}
@@ -366,7 +454,7 @@ func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
 			select {
 			case <-j.ctx.Done():
 				timer.Stop()
-				j.finish(true, fmt.Sprintf("stopped after %d frames", i))
+				complete(fmt.Sprintf("stopped after %d frames", i))
 				return
 			case <-timer.C:
 			}
@@ -377,50 +465,28 @@ func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
 			return
 		}
 	}
-	j.finish(true, fmt.Sprintf("sent %d frames", len(recs)))
+	complete(fmt.Sprintf("sent %d frames", len(recs)))
 }
 
 // loadPcap reads all records from a pcap or pcapng file.
 func loadPcap(path string) ([]*pcapio.Record, bool, error) {
-	f, err := os.Open(path)
+	cap, err := pcapio.LoadFile(path, pcapio.DefaultLimits())
 	if err != nil {
 		return nil, false, err
 	}
-	defer f.Close()
-	br := bufio.NewReaderSize(f, 1<<16)
-	magic, err := br.Peek(4)
+	return cap.Records, cap.Nanosecond, nil
+}
+
+func (s *Server) loadPcap(path string) ([]*pcapio.Record, bool, error) {
+	f, err := s.openRootedPath(path)
 	if err != nil {
 		return nil, false, err
 	}
-	type recReader interface {
-		Read() (*pcapio.Record, error)
+	capture, loadErr := orchestration.Load(f)
+	if err := errors.Join(loadErr, f.Close()); err != nil {
+		return nil, false, err
 	}
-	var rd recReader
-	nanos := false
-	if binary.LittleEndian.Uint32(magic) == 0x0A0D0D0A { // pcapng section header
-		nr, err := pcapio.NewNgReader(br)
-		if err != nil {
-			return nil, false, err
-		}
-		rd, nanos = nr, true
-	} else {
-		r, err := pcapio.NewReader(br)
-		if err != nil {
-			return nil, false, err
-		}
-		rd, nanos = r, r.Nanosecond()
-	}
-	var recs []*pcapio.Record
-	for {
-		rec, err := rd.Read()
-		if err == io.EOF || err != nil {
-			break
-		}
-		cp := *rec
-		cp.Data = append([]byte(nil), rec.Data...)
-		recs = append(recs, &cp)
-	}
-	return recs, nanos, nil
+	return capture.Records, capture.Nanosecond, nil
 }
 
 func pickFlow(flows []*engine.Flow, sel int) (*engine.Flow, error) {

@@ -1,77 +1,45 @@
 package main
 
 import (
-	"bufio"
-	"encoding/binary"
-	"io"
-	"os"
-
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
-	"github.com/kvmukilan/livewire/internal/wire"
 )
 
-// capReader unifies the classic pcap and pcapng readers.
-type capReader interface {
-	Read() (*pcapio.Record, error)
-	LinkType() wire.LinkType
-}
-
-// input is an opened capture with its backing file and metadata.
+// input preserves the small iterator surface used by older command stages while
+// delegating all parsing, validation, and limits to pcapio.LoadFile.
 type input struct {
-	rd      capReader
-	file    *os.File
-	nanos   bool // source had nanosecond timestamps
+	records []*pcapio.Record
+	next    int
+	nanos   bool
 	isNg    bool
 	ngMixed func() bool
 }
 
-func (in *input) Close() error { return in.file.Close() }
-
-// openInput opens path and returns a unified reader, detecting pcap vs pcapng by
-// magic. pcapng is treated as nanosecond-resolution.
+// openInput is the sole CLI capture loader. The dashboard calls the same
+// pcapio.LoadFile implementation directly through its rooted file handle.
 func openInput(path string) (*input, error) {
-	f, err := os.Open(path)
+	capture, err := orchestration.LoadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	br := bufio.NewReaderSize(f, 1<<16)
-	magic, err := br.Peek(4)
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	if isPcapng(magic) {
-		nr, err := pcapio.NewNgReader(br)
-		if err != nil {
-			f.Close()
-			return nil, err
-		}
-		return &input{rd: nr, file: f, nanos: true, isNg: true, ngMixed: nr.Mixed}, nil
-	}
-	r, err := pcapio.NewReader(br)
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	return &input{rd: r, file: f, nanos: r.Nanosecond()}, nil
+	mixed := capture.MixedLinks
+	return &input{
+		records: capture.Records,
+		nanos:   capture.Nanosecond,
+		isNg:    capture.PCAPNG,
+		ngMixed: func() bool { return mixed },
+	}, nil
 }
 
-func isPcapng(magic []byte) bool {
-	return binary.LittleEndian.Uint32(magic) == 0x0A0D0D0A
-}
-
-// eachRecord streams every record to fn, stopping at EOF or the first error.
+// eachRecord visits every remaining validated record and returns callback
+// errors without treating parser failures as EOF (parsing already completed).
 func (in *input) eachRecord(fn func(rec *pcapio.Record) error) error {
-	for {
-		rec, err := in.rd.Read()
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
+	for in.next < len(in.records) {
+		rec := in.records[in.next]
+		in.next++
 		if err := fn(rec); err != nil {
 			return err
 		}
 	}
+	return nil
 }

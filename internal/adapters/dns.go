@@ -65,8 +65,7 @@ func (d DNS) Decode(_ replay.Direction, data []byte) ([]replay.Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		msgRaw := append([]byte(nil), raw...)
-		msgRaw = binary.BigEndian.AppendUint16(nil, uint16(len(raw)))
+		msgRaw := binary.BigEndian.AppendUint16(nil, uint16(len(raw)))
 		msgRaw = append(msgRaw, raw...)
 		fields["tcp"] = true
 		out = append(out, replay.Message{Kind: "dns", Raw: msgRaw, Fields: fields})

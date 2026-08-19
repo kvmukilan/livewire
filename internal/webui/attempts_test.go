@@ -31,7 +31,7 @@ func TestAdaptiveRunValidatesAttempts(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
 			writeWebTestPcap(t, dir)
-			h := NewServer(dir).Handler()
+			h := testHandler(t, dir)
 			body := map[string]any{
 				"pcap": "sample.pcap", "iface": "test0", "targetIP": "192.0.2.2",
 				"profile": "functional", "verify": "lenient",

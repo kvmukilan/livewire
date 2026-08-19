@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"strconv"
@@ -87,8 +88,10 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 		rep.recordIterations(summary)
 		fmt.Print(summary.Plain())
 	}
+	var reportErr error
 	if o.report != "" {
 		if werr := rep.write(o.report); werr != nil {
+			reportErr = fmt.Errorf("write replay report: %w", werr)
 			fmt.Printf("report: %v\n", werr)
 		} else {
 			fmt.Printf("report written to %s\n", o.report)
@@ -98,9 +101,9 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 	// the replay did not complete. A repeated run reports a rate instead, so the
 	// summary is the answer and one bad attempt is not a command failure.
 	if !runs.Repeats() {
-		return passErr
+		return errors.Join(passErr, reportErr)
 	}
-	return nil
+	return reportErr
 }
 
 // liveOnePass runs a real stateful replay of one flow via the shared livereplay
@@ -230,7 +233,7 @@ func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line st
 		go func(i int, t task) {
 			defer wg.Done()
 			if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
-				if d := start.Add(t.offset).Sub(time.Now()); d > 0 {
+				if d := time.Until(start.Add(t.offset)); d > 0 {
 					timer := time.NewTimer(d)
 					select {
 					case <-liveContext(o).Done():
@@ -337,10 +340,13 @@ func resolveTarget(target string, f *engine.Flow) (netip.Addr, uint16, error) {
 		}
 		ip, e1 := netip.ParseAddr(host)
 		p, e2 := strconv.ParseUint(portStr, 10, 16)
-		if e1 != nil || e2 != nil {
+		if e1 != nil || e2 != nil || p == 0 {
 			return netip.Addr{}, 0, fmt.Errorf("invalid -target %q", target)
 		}
 		return ip, uint16(p), nil
+	}
+	if ap.Port() == 0 {
+		return netip.Addr{}, 0, fmt.Errorf("invalid -target %q: port must be between 1 and 65535", target)
 	}
 	return ap.Addr(), ap.Port(), nil
 }

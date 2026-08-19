@@ -2,12 +2,21 @@ package replay
 
 import (
 	"context"
+	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/pcapio"
 )
+
+type closeErrorConn struct {
+	net.Conn
+	err error
+}
+
+func (c *closeErrorConn) Close() error { return errors.Join(c.Conn.Close(), c.err) }
 
 type fourByteAdapter struct{}
 
@@ -59,6 +68,30 @@ func TestRunTCPSemanticContext(t *testing.T) {
 	}
 	if !res.Completed || !res.Matched || res.Sent != 1 || res.Received != 1 {
 		t.Fatalf("result=%+v", res)
+	}
+}
+
+func TestRunTCPSemanticCloseFailureInvalidatesSuccess(t *testing.T) {
+	client, server := net.Pipe()
+	defer server.Close()
+	dial := func(context.Context, string, string) (net.Conn, error) {
+		return &closeErrorConn{Conn: client, err: errors.New("injected close failure")}, nil
+	}
+	go func() {
+		buf := make([]byte, 4)
+		_, _ = server.Read(buf)
+		_, _ = server.Write([]byte("pong"))
+	}()
+	s := &Session{ID: "tcp-0", Transport: TransportTCP, Events: []Event{
+		{Direction: ClientToServer, Record: &pcapio.Record{}, Payload: []byte("ping")},
+		{Direction: ServerToClient, Record: &pcapio.Record{}, Payload: []byte("pong")},
+	}}
+	res, err := RunTCPSemanticContext(context.Background(), TCPSemanticConfig{Session: s, Adapter: fourByteAdapter{}, Verify: VerifyStrict, Timeout: time.Second, Dial: dial})
+	if err == nil || !strings.Contains(err.Error(), "injected close failure") {
+		t.Fatalf("close error was not propagated: result=%+v err=%v", res, err)
+	}
+	if res.Completed || !strings.Contains(res.Error, "injected close failure") {
+		t.Fatalf("close failure left a successful result: %+v", res)
 	}
 }
 

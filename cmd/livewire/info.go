@@ -174,8 +174,6 @@ func cmdInfo(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
 	stats, err := scanCapture(in, *verbose)
 	if err != nil {
 		return err

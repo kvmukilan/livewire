@@ -106,10 +106,11 @@ func ParseProfile(s string) (Profile, error) {
 type Mode string
 
 const (
-	ModeSemantic Mode = "semantic"
-	ModeStateful Mode = "stateful"
-	ModeWire     Mode = "wire"
-	ModeBlocked  Mode = "blocked"
+	ModeSemantic    Mode = "semantic"
+	ModeCoordinated Mode = "coordinated"
+	ModeStateful    Mode = "stateful"
+	ModeWire        Mode = "wire"
+	ModeBlocked     Mode = "blocked"
 )
 
 type Fidelity string
@@ -123,16 +124,17 @@ const (
 )
 
 type PlanEntry struct {
-	SessionID       string    `json:"sessionId"`
-	Transport       Transport `json:"transport"`
-	Driver          string    `json:"driver"`
-	Adapter         string    `json:"adapter,omitempty"`
-	Mode            Mode      `json:"mode"`
-	Fidelity        Fidelity  `json:"fidelity"`
-	PacketIndexes   []int     `json:"packetIndexes"`
-	Transformations []string  `json:"transformations,omitempty"`
-	Warnings        []string  `json:"warnings,omitempty"`
-	Blockers        []string  `json:"blockers,omitempty"`
+	SessionID         string    `json:"sessionId"`
+	Transport         Transport `json:"transport"`
+	Driver            string    `json:"driver"`
+	Adapter           string    `json:"adapter,omitempty"`
+	Mode              Mode      `json:"mode"`
+	Fidelity          Fidelity  `json:"fidelity"`
+	PacketIndexes     []int     `json:"packetIndexes"`
+	Transformations   []string  `json:"transformations,omitempty"`
+	Warnings          []string  `json:"warnings,omitempty"`
+	Blockers          []string  `json:"blockers,omitempty"`
+	RelatedSessionIDs []string  `json:"relatedSessionIds,omitempty"`
 }
 
 type ReplayPlan struct {

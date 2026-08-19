@@ -60,7 +60,10 @@ func (s *Server) handleRSTRule(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, map[string]any{"ok": true, "note": "no such rule", "rules": s.rstRuleKeysLocked()})
 			return
 		}
-		guard.Release()
+		if err := guard.Release(); err != nil {
+			writeErr(w, 500, fmt.Errorf("release RST rule: %w", err))
+			return
+		}
 		delete(s.rstRules, key)
 		writeJSON(w, map[string]any{"ok": true, "rules": s.rstRuleKeysLocked()})
 	default:

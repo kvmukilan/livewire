@@ -1,14 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
+	"github.com/kvmukilan/livewire/internal/ftpreplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
 )
@@ -33,20 +32,21 @@ type reterminationReport struct {
 }
 
 type reterminationOutcome struct {
-	Completed           bool                `json:"completed"`
-	Verified            bool                `json:"verified"`
-	Matched             bool                `json:"matched"`
-	Adapter             string              `json:"adapter"`
-	ProtocolVersion     string              `json:"protocolVersion,omitempty"`
-	CipherSuite         string              `json:"cipherSuite,omitempty"`
-	ALPN                string              `json:"alpn,omitempty"`
-	PeerIdentityChecked bool                `json:"peerIdentityChecked"`
-	Requests            int                 `json:"requests"`
-	Responses           int                 `json:"responses"`
-	Mismatches          int                 `json:"mismatches"`
-	Differences         []replay.Difference `json:"differences,omitempty"`
-	Commands            []commandEvidence   `json:"commands,omitempty"`
-	Error               string              `json:"error,omitempty"`
+	Completed           bool                       `json:"completed"`
+	Verified            bool                       `json:"verified"`
+	Matched             bool                       `json:"matched"`
+	Adapter             string                     `json:"adapter"`
+	ProtocolVersion     string                     `json:"protocolVersion,omitempty"`
+	CipherSuite         string                     `json:"cipherSuite,omitempty"`
+	ALPN                string                     `json:"alpn,omitempty"`
+	PeerIdentityChecked bool                       `json:"peerIdentityChecked"`
+	Requests            int                        `json:"requests"`
+	Responses           int                        `json:"responses"`
+	Mismatches          int                        `json:"mismatches"`
+	Differences         []replay.Difference        `json:"differences,omitempty"`
+	Commands            []commandEvidence          `json:"commands,omitempty"`
+	Transfers           []ftpreplay.TransferResult `json:"transfers,omitempty"`
+	Error               string                     `json:"error,omitempty"`
 }
 
 type commandEvidence struct {
@@ -84,14 +84,7 @@ func newReterminationReport(kind, captureDigest, target string, plan replay.Repl
 }
 
 func (r *reterminationReport) write(path string) error {
-	b, err := json.MarshalIndent(r, "", "  ")
-	if err != nil {
-		return err
-	}
-	for _, secret := range r.secretValues {
-		b = []byte(strings.ReplaceAll(string(b), secret, "[REDACTED]"))
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	return orchestration.WriteJSON(path, r, runvars.NewRedactor(nil, r.secretValues...))
 }
 
 // buildReterminationPlan accounts for the entire input capture. Only the

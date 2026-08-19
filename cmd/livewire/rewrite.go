@@ -1,16 +1,17 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/kvmukilan/livewire/internal/edit"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
-func cmdRewrite(args []string) error {
+func cmdRewrite(args []string) (retErr error) {
 	fs := flag.NewFlagSet("rewrite", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file")
@@ -107,13 +108,11 @@ func cmdRewrite(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
-
-	outFile, err := os.Create(outPath)
+	af, err := orchestration.CreateArtifact(outPath)
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
 
 	var w *pcapio.Writer
 	var link wire.LinkType
@@ -123,7 +122,7 @@ func cmdRewrite(args []string) error {
 		total++
 		if w == nil {
 			link = rec.LinkType
-			w, err = pcapio.NewWriter(outFile, link, in.nanos)
+			w, err = pcapio.NewWriter(af, link, in.nanos)
 			if err != nil {
 				return err
 			}
@@ -152,6 +151,9 @@ func cmdRewrite(args []string) error {
 		if err := w.Flush(); err != nil {
 			return err
 		}
+	}
+	if err := af.Commit(); err != nil {
+		return err
 	}
 	fmt.Printf("rewrote %d/%d packets -> %s (link %s)\n", edited, total, outPath, linkName(link))
 	return nil

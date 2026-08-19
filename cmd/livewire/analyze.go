@@ -34,8 +34,8 @@ func cmdAnalyze(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-in is required")
 	}
-	if *udpIdle <= 0 {
-		return fmt.Errorf("-udp-idle must be positive")
+	if *udpIdle <= 0 || *udpIdle > time.Hour {
+		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
 	recs, _, err := loadRecords(*inPath)
 	if err != nil {

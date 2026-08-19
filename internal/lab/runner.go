@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/backend"
+	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/wire"
@@ -27,14 +28,18 @@ type Backends struct {
 
 var acquireBackends = openBackends
 
-func (b Backends) close() {
+func (b Backends) close() error {
 	seen := map[backend.PacketBackend]bool{}
+	var errs []error
 	for _, x := range []backend.PacketBackend{b.ClientTX, b.ClientRX, b.ServerTX, b.ServerRX} {
 		if x != nil && !seen[x] {
-			_ = x.Close()
+			if err := x.Close(); err != nil {
+				errs = append(errs, err)
+			}
 			seen[x] = true
 		}
 	}
+	return errors.Join(errs...)
 }
 
 type Config struct {
@@ -136,7 +141,7 @@ type Result struct {
 	Cancelled         bool                     `json:"cancelled"`
 }
 
-func RunContext(ctx context.Context, cfg Config) (Result, error) {
+func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 	if cfg.Trace == nil {
 		return Result{}, fmt.Errorf("lab: trace is required")
 	}
@@ -163,7 +168,7 @@ func RunContext(ctx context.Context, cfg Config) (Result, error) {
 		backs, owned = &b, true
 	}
 	if owned {
-		defer backs.close()
+		defer func() { retErr = errors.Join(retErr, backs.close()) }()
 		resolvedTopology, resolutions, err := resolveTopologyLinks(cfg.Topology, *backs)
 		if err != nil {
 			return Result{}, err
@@ -208,7 +213,7 @@ func resolveTopologyLinks(topology Topology, b Backends) (Topology, []LinkResolu
 func openBackends(t Topology) (Backends, error) {
 	var b Backends
 	var err error
-	fail := func(e error) (Backends, error) { b.close(); return Backends{}, e }
+	fail := func(e error) (Backends, error) { return Backends{}, errors.Join(e, b.close()) }
 	if b.ClientTX, err = backend.OpenSender(t.Client.Interface); err != nil {
 		return b, err
 	}
@@ -981,19 +986,19 @@ func overallLabFidelity(requested replay.Profile, sessions []SessionVerdict) rep
 	return replay.FidelityTransport
 }
 
-func WriteEvidence(path string, result Result, topology Topology) error {
-	f, err := os.Create(path)
+func WriteEvidence(path string, result Result, topology Topology) (retErr error) {
+	af, err := orchestration.CreateArtifact(path)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
 	links := [2]wire.LinkType{wire.LinkEthernet, wire.LinkEthernet}
 	for _, rec := range result.Evidence {
 		if rec.InterfaceID < 2 {
 			links[rec.InterfaceID] = rec.LinkType
 		}
 	}
-	w, err := pcapio.NewNgWriter(f, []pcapio.NgInterface{
+	w, err := pcapio.NewNgWriter(af, []pcapio.NgInterface{
 		{Name: "client:" + topology.Client.Interface, LinkType: links[0]},
 		{Name: "server:" + topology.Server.Interface, LinkType: links[1]},
 	})
@@ -1005,5 +1010,8 @@ func WriteEvidence(path string, result Result, topology Topology) error {
 			return err
 		}
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	return af.Commit()
 }

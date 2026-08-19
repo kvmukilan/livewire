@@ -9,9 +9,6 @@ import (
 	"github.com/kvmukilan/livewire/internal/sshreplay"
 )
 
-// sshEnabled reports whether this build includes SSH re-termination.
-func sshEnabled() bool { return true }
-
 // handleSSH runs an SSH re-termination as a job: connect, replay the commands,
 // and capture their output.
 func (s *Server) handleSSH(w http.ResponseWriter, r *http.Request) {

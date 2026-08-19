@@ -2,6 +2,7 @@ package replay
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -30,7 +31,7 @@ type TCPSemanticConfig struct {
 // RunTCPSemanticContext re-terminates an unencrypted TCP application session
 // through a normal live socket. Segmentation is intentionally not claimed: use
 // the transport profile for packet-level TCP behavior.
-func RunTCPSemanticContext(ctx context.Context, cfg TCPSemanticConfig) (TransportResult, error) {
+func RunTCPSemanticContext(ctx context.Context, cfg TCPSemanticConfig) (res TransportResult, retErr error) {
 	if cfg.Session == nil || cfg.Session.Transport != TransportTCP || cfg.Adapter == nil {
 		return TransportResult{}, fmt.Errorf("semantic TCP replay requires a TCP session and adapter")
 	}
@@ -50,10 +51,15 @@ func RunTCPSemanticContext(ctx context.Context, cfg TCPSemanticConfig) (Transpor
 	if err != nil {
 		return TransportResult{SessionID: cfg.Session.ID, Mode: ModeSemantic, Fidelity: FidelitySemantic, Error: err.Error()}, err
 	}
-	defer conn.Close()
-
 	verified := cfg.Verify != VerifyOff
-	res := TransportResult{SessionID: cfg.Session.ID, Mode: ModeSemantic, Fidelity: FidelitySemantic, Verified: verified, Matched: verified}
+	res = TransportResult{SessionID: cfg.Session.ID, Mode: ModeSemantic, Fidelity: FidelitySemantic, Verified: verified, Matched: verified}
+	defer func() {
+		if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			retErr = errors.Join(retErr, fmt.Errorf("close semantic TCP connection: %w", err))
+			res.Completed = false
+			res.Error = retErr.Error()
+		}
+	}()
 	state := &RuntimeState{Variables: copyVariables(cfg.Variables), Learned: map[string][]byte{}}
 	turns, turnErr := semanticTurns(cfg.Session)
 	if turnErr != nil {
@@ -230,7 +236,9 @@ func readAdapterMessages(ctx context.Context, conn net.Conn, adapter Adapter, di
 		if step.After(deadline) {
 			step = deadline
 		}
-		_ = conn.SetReadDeadline(step)
+		if err := conn.SetReadDeadline(step); err != nil && !errors.Is(err, io.ErrClosedPipe) && !errors.Is(err, net.ErrClosed) {
+			return nil, fmt.Errorf("set response read deadline: %w", err)
+		}
 		n, err := conn.Read(tmp)
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
@@ -282,7 +290,9 @@ func writeContext(ctx context.Context, conn net.Conn, data []byte, timeout time.
 		if step.After(deadline) {
 			step = deadline
 		}
-		_ = conn.SetWriteDeadline(step)
+		if err := conn.SetWriteDeadline(step); err != nil {
+			return fmt.Errorf("set request write deadline: %w", err)
+		}
 		n, err := conn.Write(data)
 		data = data[n:]
 		if err != nil {

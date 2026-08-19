@@ -3,6 +3,7 @@ package replay
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/netip"
 	"time"
@@ -51,7 +52,7 @@ func (r TransportResult) Succeeded() bool { return r.Completed && r.Error == "" 
 
 // RunTransportContext opens the configured interface and drives one UDP or
 // ICMP session. TCP continues through livereplay's richer state machine.
-func RunTransportContext(ctx context.Context, cfg TransportRunConfig) (TransportResult, error) {
+func RunTransportContext(ctx context.Context, cfg TransportRunConfig) (result TransportResult, retErr error) {
 	if cfg.Session == nil {
 		return TransportResult{}, fmt.Errorf("replay: nil session")
 	}
@@ -70,7 +71,11 @@ func RunTransportContext(ctx context.Context, cfg TransportRunConfig) (Transport
 	if err != nil {
 		return TransportResult{}, err
 	}
-	defer lb.Backend.Close()
+	defer func() {
+		if err := lb.Backend.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close transport backend: %w", err))
+		}
+	}()
 	return RunTransportWithBackendContext(ctx, cfg, lb)
 }
 

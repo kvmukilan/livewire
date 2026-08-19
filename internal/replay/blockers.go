@@ -1,6 +1,8 @@
 package replay
 
 import (
+	"bytes"
+
 	"github.com/kvmukilan/livewire/internal/dissect"
 )
 
@@ -27,7 +29,15 @@ func MarkIntrinsicBlockers(t *Trace) {
 		case dissect.DetectSSH(client):
 			s.Blockers = appendUnique(s.Blockers, "SSH ciphertext requires supplied credentials and a command script; captured ciphertext is not replayable")
 		case dissect.DetectTLS(client).IsTLS:
-			s.Blockers = appendUnique(s.Blockers, "TLS requires a matching key log to recover plaintext before a fresh authenticated connection can be created")
+			if s.Server.Port == 990 {
+				s.Blockers = appendUnique(s.Blockers, "implicit FTPS requires a matching key log and the ftp-replay command; captured TLS ciphertext is not replayable")
+			} else {
+				s.Blockers = appendUnique(s.Blockers, "TLS requires a matching key log to recover plaintext before a fresh authenticated connection can be created")
+			}
+		case bytes.Contains(bytes.ToUpper(client), []byte("AUTH TLS\r\n")):
+			if offset, info := dissect.FindTLS(client); offset >= 0 && info.IsTLS {
+				s.Blockers = appendUnique(s.Blockers, "explicit FTPS requires a matching key log and the ftp-replay command; captured TLS ciphertext is not replayable")
+			}
 		}
 		for _, stream := range [][]byte{client, server} {
 			if frames, _, err := dissect.ParseDNP3Stream(stream); err == nil {
