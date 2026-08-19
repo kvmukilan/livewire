@@ -40,7 +40,10 @@ try {
         $env:GOOS = $target.GOOS
         $env:GOARCH = $target.GOARCH
         $env:CGO_ENABLED = "0"
-        $ldflags = "-s -w -X github.com/kvmukilan/livewire/internal/buildinfo.Version=$Version"
+        # Go's default build ID includes action hashes that can differ between
+        # otherwise identical toolchain installations. Omitting it makes the
+        # executable bytes portable across clean Windows release runners.
+        $ldflags = "-buildid= -s -w -X github.com/kvmukilan/livewire/internal/buildinfo.Version=$Version"
         & go build -buildvcs=false -trimpath -ldflags $ldflags -o (Join-Path $output $target.Name) ./cmd/livewire
         if ($LASTEXITCODE -ne 0) { throw "Build failed for $($target.GOOS)/$($target.GOARCH)" }
         $moduleInfo = (& go version -m (Join-Path $output $target.Name) 2>&1 | Out-String)
