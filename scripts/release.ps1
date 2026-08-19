@@ -113,21 +113,9 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     }
     Rename-Item -LiteralPath (Join-Path $windowsStage "livewire-$Version-windows-amd64.exe") -NewName "livewire.exe"
 
-    Add-Type -AssemblyName System.IO.Compression
     $zipPath = Join-Path $output "livewire-$Version-windows-amd64.zip"
-    $zipStream = [IO.File]::Open($zipPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-    try {
-        $archive = [IO.Compression.ZipArchive]::new($zipStream, [IO.Compression.ZipArchiveMode]::Create, $false)
-        try {
-            foreach ($file in (Get-ChildItem -LiteralPath $windowsStage -File | Sort-Object Name)) {
-                $entry = $archive.CreateEntry($file.Name, [IO.Compression.CompressionLevel]::NoCompression)
-                $entry.LastWriteTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
-                $inputStream = [IO.File]::OpenRead($file.FullName)
-                $entryStream = $entry.Open()
-                try { $inputStream.CopyTo($entryStream) } finally { $entryStream.Dispose(); $inputStream.Dispose() }
-            }
-        } finally { $archive.Dispose() }
-    } finally { $zipStream.Dispose() }
+    & go run ./scripts/releasezip.go -source $windowsStage -output $zipPath
+    if ($LASTEXITCODE -ne 0) { throw "Deterministic Windows ZIP generation failed" }
     Remove-Item -LiteralPath $windowsStage -Recurse -Force
 } finally {
     foreach ($name in @("GOOS", "GOARCH", "CGO_ENABLED", "SOURCE_DATE_EPOCH")) {
