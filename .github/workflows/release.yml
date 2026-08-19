@@ -54,11 +54,17 @@ jobs:
           $actualFiles = Get-ChildItem $actual -File | Sort-Object Name
           $names = Compare-Object $expectedFiles.Name $actualFiles.Name
           if ($names) { throw "Artifact name mismatch: $($names | Out-String)" }
+          $mismatches = @()
           foreach ($file in $expectedFiles) {
             $rebuilt = Join-Path $actual $file.Name
             $want = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
             $got = (Get-FileHash $rebuilt -Algorithm SHA256).Hash
-            if ($want -ne $got) { throw "Non-reproducible artifact: $($file.Name)" }
+            if ($want -ne $got) {
+              $mismatches += "$($file.Name): committed=$want regenerated=$got"
+            }
+          }
+          if ($mismatches) {
+            throw "Non-reproducible artifacts:`n$($mismatches -join "`n")"
           }
 
       - name: Validate SBOM and ZIP

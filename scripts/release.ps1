@@ -52,6 +52,10 @@ try {
         }
     }
 
+    foreach ($name in @("GOOS", "GOARCH", "CGO_ENABLED")) {
+        Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    }
+
     foreach ($document in $documents) {
         $source = Join-Path $repo $document
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -72,35 +76,9 @@ and checksum manifest. Windows may display an unknown-publisher warning.
 "@
     [IO.File]::WriteAllText((Join-Path $output "WINDOWS-UNSIGNED.txt"), $unsignedNotice.Trim() + "`n", [Text.UTF8Encoding]::new($false))
 
-    $moduleRows = & go list -m -f '{{if not .Main}}{{.Path}}|{{.Version}}{{end}}' all
-    if ($LASTEXITCODE -ne 0) { throw "go list failed while generating the SBOM" }
-    $components = @()
-    foreach ($row in ($moduleRows | Where-Object { $_ } | Sort-Object)) {
-        $parts = $row -split '\|', 2
-        $components += [ordered]@{
-            type = "library"
-            name = $parts[0]
-            version = $parts[1]
-            purl = "pkg:golang/$($parts[0])@$($parts[1])"
-        }
-    }
-    $bom = [ordered]@{
-        bomFormat = "CycloneDX"
-        specVersion = "1.6"
-        version = 1
-        metadata = [ordered]@{
-            component = [ordered]@{
-                type = "application"
-                name = "livewire"
-                version = $Version
-                purl = "pkg:golang/github.com/kvmukilan/livewire@$Version"
-            }
-        }
-        components = $components
-    }
     $sbomPath = Join-Path $output "livewire-$Version.cdx.json"
-    $sbomJSON = ($bom | ConvertTo-Json -Depth 8) -replace "`r`n", "`n"
-    [IO.File]::WriteAllText($sbomPath, ($sbomJSON + "`n"), [Text.UTF8Encoding]::new($false))
+    & go run ./scripts/releasegen.go sbom -version $Version -output $sbomPath
+    if ($LASTEXITCODE -ne 0) { throw "Deterministic SBOM generation failed" }
 
     $windowsStage = Join-Path $output "windows-amd64"
     New-Item -ItemType Directory -Path $windowsStage -Force | Out-Null
@@ -114,22 +92,19 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     Rename-Item -LiteralPath (Join-Path $windowsStage "livewire-$Version-windows-amd64.exe") -NewName "livewire.exe"
 
     $zipPath = Join-Path $output "livewire-$Version-windows-amd64.zip"
-    & go run ./scripts/releasezip.go -source $windowsStage -output $zipPath
+    & go run ./scripts/releasegen.go zip -source $windowsStage -output $zipPath
     if ($LASTEXITCODE -ne 0) { throw "Deterministic Windows ZIP generation failed" }
     Remove-Item -LiteralPath $windowsStage -Recurse -Force
+
+    $checksumPath = Join-Path $output "SHA256SUMS"
+    & go run ./scripts/releasegen.go checksums -directory $output -output $checksumPath
+    if ($LASTEXITCODE -ne 0) { throw "Deterministic checksum generation failed" }
 } finally {
     foreach ($name in @("GOOS", "GOARCH", "CGO_ENABLED", "SOURCE_DATE_EPOCH")) {
         Remove-Item "Env:$name" -ErrorAction SilentlyContinue
     }
     Pop-Location
 }
-
-$checksumPath = Join-Path $output "SHA256SUMS"
-$lines = @(Get-ChildItem -LiteralPath $output -File |
-    Where-Object Name -ne "SHA256SUMS" |
-    Sort-Object Name |
-    ForEach-Object { "{0}  {1}" -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $_.Name })
-[IO.File]::WriteAllText($checksumPath, (($lines -join "`n") + "`n"), [Text.UTF8Encoding]::new($false))
 
 Write-Host "Built reproducible Livewire v$Version artifacts in $output"
 Get-Content -LiteralPath $checksumPath
