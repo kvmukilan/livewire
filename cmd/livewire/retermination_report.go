@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -142,4 +143,32 @@ func reterminationEventsTruncated(events []replay.Event) bool {
 		}
 	}
 	return false
+}
+
+// validateReterminationExecution prevents a specialized secure runner from
+// sending when its selected lane is blocked, and lets the unified front door
+// require that the secure route account for the complete capture. Compatibility
+// commands retain their one-selected-session behavior unless explicitly asked
+// for complete coverage.
+func validateReterminationExecution(plan replay.ReplayPlan, requireComplete bool) error {
+	executable := 0
+	var blocked []error
+	for _, entry := range plan.Entries {
+		if entry.Mode != replay.ModeBlocked {
+			executable++
+			continue
+		}
+		reason := "no safe driver"
+		if len(entry.Blockers) > 0 {
+			reason = entry.Blockers[0]
+		}
+		blocked = append(blocked, fmt.Errorf("session %s: %s", entry.SessionID, reason))
+	}
+	if executable == 0 {
+		return fmt.Errorf("no safely executable secure session; no packets were sent: %w", errors.Join(blocked...))
+	}
+	if requireComplete && len(blocked) > 0 {
+		return fmt.Errorf("automatic mode would leave part of the capture unreplayed; isolate the intended exchange or use a topology-aware lab run. No packets were sent: %w", errors.Join(blocked...))
+	}
+	return nil
 }

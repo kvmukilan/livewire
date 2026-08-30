@@ -110,12 +110,18 @@ func cmdLab(args []string) error {
 	printCoverage(plan)
 
 	base := strings.TrimSuffix(inPath, filepath.Ext(inPath))
-	if *evidencePath == "" {
-		*evidencePath = base + ".lab.pcapng"
+	resolvedEvidence, err := resolveOutputPath(*evidencePath, base+".lab.pcapng", "-evidence")
+	if err != nil {
+		return err
 	}
-	if *reportPath == "" {
-		*reportPath = base + ".lab.report.json"
+	resolvedReport, err := resolveOutputPath(*reportPath, base+".lab.report.json", "-report")
+	if err != nil {
+		return err
 	}
+	if sameOutputPath(resolvedEvidence, resolvedReport) {
+		return fmt.Errorf("-evidence and -report must name different files")
+	}
+	*evidencePath, *reportPath = resolvedEvidence, resolvedReport
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	fmt.Printf("\nLab: %s -> DUT -> %s (%d scheduled capture frames, seed %d)\n", topology.Client.Interface, topology.Server.Interface, trace.Packets, scenario.Seed)

@@ -29,6 +29,27 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+func TestClassifyVerifiedDistinguishesNotCompared(t *testing.T) {
+	cases := []struct {
+		name                                   string
+		completed, verified, matched, wireOnly bool
+		want                                   Verdict
+	}{
+		{"verified match", true, true, true, false, Same},
+		{"verified difference", true, true, false, false, Different},
+		{"completed but not compared", true, false, false, false, Unverified},
+		{"incomplete is still incomplete", false, false, false, false, Incomplete},
+		{"wire-only wins", true, true, true, true, WireOnly},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ClassifyVerified(c.completed, c.verified, c.matched, c.wireOnly); got != c.want {
+				t.Fatalf("ClassifyVerified(%v,%v,%v,%v) = %v, want %v", c.completed, c.verified, c.matched, c.wireOnly, got, c.want)
+			}
+		})
+	}
+}
+
 func TestTallyWorst(t *testing.T) {
 	cases := []struct {
 		name string
@@ -39,7 +60,9 @@ func TestTallyWorst(t *testing.T) {
 		{"one different among matches", Tally{Same: 2, Different: 1}, Different},
 		{"one incomplete outranks different", Tally{Same: 1, Different: 1, Incomplete: 1}, Incomplete},
 		{"wire only", Tally{WireOnly: 2}, WireOnly},
+		{"unverified", Tally{Unverified: 2}, Unverified},
 		{"a match outranks wire-only", Tally{Same: 1, WireOnly: 2}, Same},
+		{"unverified prevents an all-matched claim", Tally{Same: 1, Unverified: 2}, Unverified},
 		{"empty is not a pass", Tally{}, Incomplete},
 	}
 	for _, c := range cases {
@@ -52,16 +75,17 @@ func TestTallyWorst(t *testing.T) {
 }
 
 func TestTallyTotal(t *testing.T) {
-	tl := Tally{Same: 1, Different: 2, WireOnly: 3, Incomplete: 4}
-	if got := tl.Total(); got != 10 {
-		t.Fatalf("Total() = %d, want 10", got)
+	tl := Tally{Same: 1, Different: 2, WireOnly: 3, Unverified: 4, Incomplete: 5}
+	if got := tl.Total(); got != 15 {
+		t.Fatalf("Total() = %d, want 15", got)
 	}
 	var empty Tally
 	empty.Add(Same)
 	empty.Add(Different)
 	empty.Add(WireOnly)
+	empty.Add(Unverified)
 	empty.Add(Incomplete)
-	if empty != (Tally{Same: 1, Different: 1, WireOnly: 1, Incomplete: 1}) {
+	if empty != (Tally{Same: 1, Different: 1, WireOnly: 1, Unverified: 1, Incomplete: 1}) {
 		t.Fatalf("Add did not record each verdict once: %+v", empty)
 	}
 }
@@ -129,6 +153,14 @@ func TestPlanRunStopWhenDifferent(t *testing.T) {
 	})
 	if len(got) != 3 {
 		t.Fatalf("wire-only ran %d attempts, want 3", len(got))
+	}
+
+	// A completed-but-unverified attempt is not evidence of divergence either.
+	got = Plan{Times: 3, StopWhenDifferent: true}.Run(context.Background(), func(int) Tally {
+		return Tally{Unverified: 1}
+	})
+	if len(got) != 3 {
+		t.Fatalf("unverified ran %d attempts, want 3", len(got))
 	}
 
 	// An incomplete attempt is a divergence too.
@@ -230,6 +262,16 @@ func TestSummarizeAllWireOnly(t *testing.T) {
 	}
 }
 
+func TestSummarizeAllUnverified(t *testing.T) {
+	s := Summarize([]Tally{{Unverified: 1}, {Unverified: 1}}, 2)
+	if s.Verdict != Unverified || s.Unverified != 2 || s.Sessions.Unverified != 2 {
+		t.Fatalf("unverified summary = %+v, want unverified/2", s)
+	}
+	if !s.Consistent || s.Intermittent {
+		t.Fatalf("uniform unverified: consistent=%v intermittent=%v, want true/false", s.Consistent, s.Intermittent)
+	}
+}
+
 func TestSummarizeSingleAttemptIsNeverIntermittent(t *testing.T) {
 	s := Summarize([]Tally{{Different: 1}}, 1)
 	if s.Intermittent {
@@ -253,7 +295,7 @@ func TestSummarizeSessionTotals(t *testing.T) {
 		t.Fatalf("session totals = %+v, want Same 5 / Different 1", s.Sessions)
 	}
 	// Per-attempt headline counts always add up to the attempts that ran.
-	if s.Same+s.Different+s.WireOnly+s.Incomplete != s.Attempts {
+	if s.Same+s.Different+s.WireOnly+s.Unverified+s.Incomplete != s.Attempts {
 		t.Fatalf("headline counts %+v do not add up to %d attempts", s, s.Attempts)
 	}
 }
@@ -384,6 +426,7 @@ func TestVerdictNames(t *testing.T) {
 		{Same, "same", "SAME AS THE RECORDING"},
 		{Different, "different", "DIFFERENT FROM THE RECORDING"},
 		{WireOnly, "wireOnly", "SENT ON THE WIRE; NOT COMPARED"},
+		{Unverified, "unverified", "COMPLETED; NOT COMPARED"},
 		{Incomplete, "incomplete", "DID NOT COMPLETE"},
 	} {
 		if got := c.v.String(); got != c.name {

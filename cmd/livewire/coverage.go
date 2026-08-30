@@ -37,6 +37,7 @@ type analysisDocument struct {
 	Preflight       preflightReport   `json:"preflight"`
 	Coverage        replay.ReplayPlan `json:"coverage"`
 	AdapterVersions map[string]string `json:"adapterVersions"`
+	AutomaticRoute  protocolReadiness `json:"automaticRoute"`
 }
 
 func compileCoverageWithOptions(records []*pcapio.Record, profile replay.Profile, registry *replay.Registry, opts replay.ExtractOptions) (*replay.Trace, replay.ReplayPlan, error) {

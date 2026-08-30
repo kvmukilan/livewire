@@ -57,6 +57,49 @@ func TestWriteAtomicFailureLeavesNoArtifactOrTemporaryFile(t *testing.T) {
 	}
 }
 
+func TestWriteFileAtomicNeverReplacesExistingTarget(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "report.json")
+	if err := os.WriteFile(target, []byte("original"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err := WriteFileAtomic(target, []byte("replacement"))
+	if err == nil {
+		t.Fatal("existing target was replaced")
+	}
+	data, readErr := os.ReadFile(target)
+	if readErr != nil || string(data) != "original" {
+		t.Fatalf("existing target changed: data=%q err=%v", data, readErr)
+	}
+	entries, readDirErr := os.ReadDir(dir)
+	if readDirErr != nil {
+		t.Fatal(readDirErr)
+	}
+	for _, entry := range entries {
+		if strings.Contains(entry.Name(), ".tmp-") {
+			t.Fatalf("temporary file leaked after no-replace failure: %s", entry.Name())
+		}
+	}
+}
+
+func TestCreateRejectsExistingTargetBeforeCreatingTemporaryFile(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "existing.json")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(target); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("Create existing target error = %v, want an exists error", err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, ".existing.json.tmp-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("Create left temporary files behind: %v", matches)
+	}
+}
+
 func TestAbortAndInvalidCommitAreIdempotent(t *testing.T) {
 	a, err := Create(filepath.Join(t.TempDir(), "out"))
 	if err != nil {

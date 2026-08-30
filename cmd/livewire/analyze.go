@@ -57,7 +57,8 @@ func cmdAnalyze(args []string) error {
 	}
 	printCoverage(plan)
 	if *jsonPath != "" {
-		if err := writeAssessment(*jsonPath, assessment, plan, registry); err != nil {
+		readiness := assessProtocolReadiness(detectProtocolRoute(recs))
+		if err := writeAssessment(*jsonPath, assessment, plan, registry, readiness); err != nil {
 			return err
 		}
 		fmt.Printf("Assessment written to %s\n", *jsonPath)

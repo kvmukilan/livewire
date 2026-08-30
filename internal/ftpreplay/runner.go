@@ -51,6 +51,7 @@ type Result struct {
 	Transfers   []TransferResult    `json:"transfers,omitempty"`
 	TLS         bool                `json:"tls"`
 	Completed   bool                `json:"completed"`
+	Verified    bool                `json:"verified"`
 }
 
 func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
@@ -63,6 +64,7 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 	if cfg.Timeout > 10*time.Minute {
 		return Result{}, fmt.Errorf("ftpreplay: timeout must not exceed 10 minutes")
 	}
+	result.Verified = cfg.Verify != replay.VerifyOff
 	_, portText, err := net.SplitHostPort(cfg.Address)
 	if err != nil {
 		return Result{}, fmt.Errorf("ftpreplay: invalid target address: %w", err)

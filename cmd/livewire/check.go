@@ -71,6 +71,8 @@ func cmdCheck(args []string) error {
 	if err != nil {
 		return err
 	}
+	readiness := assessProtocolReadiness(detectProtocolRoute(recs))
+	printProtocolReadiness(readiness)
 	assessment := assessCapture(recs, engine.ExtractFlows(recs))
 	printPreflight(assessment)
 
@@ -93,7 +95,7 @@ func cmdCheck(args []string) error {
 	}
 
 	if *jsonPath != "" {
-		if err := writeAssessment(*jsonPath, assessment, plan, registry); err != nil {
+		if err := writeAssessment(*jsonPath, assessment, plan, registry, readiness); err != nil {
 			return err
 		}
 		fmt.Printf("Assessment written to %s\n", *jsonPath)
@@ -107,11 +109,12 @@ var checkAliases = aliasSet{}
 
 // writeAssessment persists the machine-readable assessment. Shared by 'check'
 // and the 'analyze' compatibility command so both emit the same document.
-func writeAssessment(path string, assessment preflightReport, plan replay.ReplayPlan, registry *replay.Registry) error {
+func writeAssessment(path string, assessment preflightReport, plan replay.ReplayPlan, registry *replay.Registry, readiness protocolReadiness) error {
 	b, err := json.MarshalIndent(analysisDocument{
 		Preflight:       assessment,
 		Coverage:        plan,
 		AdapterVersions: adapters.VersionsForRegistry(registry),
+		AutomaticRoute:  readiness,
 	}, "", "  ")
 	if err != nil {
 		return err

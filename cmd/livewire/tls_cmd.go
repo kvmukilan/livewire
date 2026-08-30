@@ -16,12 +16,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kvmukilan/livewire/internal/adapters"
+	"github.com/kvmukilan/livewire/internal/dissect"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/tlsreplay"
 )
 
-func cmdTLSReplay(args []string) error {
+func runTLSReplayArgs(args []string) error {
 	fs := flag.NewFlagSet("tls-replay", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "capture containing one TLS session")
@@ -35,6 +35,7 @@ func cmdTLSReplay(args []string) error {
 	strict := fs.Bool("strict", false, "require live plaintext responses to byte-match the capture")
 	timeout := fs.Duration("timeout", 10*time.Second, "fresh connection timeout")
 	reportPath := fs.String("report", "", "output redacted JSON report (default: <capture>.tls.report.json)")
+	requireComplete := fs.Bool("require-complete-capture", false, "refuse to run when any capture lane would be left unreplayed")
 	var variables setFlags
 	fs.Var(&variables, "set", "set an inner-protocol variable (repeatable name=value)")
 	var rulePacks fileFlags
@@ -125,10 +126,15 @@ func cmdTLSReplay(args []string) error {
 	if err := plan.ValidateCoverage(); err != nil {
 		return fmt.Errorf("TLS replay plan coverage: %w", err)
 	}
-	printCoverage(plan)
-	if *reportPath == "" {
-		*reportPath = strings.TrimSuffix(inPath, filepath.Ext(inPath)) + ".tls.report.json"
+	if err := validateReterminationExecution(plan, *requireComplete); err != nil {
+		return fmt.Errorf("TLS replay plan: %w", err)
 	}
+	printCoverage(plan)
+	resolvedReport, err := resolveOutputPath(*reportPath, strings.TrimSuffix(inPath, filepath.Ext(inPath))+".tls.report.json", "-report")
+	if err != nil {
+		return err
+	}
+	*reportPath = resolvedReport
 	digest, err := sha256File(inPath)
 	if err != nil {
 		return fmt.Errorf("capture digest: %w", err)
@@ -179,6 +185,9 @@ func cmdTLSReplay(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	res, runErr := tlsreplay.ReTerminateContext(ctx, tlsreplay.ReTermConfig{Address: target, TLSConfig: tlsCfg, Script: script, Timeout: *timeout, Verify: *strict, Adapter: inner, State: state, VerifyMode: verifyMode})
+	if runErr != nil {
+		runErr = errors.New(redactRunText(runErr.Error(), variables))
+	}
 	if res != nil {
 		report.Outcome.ProtocolVersion = tlsVersionName(res.HandshakeState.Version)
 		report.Outcome.CipherSuite = tls.CipherSuiteName(res.HandshakeState.CipherSuite)
@@ -359,10 +368,6 @@ func copyStringMap(values map[string]string) map[string]string {
 }
 
 func isTLSSession(s *replay.Session) bool {
-	for _, e := range s.Events {
-		if e.Direction == replay.ClientToServer && len(e.Payload) > 0 {
-			return adapters.TLS{}.Detect(*s) > 0
-		}
-	}
-	return false
+	client, _, err := replay.TCPPayloadStreams(s)
+	return err == nil && dissect.DetectTLS(client).IsTLS
 }

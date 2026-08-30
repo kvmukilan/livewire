@@ -44,7 +44,7 @@ func cmdReproduce(args []string) error {
 	fs.StringVar(&on, "on", "", "alias for -i")
 	fs.StringVar(&on, "iface", "", "alias for -i")
 	var to string
-	fs.StringVar(&to, flagTarget, "", "your device's IP address (asks if not given)")
+	fs.StringVar(&to, flagTarget, "", "device IP or fresh secure target host:port (asks if not given)")
 	fs.StringVar(&to, "to", "", "alias for -t")
 	fs.StringVar(&to, "target", "", "alias for -t")
 	var times int
@@ -57,7 +57,8 @@ func cmdReproduce(args []string) error {
 	gap := fs.Duration("gap", time.Second, "settle time between attempts when -n is more than 1")
 	stopWhenDifferent := fs.Bool("stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
 	profileName := fs.String("profile", "functional", "replay fidelity: functional | timing | transport | wire")
-	strict := fs.Bool("strict", false, "stop at the first difference from the recording")
+	strict := fs.Bool("strict", false, "abort a session at the first structural difference from the recording")
+	wireMode := fs.Bool("wire", false, "explicitly inject captured frames without session adaptation or response verification")
 	reportPath := fs.String("report", "", "where to save the shareable report (default: <capture>.report.json)")
 	actualPath := fs.String("actual-out", "", "where to save actual replay traffic (default: <capture>.actual.pcap)")
 	noGuard := fs.Bool("no-rst-guard", false, "advanced: don't suppress the host's RST (usually leave this off)")
@@ -66,6 +67,19 @@ func cmdReproduce(args []string) error {
 	fs.Var(&variables, "set", "set a run variable (repeatable name=value; secret names are redacted from reports)")
 	var rulePacks fileFlags
 	fs.Var(&rulePacks, "rules", "JSON adapter rule pack (repeatable)")
+	keylogPath := fs.String("keylog", "", "matching NSS key log for TLS/FTPS (never auto-consumed or logged)")
+	serverName := fs.String("server-name", "", "TLS certificate DNS name (default: target host)")
+	caPath := fs.String("ca", "", "optional PEM CA bundle for TLS/FTPS verification")
+	insecure := fs.Bool("insecure-skip-verify", false, "explicitly disable TLS certificate verification (lab only)")
+	secureTimeout := fs.Duration("timeout", 30*time.Second, "fresh TLS, FTPS, or SSH connection timeout")
+	sshUser := fs.String("user", "", "SSH username")
+	sshPass := fs.String("pass", "", "SSH password (or use -key; never written to reports)")
+	sshKey := fs.String("key", "", "SSH private-key file (alternative to -pass)")
+	sshHostKey := fs.String("host-key", "", "pinned OpenSSH public host-key file (required in unified mode)")
+	var sshCommands multiFlag
+	var sshExpects multiFlag
+	fs.Var(&sshCommands, "cmd", "explicit SSH command to run (repeatable)")
+	fs.Var(&sshExpects, "expect", "expected SSH output substring, one per -cmd")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage: livewire reproduce <capture.pcap> [options]")
@@ -75,7 +89,7 @@ func cmdReproduce(args []string) error {
 		fmt.Println("\nIf the issue comes and goes, add -n 5 to replay five times and see how")
 		fmt.Println("often it happens. If it's timing-related add -under-load; for a low-level")
 		fmt.Println("TCP issue add -exact-tcp. You normally don't need anything else.")
-		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", flagDetails)
+		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", "wire", flagDetails)
 	}
 	pcapPath, err := parseCaptureArgs(fs, args, &pcapFlag)
 	if err != nil {
@@ -103,6 +117,18 @@ func cmdReproduce(args []string) error {
 
 	recs, _, err := loadRecords(pcapPath)
 	if err != nil {
+		return err
+	}
+	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
+		capture: pcapPath, iface: on, target: to,
+		keylog: *keylogPath, serverName: *serverName, ca: *caPath,
+		insecure: *insecure, strict: *strict, wire: *wireMode,
+		user: *sshUser, password: *sshPass, privateKey: *sshKey, hostKey: *sshHostKey,
+		commands: sshCommands, expects: sshExpects, timeout: *secureTimeout,
+		report: *reportPath, times: times, gap: *gap, stopWhenDifferent: *stopWhenDifferent,
+		variables: variables, rulePacks: rulePacks,
+	})
+	if handled {
 		return err
 	}
 	flows := engine.ExtractFlows(recs)
@@ -139,6 +165,13 @@ func cmdReproduce(args []string) error {
 	if len(plan.Entries) == 0 {
 		return fmt.Errorf("capture %s has no packets", pcapPath)
 	}
+	if !strings.EqualFold(selectedProfile, "wire") {
+		for _, entry := range plan.Entries {
+			if entry.Mode == replay.ModeWire {
+				return fmt.Errorf("%s contains traffic that has no safe stateful driver; no packets were sent. Inspect it with 'livewire check %s -details', or explicitly choose raw injection with --wire -i <connection>", filepath.Base(pcapPath), pcapPath)
+			}
+		}
+	}
 	fmt.Printf("Loaded %s: %d session(s), %d raw frame(s).\n", filepath.Base(pcapPath), len(trace.Sessions), len(trace.Raw))
 	if *details {
 		printCoverage(plan)
@@ -148,6 +181,21 @@ func cmdReproduce(args []string) error {
 		for _, b := range blockers {
 			fmt.Printf("  - %s\n", b)
 		}
+		if !planHasExecutableEntry(plan) {
+			return fmt.Errorf("the capture has no safely executable session; no packets were sent")
+		}
+	}
+	base := strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath))
+	out, err := resolveOutputPath(*reportPath, base+".report.json", "-report")
+	if err != nil {
+		return err
+	}
+	actual, err := resolveOutputPath(*actualPath, base+".actual.pcap", "-actual-out")
+	if err != nil {
+		return err
+	}
+	if sameOutputPath(out, actual) {
+		return fmt.Errorf("-report and -actual-out must name different files")
 	}
 
 	// 1) Which device? (its IP; the port comes from the capture)
@@ -233,7 +281,7 @@ func cmdReproduce(args []string) error {
 		}
 
 		results := executeReplayPlan(executePlanConfig{
-			Context: ctx, Trace: trace, Plan: plan, Records: recs, Registry: registry,
+			Context: ctx, Trace: trace, Plan: plan, Registry: registry,
 			Flows: flows, Iface: iface, TargetIP: deviceIP, Variables: variables, Live: att, Log: logf,
 		})
 
@@ -273,14 +321,6 @@ func cmdReproduce(args []string) error {
 		rep.recordIterations(summary)
 	}
 
-	out := *reportPath
-	if out == "" {
-		out = strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath)) + ".report.json"
-	}
-	actual := *actualPath
-	if actual == "" {
-		actual = strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath)) + ".actual.pcap"
-	}
 	var artifactErrs []error
 	if len(actualFrames) > 0 {
 		if aerr := writeFrames(actual, actualFrames, true); aerr != nil {
@@ -302,8 +342,8 @@ func cmdReproduce(args []string) error {
 		fmt.Print(summary.Plain())
 	} else {
 		s := summary.Sessions
-		fmt.Printf("\nSummary: %d same as recording, %d different, %d wire-only, %d did not complete.\n",
-			s.Same, s.Different, s.WireOnly, s.Incomplete)
+		fmt.Printf("\nSummary: %d same as recording, %d different, %d unverified, %d wire-only, %d did not complete.\n",
+			s.Same, s.Different, s.Unverified, s.WireOnly, s.Incomplete)
 	}
 
 	// If the run didn't reproduce the issue, suggest the opt-in tuning.
@@ -343,7 +383,7 @@ func sessionVerdict(result plannedResult, variables map[string]string) (iterate.
 	completed, matched := result.Transport.Completed, result.Transport.Matched
 	if result.Entry.Transport == replay.TransportTCP && result.Entry.Mode == replay.ModeStateful {
 		completed, matched = result.TCP.Outcome.Succeeded(), result.TCP.Matched
-		v := iterate.Classify(completed, matched, false)
+		v := iterate.ClassifyVerified(completed, result.TCP.Verified, matched, false)
 		switch v {
 		case iterate.Incomplete:
 			return v, redactRunText(plainReason(result.TCP.Outcome), variables)
@@ -358,7 +398,7 @@ func sessionVerdict(result plannedResult, variables map[string]string) (iterate.
 		for _, transfer := range result.FTP.Transfers {
 			matched = matched && transfer.Matched
 		}
-		v := iterate.Classify(result.FTP.Completed, matched, false)
+		v := iterate.ClassifyVerified(result.FTP.Completed, result.FTP.Verified, matched, false)
 		if v == iterate.Different && len(result.FTP.Differences) > 0 {
 			d := result.FTP.Differences[0]
 			return v, redactRunText(fmt.Sprintf("%s: expected %s, got %s", d.Field, d.Expected, d.Actual), variables)
@@ -368,7 +408,7 @@ func sessionVerdict(result plannedResult, variables map[string]string) (iterate.
 		}
 		return v, ""
 	}
-	v := iterate.Classify(completed, matched, false)
+	v := iterate.ClassifyVerified(completed, result.Transport.Verified, matched, false)
 	if v == iterate.Different && len(result.Transport.Differences) > 0 {
 		d := result.Transport.Differences[0]
 		return v, redactRunText(fmt.Sprintf("%s: expected %s, got %s", d.Field, d.Expected, d.Actual), variables)
@@ -412,8 +452,9 @@ func printSessionResult(result plannedResult, variables map[string]string) {
 		for _, transfer := range result.FTP.Transfers {
 			matched = matched && transfer.Matched
 		}
-		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v commands=%d replies=%d transfers=%d\n--------------------------------\n",
-			label, result.FTP.Completed, matched, result.FTP.Commands, result.FTP.Replies, len(result.FTP.Transfers))
+		matched = result.FTP.Verified && matched
+		fmt.Printf("\n---- %s ----\nRESULT: completed=%v verified=%v matched=%v commands=%d replies=%d transfers=%d\n--------------------------------\n",
+			label, result.FTP.Completed, result.FTP.Verified, matched, result.FTP.Commands, result.FTP.Replies, len(result.FTP.Transfers))
 	default:
 		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v sent=%d received=%d\n--------------------------------\n",
 			label, result.Transport.Completed, result.Transport.Matched, result.Transport.Sent, result.Transport.Received)
@@ -435,6 +476,15 @@ func planBlockers(plan replay.ReplayPlan) []string {
 		}
 	}
 	return out
+}
+
+func planHasExecutableEntry(plan replay.ReplayPlan) bool {
+	for _, entry := range plan.Entries {
+		if entry.Mode != replay.ModeBlocked {
+			return true
+		}
+	}
+	return false
 }
 
 func sha256File(path string) (digest string, retErr error) {

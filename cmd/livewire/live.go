@@ -16,6 +16,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/tui"
+	"golang.org/x/term"
 )
 
 // liveAliases names the flags on 'live' kept only for compatibility.
@@ -26,11 +27,21 @@ var liveAliases = aliasSet{
 
 // isTerminal reports whether f is a TTY, to decide whether to emit ANSI colour.
 func isTerminal(f *os.File) bool {
-	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	return f != nil && term.IsTerminal(int(f.Fd()))
 }
 
+// cmdLive has a positional primary mode and an exact compatibility mode. A
+// positional capture uses the same protocol-aware orchestration as reproduce;
+// the historical `live -in ...` form keeps its original TCP dry-run/on-wire
+// behavior and flags unchanged.
 func cmdLive(args []string) error {
+	if len(args) > 0 && !isFlagArg(args[0]) {
+		return cmdReproduce(args)
+	}
+	return cmdLiveLegacy(args)
+}
+
+func cmdLiveLegacy(args []string) error {
 	fs := flag.NewFlagSet("live", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file (required)")
@@ -67,10 +78,12 @@ func cmdLive(args []string) error {
 	allFlagsOn := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage:")
+		fmt.Println("  primary:  livewire live <capture.pcap> [options]")
 		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-o rewritten.pcap] [-v]")
 		fmt.Println("  on-wire:  livewire live -in <file> -live -i <connection> [-t ip[:port]] [-n 5]")
-		fmt.Println("\nStateful TCP replay. Learns the live peer's ISN and realigns seq/ack per flow.")
-		fmt.Println("Protocol-agnostic (Modbus, DNP3, HTTP, ...): only TCP headers are rewritten.")
+		fmt.Println("\nThe positional form auto-selects plaintext, transport, TLS, FTPS, or SSH handling.")
+		fmt.Println("The -in form is the legacy stateful TCP engine and retains its prior behavior.")
+		fmt.Println("For positional secure/wire options, run: livewire live <capture> -all-flags")
 		printFlags(fs, flagIn, flagLive, flagIface, flagTarget, flagCount, flagOut, "all", "mode", "flow", "report", "v")
 	}
 	if err := fs.Parse(args); err != nil {

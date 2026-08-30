@@ -24,7 +24,7 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return fmt.Sprintf("%d command(s)", len(*m)) }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
-func cmdSSHReplay(args []string) error {
+func runSSHReplayArgs(args []string) error {
 	fs := flag.NewFlagSet("ssh-replay", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "capture containing one SSH session")
@@ -36,6 +36,7 @@ func cmdSSHReplay(args []string) error {
 	keyPath := fs.String("key", "", "path to a PEM private key (alternative to -pass)")
 	hostKeyPath := fs.String("host-key", "", "OpenSSH public host key to pin (recommended)")
 	reportPath := fs.String("report", "", "output redacted JSON report (default: <capture>.ssh.report.json)")
+	requireComplete := fs.Bool("require-complete-capture", false, "refuse to run when any capture lane would be left unreplayed")
 	timeout := fs.Duration("timeout", 15*time.Second, "connection timeout")
 	var cmds multiFlag
 	var expects multiFlag
@@ -70,6 +71,7 @@ func cmdSSHReplay(args []string) error {
 	if len(expects) != 0 && len(expects) != len(cmds) {
 		return fmt.Errorf("when -expect is used, provide exactly one for each -cmd")
 	}
+	expects = multiFlag(normalizeSSHExpects(expects))
 	if (*pass == "") == (*keyPath == "") {
 		return fmt.Errorf("provide exactly one of -pass or -key")
 	}
@@ -95,10 +97,15 @@ func cmdSSHReplay(args []string) error {
 	if err := plan.ValidateCoverage(); err != nil {
 		return fmt.Errorf("SSH replay plan coverage: %w", err)
 	}
-	printCoverage(plan)
-	if *reportPath == "" {
-		*reportPath = strings.TrimSuffix(inPath, filepath.Ext(inPath)) + ".ssh.report.json"
+	if err := validateReterminationExecution(plan, *requireComplete); err != nil {
+		return fmt.Errorf("SSH replay plan: %w", err)
 	}
+	printCoverage(plan)
+	resolvedReport, err := resolveOutputPath(*reportPath, strings.TrimSuffix(inPath, filepath.Ext(inPath))+".ssh.report.json", "-report")
+	if err != nil {
+		return err
+	}
+	*reportPath = resolvedReport
 	digest, err := sha256File(inPath)
 	if err != nil {
 		return fmt.Errorf("capture digest: %w", err)
@@ -154,6 +161,9 @@ func cmdSSHReplay(args []string) error {
 		Address: target, Auth: auth, Commands: commandsList, Timeout: *timeout,
 		Verify: len(expects) > 0, HostKey: pinnedHostKey,
 	})
+	if runErr != nil && *pass != "" {
+		runErr = fmt.Errorf("%s", strings.ReplaceAll(runErr.Error(), *pass, "[REDACTED]"))
+	}
 	if res != nil {
 		report.Outcome.Responses = len(res.Outputs)
 		report.Outcome.Mismatches = res.Mismatches

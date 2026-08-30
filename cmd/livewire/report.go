@@ -82,7 +82,7 @@ func (r *replayReport) recordIterations(s iterate.Summary) {
 	r.Attempts = s.Attempts
 	r.Outcome = &s
 	r.Transformations = append(r.Transformations,
-		"each attempt used a fresh client port and ISN so the device would not treat it as a duplicate connection")
+		"repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections")
 }
 
 type sessionResult struct {
@@ -147,8 +147,8 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 		}
 	} else if p.Entry.Mode == replay.ModeCoordinated && p.Entry.Adapter == "ftp" {
 		sr.Completed = p.FTP.Completed
-		sr.Verified = r.Verify != string(replay.VerifyOff)
-		sr.Matched = p.FTP.Completed && len(p.FTP.Differences) == 0
+		sr.Verified = p.FTP.Verified
+		sr.Matched = p.FTP.Verified && p.FTP.Completed && len(p.FTP.Differences) == 0
 		for _, transfer := range p.FTP.Transfers {
 			sr.Matched = sr.Matched && transfer.Matched
 		}

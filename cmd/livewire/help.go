@@ -32,9 +32,8 @@ const allFlagsName = "all-flags"
 // first-time user has to read.
 type aliasSet map[string]bool
 
-// usageWriter is where command help goes. Commands print their own help to
-// stdout (it is requested output, not an error), while the top-level usage goes
-// to stderr because it doubles as the message for a bad invocation.
+// usageWriter is where command help goes. Requested help always uses stdout so
+// shells such as Windows PowerShell do not present successful help as an error.
 var usageWriter = os.Stdout
 
 // printFlags lists only the named flags, in the order given, and then points at
@@ -68,7 +67,7 @@ func printFlags(fs *flag.FlagSet, visible ...string) {
 		}
 	})
 	if hidden > 0 {
-		fmt.Fprintf(usageWriter, "\n%d more option(s) for advanced use: livewire %s -%s\n", hidden, fs.Name(), allFlagsName)
+		fmt.Fprintf(usageWriter, "\nAdvanced options are available: livewire %s -%s\n", fs.Name(), allFlagsName)
 	}
 }
 

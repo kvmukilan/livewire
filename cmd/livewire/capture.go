@@ -57,6 +57,14 @@ func cmdCapture(args []string) (retErr error) {
 		return fmt.Errorf("-duration must be between 0 and 24h")
 	}
 
+	// Reserve the private temporary artifact before opening the capture backend,
+	// so an existing -o fails without touching the network interface.
+	af, err := orchestration.CreateArtifact(outPath)
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
+
 	snd, err := backend.OpenCapture(iface, *promisc)
 	if err != nil {
 		return err
@@ -68,11 +76,6 @@ func cmdCapture(args []string) (retErr error) {
 		}
 	}()
 
-	af, err := orchestration.CreateArtifact(outPath)
-	if err != nil {
-		return err
-	}
-	defer func() { retErr = errors.Join(retErr, af.Abort()) }()
 	w, err := pcapio.NewWriter(af, snd.LinkType(), true)
 	if err != nil {
 		return err

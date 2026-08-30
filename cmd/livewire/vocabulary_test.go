@@ -26,7 +26,7 @@ var vocabulary = []struct {
 	aliases   []string
 }{
 	{"reproduce",
-		[]string{flagIn, flagIface, flagTarget, flagCount, flagDetails, "gap", "stop-when-different"},
+		[]string{flagIn, flagIface, flagTarget, flagCount, flagDetails, "gap", "stop-when-different", "wire", "keylog", "user", "host-key", "cmd"},
 		[]string{"on", "iface", "to", "target", "times", "iterations"}},
 	{"check", []string{flagIn, flagDetails, "json"}, nil},
 	{"capture", []string{flagIface, flagOut, flagCount}, []string{"iface", "out", "count"}},
@@ -146,10 +146,9 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 	}
 }
 
-// The front door must show exactly the everyday commands. Adding a sixth should
-// be a deliberate decision, so this fails and asks for one.
+// The front door must show exactly the two primary product commands.
 func TestUsageShowsOnlyEverydayCommands(t *testing.T) {
-	want := []string{"reproduce", "check", "capture", "ifaces", "web"}
+	want := []string{"reproduce", "live"}
 	var got []string
 	for _, c := range commands {
 		if c.group == groupEveryday {
@@ -266,17 +265,64 @@ func TestBinarySurface(t *testing.T) {
 	bin := buildBinary(t)
 	pcap := writeHandshakePcap(t, t.TempDir())
 
-	t.Run("no args lists five everyday commands and hides the rest", func(t *testing.T) {
-		out, _ := runBinary(t, bin) // exits 2 by design
-		for _, name := range []string{"reproduce", "check", "capture", "ifaces", "web"} {
+	t.Run("no args opens the unified help hub", func(t *testing.T) {
+		out, err := runBinary(t, bin)
+		if err != nil {
+			t.Fatalf("the help hub should exit successfully: %v\n%s", err, out)
+		}
+		for _, name := range []string{"reproduce", "live"} {
 			if !strings.Contains(out, name) {
 				t.Errorf("front door is missing %q:\n%s", name, out)
 			}
 		}
-		for _, name := range []string{"rstdrop", "rewrite", "lab", "tls-replay"} {
+		for _, name := range []string{"rstdrop", "rewrite", "tls-replay", "livewire check", "livewire capture", "livewire web"} {
 			if strings.Contains(out, name) {
 				t.Errorf("front door should not list the advanced command %q:\n%s", name, out)
 			}
+		}
+		for _, topic := range []string{"help examples", "help troubleshoot", "help protocols", "help diagnose", "help commands", "help <command>"} {
+			if !strings.Contains(out, topic) {
+				t.Errorf("help hub is missing topic %q:\n%s", topic, out)
+			}
+		}
+	})
+
+	t.Run("successful top-level help uses stdout only", func(t *testing.T) {
+		stdout, stderr, err := runBinaryStreams(t, bin, "help")
+		if err != nil {
+			t.Fatalf("help failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+		}
+		if stderr != "" {
+			t.Errorf("successful help must not look like a PowerShell error; stderr was:\n%s", stderr)
+		}
+		if !strings.Contains(stdout, "Two commands cover the normal workflow:") {
+			t.Errorf("stdout did not contain the help hub:\n%s", stdout)
+		}
+	})
+
+	t.Run("unified help topics give workflows and recovery", func(t *testing.T) {
+		cases := []struct {
+			topic string
+			want  []string
+		}{
+			{topic: "examples", want: []string{"-n 5", "-keylog", "--wire"}},
+			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
+			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "--wire"}},
+			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
+			{topic: "commands", want: []string{"Primary commands:", "Advanced commands:", "tls-replay"}},
+		}
+		for _, tc := range cases {
+			t.Run(tc.topic, func(t *testing.T) {
+				out, err := runBinary(t, bin, "help", tc.topic)
+				if err != nil {
+					t.Fatalf("help %s failed: %v\n%s", tc.topic, err, out)
+				}
+				for _, want := range tc.want {
+					if !strings.Contains(out, want) {
+						t.Errorf("help %s is missing %q:\n%s", tc.topic, want, out)
+					}
+				}
+			})
 		}
 	})
 
@@ -375,20 +421,34 @@ func TestBinarySurface(t *testing.T) {
 	})
 
 	t.Run("asking for help is not a failure", func(t *testing.T) {
-		for _, args := range [][]string{{"reproduce", "-h"}, {"help", "reproduce"}, {"help"}, {"help", "--all"}} {
+		for _, args := range [][]string{{"reproduce", "-h"}, {"help", "reproduce"}, {"help"}, {"help", "examples"}, {"help", "troubleshoot"}, {"help", "protocols"}, {"help", "diagnose"}, {"help", "commands"}, {"help", "--all"}} {
 			if out, err := runBinary(t, bin, args...); err != nil {
 				t.Errorf("%v should exit 0, got %v:\n%s", args, err, out)
 			}
 		}
 	})
 
-	t.Run("help names an unknown command instead of guessing", func(t *testing.T) {
+	t.Run("help names an unknown topic and points back to the hub", func(t *testing.T) {
 		out, err := runBinary(t, bin, "help", "nonsense")
 		if err == nil {
 			t.Errorf("help for an unknown command should fail:\n%s", out)
 		}
 		if !strings.Contains(out, "nonsense") {
 			t.Errorf("the error should name what was not found:\n%s", out)
+		}
+		if !strings.Contains(out, "livewire help") {
+			t.Errorf("the error should point back to the unified hub:\n%s", out)
+		}
+	})
+
+	t.Run("command and help typos get a useful suggestion", func(t *testing.T) {
+		out, err := runBinary(t, bin, "reprodce")
+		if err == nil || !strings.Contains(out, "livewire reproduce") {
+			t.Errorf("command typo should suggest reproduce; err=%v\n%s", err, out)
+		}
+		out, err = runBinary(t, bin, "help", "reprodce")
+		if err == nil || !strings.Contains(out, "livewire help reproduce") {
+			t.Errorf("help typo should suggest help reproduce; err=%v\n%s", err, out)
 		}
 	})
 
@@ -460,4 +520,14 @@ func runBinary(t *testing.T, bin string, args ...string) (string, error) {
 	t.Helper()
 	out, err := exec.Command(bin, args...).CombinedOutput()
 	return string(out), err
+}
+
+func runBinaryStreams(t *testing.T, bin string, args ...string) (stdout, stderr string, err error) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	var stdoutBuffer, stderrBuffer bytes.Buffer
+	cmd.Stdout = &stdoutBuffer
+	cmd.Stderr = &stderrBuffer
+	err = cmd.Run()
+	return stdoutBuffer.String(), stderrBuffer.String(), err
 }

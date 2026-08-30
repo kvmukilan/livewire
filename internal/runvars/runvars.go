@@ -23,6 +23,9 @@ func ParseAssignment(s string) (string, string, error) {
 
 func IsSecret(name string) bool {
 	n := strings.ToLower(name)
+	// MQTT usernames are often account identifiers and HTTP bodies commonly
+	// carry credentials, tokens, or personal data. Treat both as sensitive even
+	// though their names do not contain one of the generic markers below.
 	if n == "mqtt.username" || n == "http.body" {
 		return true
 	}

@@ -6,14 +6,83 @@ on:
       - "v*"
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
+  compatibility:
+    name: Release compatibility - Go ${{ matrix.go }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ["1.25.14", "1.26.7", "1.27.x"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          check-latest: true
+          cache: true
+      - run: go mod verify
+      - run: go test -count=1 ./...
+      - run: go vet ./...
+
+  quality:
+    name: Release security, race, fuzz, and coverage gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.7"
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
+      - run: go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 -severity high -confidence high -exclude-generated ./...
+      - name: Race, shuffle, and repeat
+        run: |
+          go test -race -count=1 ./...
+          go test -shuffle=on -count=3 ./...
+          go test -shuffle=on -count=20 ./internal/webui
+      - name: Fuzz smoke
+        run: |
+          go test ./internal/adapters -run='^$' -fuzz=FuzzBuiltInDecoders -fuzztime=5s -parallel=1
+          go test ./internal/adapters -run='^$' -fuzz=FuzzRulePackCompiler -fuzztime=5s -parallel=1
+          go test ./internal/lab -run='^$' -fuzz=FuzzScenarioParsing -fuzztime=5s -parallel=1
+          go test ./internal/tlsreplay -run='^$' -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=5s -parallel=1
+          go test ./internal/replay -run='^$' -fuzz=FuzzTraceExtractionCoverage -fuzztime=5s -parallel=1
+          go test ./internal/ipreasm -run='^$' -fuzz=FuzzIPv6FragmentReassembly -fuzztime=5s -parallel=1
+          go test ./internal/ipreasm -run='^$' -fuzz=FuzzMalformedFragmentFrames -fuzztime=5s -parallel=1
+      - name: Coverage floors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p coverage
+          go test -coverprofile=coverage/aggregate.out ./...
+          go test -coverprofile=coverage/pcapio.out ./internal/pcapio
+          go test -coverprofile=coverage/webui.out ./internal/webui
+          go test -coverprofile=coverage/cmd.out ./cmd/livewire
+          go test -coverprofile=coverage/backend.out ./internal/backend
+          check_floor() {
+            local profile="$1" floor="$2" label="$3" actual
+            actual="$(go tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
+            printf '%s coverage: %s%% (required %s%%)\n' "$label" "$actual" "$floor"
+            awk -v actual="$actual" -v floor="$floor" 'BEGIN { exit !(actual + 0 >= floor + 0) }'
+          }
+          check_floor coverage/aggregate.out 60 aggregate
+          check_floor coverage/pcapio.out 85 pcapio
+          check_floor coverage/webui.out 60 webui
+          check_floor coverage/cmd.out 30 cmd/livewire
+          check_floor coverage/backend.out 20 backend
+
   release:
     name: Verify and publish release
     runs-on: windows-latest
+    needs: [compatibility, quality]
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,7 +150,7 @@ jobs:
           & "$zipDir/livewire.exe" version
           if ($LASTEXITCODE -ne 0) { throw "Windows ZIP smoke test failed" }
 
-      - name: Extract v0.7.0 release notes
+      - name: Extract release notes
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"

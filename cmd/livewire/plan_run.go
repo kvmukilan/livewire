@@ -2,35 +2,21 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/netip"
-	"time"
 
-	"github.com/kvmukilan/livewire/internal/adapters"
-	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
-	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/livereplay"
-	"github.com/kvmukilan/livewire/internal/orchestration"
-	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/planexec"
 	"github.com/kvmukilan/livewire/internal/replay"
 )
 
-type plannedResult struct {
-	Entry     replay.PlanEntry
-	Session   *replay.Session
-	Transport replay.TransportResult
-	TCP       livereplay.Result
-	FTP       ftpreplay.Result
-	Err       error
-}
+type plannedResult = planexec.Result
 
 type executePlanConfig struct {
 	Context   context.Context
 	Trace     *replay.Trace
 	Plan      replay.ReplayPlan
-	Records   []*pcapio.Record
 	Registry  *replay.Registry
 	Flows     []*engine.Flow
 	Iface     string
@@ -41,171 +27,21 @@ type executePlanConfig struct {
 }
 
 func executeReplayPlan(cfg executePlanConfig) []plannedResult {
-	if cfg.Context == nil {
-		cfg.Context = context.Background()
+	logf := cfg.Log
+	if logf == nil {
+		logf = func(int, string) {}
 	}
-	if cfg.Registry == nil {
-		cfg.Registry = adapters.DefaultRegistry()
-	}
-	if cfg.Log == nil {
-		cfg.Log = func(int, string) {}
-	}
-	return orchestration.ExecutePlan(cfg.Context, cfg.Trace, cfg.Plan, func(_ context.Context, _ int, entry replay.PlanEntry, session *replay.Session, started time.Time) plannedResult {
-		return runPlanEntry(cfg, entry, session, started)
+	return planexec.Execute(planexec.Config{
+		Context: cfg.Context, Trace: cfg.Trace, Plan: cfg.Plan, Registry: cfg.Registry,
+		Flows: cfg.Flows, Iface: cfg.Iface, TargetIP: cfg.TargetIP, Variables: cfg.Variables,
+		Verify: replay.VerifyMode(cfg.Live.verify.String()),
+		TCPConfig: func(flow *engine.Flow, session *replay.Session) livereplay.Config {
+			return cfg.Live.config(flow, cfg.TargetIP, session.Server.Port)
+		},
+		Progress: func(entry replay.PlanEntry, _ string, message string) {
+			logf(planLogIndex(entry), message)
+		},
 	})
-}
-
-func runPlanEntry(cfg executePlanConfig, entry replay.PlanEntry, s *replay.Session, started time.Time) plannedResult {
-	r := plannedResult{Entry: entry, Session: s}
-	if entry.Mode == replay.ModeBlocked {
-		r.Err = errors.New(entry.Blockers[0])
-		r.Transport = replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeBlocked, Fidelity: replay.FidelityBlocked, Error: r.Err.Error()}
-		return r
-	}
-	if entry.Mode == replay.ModeWire {
-		events := cfg.Trace.Raw
-		if s != nil {
-			events = s.Events
-		}
-		r.Transport, r.Err = runWireEvents(cfg.Context, cfg.Iface, entry, events, started, cfg.Log)
-		return r
-	}
-	if s == nil {
-		r.Err = fmt.Errorf("session %s is missing from trace", entry.SessionID)
-		return r
-	}
-	if s.Server.IP.Is4() != cfg.TargetIP.Is4() {
-		r.Err = fmt.Errorf("session uses %s but target %s has a different address family", s.Server.IP, cfg.TargetIP)
-		return r
-	}
-	if entry.Mode == replay.ModeCoordinated && entry.Adapter == "ftp" {
-		script, err := ftpreplay.BuildScript(s, nil)
-		if err != nil {
-			r.Err = err
-			return r
-		}
-		byID := map[string]*replay.Session{}
-		for _, session := range cfg.Trace.Sessions {
-			byID[session.ID] = session
-		}
-		data := make([]*replay.Session, 0, len(entry.RelatedSessionIDs))
-		for _, id := range entry.RelatedSessionIDs {
-			if related := byID[id]; related != nil {
-				data = append(data, related)
-			}
-		}
-		address := netip.AddrPortFrom(cfg.TargetIP, s.Server.Port).String()
-		r.FTP, r.Err = ftpreplay.RunContext(cfg.Context, ftpreplay.Config{
-			Control: s, Data: data, Address: address, Script: script,
-			Variables: cfg.Variables, Timeout: 30 * time.Second,
-			Verify:   replay.VerifyMode(cfg.Live.verify.String()),
-			Progress: func(line string) { cfg.Log(planLogIndex(entry), line) },
-		})
-		return r
-	}
-	verify := replay.VerifyMode(cfg.Live.verify.String())
-	if entry.Mode == replay.ModeSemantic && s.Transport == replay.TransportTCP {
-		a := cfg.Registry.ByName(entry.Adapter)
-		r.Transport, r.Err = replay.RunTCPSemanticContext(cfg.Context, replay.TCPSemanticConfig{
-			Session: s, TargetIP: cfg.TargetIP, TargetPort: s.Server.Port, Adapter: a,
-			Profile: cfg.Plan.Profile, Verify: verify, Variables: cfg.Variables, Start: started,
-			Progress: func(p replay.ProgressEvent) { cfg.Log(planLogIndex(entry), p.Message) },
-		})
-		return r
-	}
-	if s.Transport == replay.TransportUDP || s.Transport == replay.TransportICMP4 || s.Transport == replay.TransportICMP6 {
-		var a replay.Adapter
-		if entry.Adapter != "" {
-			a = cfg.Registry.ByName(entry.Adapter)
-		}
-		r.Transport, r.Err = replay.RunTransportContext(cfg.Context, replay.TransportRunConfig{
-			Session: s, Iface: cfg.Iface, TargetIP: cfg.TargetIP, TargetPort: s.Server.Port,
-			Profile: cfg.Plan.Profile, Verify: verify, Adapter: a, Variables: cfg.Variables, Start: started,
-			Progress: func(p replay.ProgressEvent) { cfg.Log(planLogIndex(entry), p.Message) },
-		})
-		return r
-	}
-	if s.Transport != replay.TransportTCP {
-		r.Err = fmt.Errorf("no runner for %s in %s mode", s.Transport, entry.Mode)
-		return r
-	}
-	f := findEngineFlow(cfg.Flows, s)
-	if f == nil {
-		r.Err = fmt.Errorf("TCP engine flow for %s was not found", s.ID)
-		return r
-	}
-	conf := cfg.Live.config(f, cfg.TargetIP, s.Server.Port)
-	conf.Pace = cfg.Plan.Profile == replay.ProfileTiming || cfg.Plan.Profile == replay.ProfileTransport
-	conf.RawL4 = cfg.Plan.Profile == replay.ProfileTransport
-	if conf.Pace && !waitPlanOffset(cfg.Context, started, sessionOffset(s)) {
-		r.Err = cfg.Context.Err()
-		return r
-	}
-	r.TCP, r.Err = livereplay.RunContext(cfg.Context, conf, func(line string) { cfg.Log(planLogIndex(entry), line) })
-	return r
-}
-
-func runWireEvents(ctx context.Context, iface string, entry replay.PlanEntry, events []replay.Event, started time.Time, logf func(int, string)) (res replay.TransportResult, retErr error) {
-	res = replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeWire, Fidelity: replay.FidelityWire, Verified: false, Matched: false}
-	b, err := backend.OpenSender(iface)
-	if err != nil {
-		res.Error = err.Error()
-		return res, err
-	}
-	defer func() {
-		if err := b.Close(); err != nil {
-			retErr = errors.Join(retErr, fmt.Errorf("close wire backend: %w", err))
-			res.Completed = false
-			res.Error = retErr.Error()
-		}
-	}()
-	for _, e := range events {
-		if !waitPlanOffset(ctx, started, e.At) {
-			res.Error = "cancelled"
-			return res, ctx.Err()
-		}
-		if err := b.Send(e.Record.Data); err != nil {
-			res.Error = err.Error()
-			return res, err
-		}
-		frame := append([]byte(nil), e.Record.Data...)
-		res.Evidence = append(res.Evidence, pcapio.Record{Time: b.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: b.LinkType()})
-		res.Sent++
-	}
-	res.Completed = true
-	logf(planLogIndex(entry), fmt.Sprintf("wire replay sent %d frame(s); no live adaptation claimed", res.Sent))
-	return res, nil
-}
-
-func findEngineFlow(flows []*engine.Flow, s *replay.Session) *engine.Flow {
-	for _, f := range flows {
-		if f.Client.Addr == s.Client.IP && f.Client.Port == s.Client.Port && f.Server.Addr == s.Server.IP && f.Server.Port == s.Server.Port {
-			return f
-		}
-	}
-	return nil
-}
-
-func sessionOffset(s *replay.Session) time.Duration {
-	if len(s.Events) == 0 {
-		return 0
-	}
-	return s.Events[0].At
-}
-
-func waitPlanOffset(ctx context.Context, started time.Time, offset time.Duration) bool {
-	d := time.Until(started.Add(offset))
-	if d <= 0 {
-		return ctx.Err() == nil
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return false
-	case <-t.C:
-		return true
-	}
 }
 
 func planLogIndex(entry replay.PlanEntry) int {

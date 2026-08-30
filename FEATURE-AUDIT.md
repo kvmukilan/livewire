@@ -1,8 +1,8 @@
 # Livewire Feature Audit (historical v0.5.0 review)
 
 > Historical record: this document describes the v0.5.0 command surface and
-> its follow-up cleanup. For the current v0.7.0 security, FTP/FTPS, CI, and
-> release disposition, see `RELEASE_AUDIT.md`; code pointers below are not a
+> its follow-up cleanup. For the current v0.8.0 security, replay orchestration,
+> FTP/FTPS, CI, and release disposition, see `RELEASE_AUDIT.md`; code pointers below are not a
 > current inventory.
 
 **Scope:** every user-facing command in `cmd/livewire/` and every package under
@@ -134,8 +134,7 @@ implemented")` markers exist anywhere in `internal/`.
 
 ## 4. Improvement plan (ranked by peer-impact ÷ effort)
 
-Items marked **[done]** were implemented in this pass (see §5); the rest are
-recommendations.
+Items marked **[done]** were implemented in this pass or its v0.8.0 follow-up.
 
 1. **[done] Group the no-argument `usage()` output** (main.go). A peer who runs
    `livewire` sees 17 commands in a flat list mixing `reproduce` with
@@ -175,7 +174,7 @@ recommendations.
    / `--profile transport`. Two names for one concept. Pick the plain-language
    aliases in the peer docs. *(A docs-only edit; safe to make now.)*
 
-8. **[recommend] De-duplicate `webui.runWebEntry` vs `runPlanEntry`.**
+8. **[done] De-duplicate `webui.runWebEntry` vs `runPlanEntry`.**
    `webui/runs.go:196` re-implements the exact Blocked→Wire→Semantic→UDP/ICMP→
    stateful dispatch tree of `cmd/livewire/plan_run.go:81`, with twin
    `findWebFlow`/`waitWeb` helpers. Two copies that must stay in sync — a latent
@@ -187,12 +186,12 @@ recommendations.
    automatically. It is now in the advanced group, off the front door entirely,
    and its `-h` text says so in three lines.
 
-10. **[recommend] Comment the surprising secret rules.** `runvars.IsSecret`
+10. **[done] Comment the surprising secret rules.** `runvars.IsSecret`
     (runvars.go:26) hard-codes `mqtt.username` and `http.body` as secrets with
     no explanation — a maintainer will wonder why a username is redacted. One
     comment line.
 
-11. **[recommend] Single-source the version.** Even after item 3, `bundle`'s
+11. **[done] Single-source the version.** Even after item 3, `bundle`'s
     `Version` and webui share a literal-ish version. Consider one exported
     `const Version` in a tiny `internal/build` package imported by both
     `cmd/livewire` and `internal/webui`, so a release bump touches one line.
@@ -283,9 +282,9 @@ it calls `timing` and `transport`.
 - The dashboard's artifact timestamps went to millisecond resolution, since two
   attempts finishing in the same second would previously collide on filename.
 
-### Still open
+### v0.8.0 follow-up completed
 
-Items 8, 10, and 11 remain recommendations. Item 8 (the `runWebEntry` /
-`runPlanEntry` duplication) is a pre-existing refactor that `internal/iterate`
-deliberately routes around rather than tackling; items 10 and 11 are unrelated
-one-liners left for a pass that is looking at those files.
+Items 8, 10, and 11 are now closed. CLI and dashboard dispatch share
+`internal/planexec`; the secret-classification rules explain why MQTT usernames
+and HTTP bodies are protected; and `internal/buildinfo.Version` is the single
+release-version source used by CLI, dashboard, reports, and bundles.

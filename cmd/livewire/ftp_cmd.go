@@ -23,7 +23,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/tlsreplay"
 )
 
-func cmdFTPReplay(args []string) error {
+func runFTPReplayArgs(args []string) error {
 	fs := flag.NewFlagSet("ftp-replay", flag.ContinueOnError)
 	var inPath, target string
 	fs.StringVar(&inPath, flagIn, "", "capture containing one FTP or FTPS control session")
@@ -36,6 +36,7 @@ func cmdFTPReplay(args []string) error {
 	verifyText := fs.String("verify", "lenient", "response verification: off, lenient, or strict")
 	timeout := fs.Duration("timeout", 30*time.Second, "control and data operation timeout")
 	reportPath := fs.String("report", "", "output redacted JSON report (default: <capture>.ftp.report.json)")
+	requireComplete := fs.Bool("require-complete-capture", false, "refuse to run when any capture lane would be left unreplayed")
 	var variables setFlags
 	fs.Var(&variables, "set", "set an FTP variable such as ftp.user, ftp.password, ftp.account, or ftp.advertise-ip")
 	allFlags := registerAllFlags(fs)
@@ -97,6 +98,9 @@ func cmdFTPReplay(args []string) error {
 	if err := plan.ValidateCoverage(); err != nil {
 		return fmt.Errorf("FTP replay plan coverage: %w", err)
 	}
+	if err := validateReterminationExecution(plan, *requireComplete); err != nil {
+		return fmt.Errorf("FTP replay plan: %w", err)
+	}
 	printCoverage(plan)
 
 	var tlsConfig *tls.Config
@@ -106,9 +110,11 @@ func cmdFTPReplay(args []string) error {
 			return err
 		}
 	}
-	if *reportPath == "" {
-		*reportPath = strings.TrimSuffix(inPath, filepath.Ext(inPath)) + ".ftp.report.json"
+	resolvedReport, err := resolveOutputPath(*reportPath, strings.TrimSuffix(inPath, filepath.Ext(inPath))+".ftp.report.json", "-report")
+	if err != nil {
+		return err
 	}
+	*reportPath = resolvedReport
 	digest, err := sha256File(inPath)
 	if err != nil {
 		return err
@@ -133,9 +139,12 @@ func cmdFTPReplay(args []string) error {
 		Variables: variables, TLSConfig: tlsConfig, Timeout: *timeout, Verify: verify,
 		Progress: func(line string) { fmt.Println("  " + redactRunText(line, variables)) },
 	})
+	if runErr != nil {
+		runErr = errors.New(redactRunText(runErr.Error(), variables))
+	}
 	report.Outcome.Completed = result.Completed
-	report.Outcome.Verified = verify != replay.VerifyOff
-	report.Outcome.Matched = ftpResultMatched(result)
+	report.Outcome.Verified = result.Verified
+	report.Outcome.Matched = result.Verified && ftpResultMatched(result)
 	report.Outcome.Adapter = "ftp"
 	report.Outcome.ProtocolVersion = ftpProtocolVersion(script)
 	report.Outcome.PeerIdentityChecked = result.TLS && !*insecure

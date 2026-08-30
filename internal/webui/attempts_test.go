@@ -54,15 +54,16 @@ func TestAdaptiveRunValidatesAttempts(t *testing.T) {
 }
 
 // The dashboard and the CLI must agree on what a result means, which is why both
-// route through iterate.Classify rather than each deciding for itself.
+// route through iterate.ClassifyVerified rather than each deciding for itself.
 func TestWebSessionResultVerdict(t *testing.T) {
 	cases := []struct {
 		name string
 		res  webSessionResult
 		want iterate.Verdict
 	}{
-		{"completed and matched", webSessionResult{Completed: true, Matched: true}, iterate.Same},
-		{"completed but different", webSessionResult{Completed: true}, iterate.Different},
+		{"completed and matched", webSessionResult{Completed: true, Verified: true, Matched: true}, iterate.Same},
+		{"completed but different", webSessionResult{Completed: true, Verified: true}, iterate.Different},
+		{"completed but not compared", webSessionResult{Completed: true}, iterate.Unverified},
 		{"did not complete", webSessionResult{}, iterate.Incomplete},
 		{"an error outranks the flags", webSessionResult{Completed: true, Matched: true, Error: "boom"}, iterate.Incomplete},
 		{"wire mode claims nothing", webSessionResult{Completed: true, Matched: true, Entry: replay.PlanEntry{Mode: replay.ModeWire}}, iterate.WireOnly},

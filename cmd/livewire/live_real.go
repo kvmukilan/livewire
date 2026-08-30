@@ -140,7 +140,7 @@ func liveOnePass(flows []*engine.Flow, flowSel int, o liveOpts, rep *replayRepor
 	}
 	printVerdict("", res)
 	rep.add(0, f, target, "stateful", res, nil)
-	tally.Add(iterate.Classify(res.Outcome.Succeeded(), res.Matched, false))
+	tally.Add(iterate.ClassifyVerified(res.Outcome.Succeeded(), res.Verified, res.Matched, false))
 	if !res.Outcome.Succeeded() {
 		return tally, fmt.Errorf("replay ended in phase %s: %s", res.Outcome.Phase, res.Outcome.Reason)
 	}
@@ -281,7 +281,7 @@ func liveAllPass(flows []*engine.Flow, o liveOpts, rep *replayReport) (iterate.T
 		switch r.mode {
 		case "stateful":
 			stateful++
-			tally.Add(iterate.Classify(r.res.Outcome.Succeeded(), r.res.Matched, false))
+			tally.Add(iterate.ClassifyVerified(r.res.Outcome.Succeeded(), r.res.Verified, r.res.Matched, false))
 			if r.res.Outcome.Succeeded() {
 				ok++
 			} else {

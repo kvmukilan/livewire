@@ -28,6 +28,9 @@ const (
 	// WireOnly means frames were sent at captured timing without any claim of
 	// live adaptation or response equivalence.
 	WireOnly
+	// Unverified means a stateful exchange completed but comparison was disabled
+	// or impossible. It must not be mislabeled as a different response.
+	Unverified
 	// Incomplete means the exchange did not finish.
 	Incomplete
 )
@@ -41,6 +44,8 @@ func (v Verdict) String() string {
 		return "different"
 	case WireOnly:
 		return "wireOnly"
+	case Unverified:
+		return "unverified"
 	default:
 		return "incomplete"
 	}
@@ -56,6 +61,8 @@ func (v Verdict) Plain() string {
 		return "DIFFERENT FROM THE RECORDING"
 	case WireOnly:
 		return "SENT ON THE WIRE; NOT COMPARED"
+	case Unverified:
+		return "COMPLETED; NOT COMPARED"
 	default:
 		return "DID NOT COMPLETE"
 	}
@@ -68,12 +75,14 @@ func (v Verdict) Plain() string {
 func (v Verdict) severity() int {
 	switch v {
 	case Incomplete:
-		return 3
+		return 4
 	case Different:
+		return 3
+	case Unverified:
 		return 2
 	case Same:
 		return 1
-	default: // WireOnly
+	default: // WireOnly claims only transmission, not application behavior.
 		return 0
 	}
 }
@@ -94,11 +103,23 @@ func Classify(completed, matched, wireOnly bool) Verdict {
 	}
 }
 
+// ClassifyVerified keeps "not compared" distinct from a real divergence.
+func ClassifyVerified(completed, verified, matched, wireOnly bool) Verdict {
+	if wireOnly {
+		return WireOnly
+	}
+	if completed && !verified {
+		return Unverified
+	}
+	return Classify(completed, matched, false)
+}
+
 // Tally counts session verdicts within one attempt.
 type Tally struct {
 	Same       int `json:"sameAsRecording"`
 	Different  int `json:"different"`
 	WireOnly   int `json:"wireOnly"`
+	Unverified int `json:"unverified"`
 	Incomplete int `json:"didNotComplete"`
 }
 
@@ -111,13 +132,15 @@ func (t *Tally) Add(v Verdict) {
 		t.Different++
 	case WireOnly:
 		t.WireOnly++
+	case Unverified:
+		t.Unverified++
 	default:
 		t.Incomplete++
 	}
 }
 
 // Total is the number of sessions counted.
-func (t Tally) Total() int { return t.Same + t.Different + t.WireOnly + t.Incomplete }
+func (t Tally) Total() int { return t.Same + t.Different + t.WireOnly + t.Unverified + t.Incomplete }
 
 // Worst reduces an attempt's sessions to that attempt's headline verdict: the
 // most serious thing that happened, since one broken session in an otherwise
@@ -128,6 +151,8 @@ func (t Tally) Worst() Verdict {
 		return Incomplete
 	case t.Different > 0:
 		return Different
+	case t.Unverified > 0:
+		return Unverified
 	case t.Same > 0:
 		return Same
 	case t.WireOnly > 0:
@@ -185,7 +210,7 @@ func (p Plan) Run(ctx context.Context, attempt func(i int) Tally) []Tally {
 		}
 		t := attempt(i)
 		out = append(out, t)
-		if p.StopWhenDifferent && t.Worst() != Same && t.Worst() != WireOnly {
+		if p.StopWhenDifferent && t.Worst() != Same && t.Worst() != WireOnly && t.Worst() != Unverified {
 			break
 		}
 	}
@@ -244,6 +269,7 @@ type Summary struct {
 	Same       int `json:"sameAsRecording"`
 	Different  int `json:"different"`
 	WireOnly   int `json:"wireOnly"`
+	Unverified int `json:"unverified"`
 	Incomplete int `json:"didNotComplete"`
 	// Sessions is the sum of every session verdict across all attempts.
 	Sessions Tally `json:"sessions"`
@@ -276,6 +302,8 @@ func Summarize(per []Tally, requested int) Summary {
 			s.Different++
 		case WireOnly:
 			s.WireOnly++
+		case Unverified:
+			s.Unverified++
 		default:
 			s.Incomplete++
 		}
@@ -288,6 +316,7 @@ func Summarize(per []Tally, requested int) Summary {
 		s.Sessions.Same += t.Same
 		s.Sessions.Different += t.Different
 		s.Sessions.WireOnly += t.WireOnly
+		s.Sessions.Unverified += t.Unverified
 		s.Sessions.Incomplete += t.Incomplete
 	}
 	if len(per) == 0 {
@@ -319,6 +348,7 @@ func (s Summary) Plain() string {
 	line("different", s.Different)
 	line("did not complete", s.Incomplete)
 	line("sent, not compared", s.WireOnly)
+	line("completed, not compared", s.Unverified)
 	b.WriteString("\n")
 	switch {
 	case s.Intermittent:
@@ -338,6 +368,8 @@ func (s Summary) Plain() string {
 	case s.Verdict == Incomplete:
 		fmt.Fprintf(&b, "The exchange did not complete on any of the %d attempts. Send us the\n", s.Attempts)
 		b.WriteString("report file.\n")
+	case s.Verdict == Unverified:
+		b.WriteString("The exchange completed, but response comparison was not enabled.\n")
 	default:
 		b.WriteString("Frames were sent at the recorded timing; the replies were not compared.\n")
 	}

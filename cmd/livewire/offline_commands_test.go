@@ -1,14 +1,47 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/replay"
 )
+
+func TestReplayWaitStopsPromptlyOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	started := time.Now()
+	if waitReplayContext(ctx, time.Minute) {
+		t.Fatal("cancelled replay wait reported success")
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("cancelled replay wait took %v", elapsed)
+	}
+}
+
+func TestReplayDryRunWritesNonClaimingReport(t *testing.T) {
+	dir := t.TempDir()
+	input := writeHandshakePcap(t, dir)
+	report := filepath.Join(dir, "wire.report.json")
+	if err := cmdReplay([]string{"-in", input, "-dry-run", "-report", report}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	for _, want := range []string{`"mode": "dry-run"`, `"completed": true`, `"verified": false`, `"framesSent": 0`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("wire report missing %s:\n%s", want, text)
+		}
+	}
+}
 
 func TestOfflineCommandSuite(t *testing.T) {
 	dir := t.TempDir()
@@ -31,7 +64,7 @@ func TestOfflineCommandSuite(t *testing.T) {
 		t.Fatal(err)
 	}
 	report := filepath.Join(dir, "run.json")
-	if err := os.WriteFile(report, []byte(`{"tool":"livewire","version":"0.7.0","captureDigest":"sha256:capture","replayPlan":{"entries":[]},"variables":{"ftp.password":"secret"}}`), 0o600); err != nil {
+	if err := os.WriteFile(report, []byte(`{"tool":"livewire","version":"0.8.0","captureDigest":"sha256:capture","replayPlan":{"entries":[]},"variables":{"ftp.password":"secret"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	bundle := filepath.Join(dir, "support.zip")

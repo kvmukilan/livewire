@@ -12,9 +12,8 @@ import (
 
 var version = buildinfo.Version
 
-// cmdGroup decides whether a command appears at the front door. The tool has
-// sixteen commands but a field engineer only ever needs five of them, and a flat
-// list of sixteen buries the one they were told to run.
+// cmdGroup decides whether a command appears at the front door. The product has
+// two primary actions; narrower tools remain available through the full catalog.
 type cmdGroup int
 
 const (
@@ -23,7 +22,7 @@ const (
 	// groupAdvanced still runs and is still documented; it is listed only by
 	// 'livewire help --all'.
 	groupAdvanced
-	// groupCompat is an older name kept working after a merge or rename. It
+	// groupCompat is an older or protocol-specific entry point kept working. It
 	// dispatches and it is named in 'livewire help --all', but it stays out of
 	// the everyday list so the surface a newcomer reads does not grow every
 	// time something is tidied up.
@@ -44,18 +43,18 @@ func (c command) matches(name string) bool { return c.name == name }
 // here is the order a reader sees.
 var commands = []command{
 	{name: "reproduce", group: groupEveryday, run: cmdReproduce,
-		summary: "replay a capture against your device and say what happened"},
-	{name: "check", group: groupEveryday, run: cmdCheck,
-		summary: "look at a capture: what's in it, and whether it can be replayed"},
-	{name: "capture", group: groupEveryday, run: cmdCapture,
-		summary: "record traffic from a network connection into a file"},
-	{name: "ifaces", group: groupEveryday, run: cmdIfaces,
-		summary: "list your network connections"},
-	{name: "web", group: groupEveryday, run: cmdWeb,
-		summary: "open the browser dashboard"},
+		summary: "guided, safe reproduction with automatic protocol handling"},
+	{name: "live", group: groupEveryday, run: cmdLive,
+		summary: "protocol-aware live replay plus advanced compatibility controls"},
 
-	{name: "live", group: groupAdvanced, run: cmdLive,
-		summary: "stateful TCP replay: realign seq/ack to a live peer (dry-run or on-wire)"},
+	{name: "check", group: groupAdvanced, run: cmdCheck,
+		summary: "look at a capture: what's in it, and whether it can be replayed"},
+	{name: "capture", group: groupAdvanced, run: cmdCapture,
+		summary: "record traffic from a network connection into a file"},
+	{name: "ifaces", group: groupAdvanced, run: cmdIfaces,
+		summary: "list your network connections"},
+	{name: "web", group: groupAdvanced, run: cmdWeb,
+		summary: "open the browser dashboard"},
 	{name: "lab", group: groupAdvanced, run: cmdLab,
 		summary: "two-sided replay through a DUT with topology, faults, and PCAPNG evidence"},
 	{name: "replay", group: groupAdvanced, run: cmdReplay,
@@ -64,12 +63,6 @@ var commands = []command{
 		summary: "apply static edits (MAC/IP/port/TTL/VLAN/seq) to a capture"},
 	{name: "convert", group: groupAdvanced, run: cmdConvert,
 		summary: "convert a pcapng file to classic pcap"},
-	{name: "tls-replay", group: groupAdvanced, run: cmdTLSReplay,
-		summary: "decrypt with a key log and re-terminate a fresh verified TLS session"},
-	{name: "ftp-replay", group: groupAdvanced, run: cmdFTPReplay,
-		summary: "coordinate FTP/FTPS control and negotiated data connections"},
-	{name: "ssh-replay", group: groupAdvanced, run: cmdSSHReplay,
-		summary: "re-terminate an SSH session against a live device"},
 	{name: "bundle", group: groupAdvanced, run: cmdBundle,
 		summary: "create a redacted metadata-only support archive"},
 	{name: "rstdrop", group: groupAdvanced, run: cmdRstdrop,
@@ -83,12 +76,18 @@ var commands = []command{
 		summary: "capture summary only (now part of 'check')"},
 	{name: "analyze", group: groupCompat, run: cmdAnalyze,
 		summary: "replayability assessment only (now part of 'check')"},
+	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay,
+		summary: "TLS-specific compatibility entry point (automatic in reproduce/live)"},
+	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay,
+		summary: "FTP/FTPS compatibility entry point (automatic in reproduce/live)"},
+	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay,
+		summary: "SSH-specific compatibility entry point (automatic in reproduce/live)"},
 }
 
 func main() {
 	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+		printHelpHub(os.Stdout)
+		return
 	}
 	name := os.Args[1]
 	if name == "-h" || name == "--help" || name == "help" {
@@ -115,72 +114,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	fmt.Fprintf(os.Stderr, "livewire: unknown command %q\n\n", name)
-	usage()
+	fmt.Fprintf(os.Stderr, "livewire: unknown command %q\n", name)
+	if suggestion := closestCommand(name); suggestion != "" {
+		fmt.Fprintf(os.Stderr, "Did you mean 'livewire %s'?\n", suggestion)
+	}
+	fmt.Fprintln(os.Stderr, "Run 'livewire help' to choose a task or see the available help topics.")
 	os.Exit(2)
-}
-
-// help implements 'livewire help [--all | <command>]'.
-func help(args []string) error {
-	if len(args) == 0 {
-		usage()
-		return nil
-	}
-	switch args[0] {
-	case "--all", "-all", "all":
-		usageAll()
-		return nil
-	}
-	for _, c := range commands {
-		if c.matches(args[0]) {
-			// Every command prints its own help when asked, so route through it
-			// rather than keeping a second description of its flags here.
-			err := c.run([]string{"-h"})
-			if errors.Is(err, flag.ErrHelp) {
-				return nil
-			}
-			return err
-		}
-	}
-	return fmt.Errorf("unknown command %q; run 'livewire help --all' for the full list", args[0])
-}
-
-func usage() {
-	fmt.Fprintf(os.Stderr, "livewire %s - protocol-adaptive traffic replay\n\n", version)
-	fmt.Fprintln(os.Stderr, "usage: livewire <command> [options]")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "New here? To reproduce an issue we sent you, run:")
-	fmt.Fprintln(os.Stderr, "  livewire reproduce <capture.pcap>")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "everyday commands:")
-	printGroup(groupEveryday)
-	fmt.Fprintln(os.Stderr, "\nrun 'livewire help <command>' for one command's options,")
-	fmt.Fprintln(os.Stderr, "or 'livewire help --all' for the advanced commands.")
-}
-
-func usageAll() {
-	fmt.Fprintf(os.Stderr, "livewire %s - protocol-adaptive traffic replay\n\n", version)
-	fmt.Fprintln(os.Stderr, "usage: livewire <command> [options]")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "everyday commands:")
-	printGroup(groupEveryday)
-	fmt.Fprintln(os.Stderr, "\nadvanced commands:")
-	printGroup(groupAdvanced)
-	fmt.Fprintln(os.Stderr, "\nolder names, still supported:")
-	printGroup(groupCompat)
-	fmt.Fprintln(os.Stderr, "\ncommon options, the same on every command that has them:")
-	fmt.Fprintln(os.Stderr, "  -in    the capture file        -o  where to write")
-	fmt.Fprintln(os.Stderr, "  -i     network connection      -n  how many")
-	fmt.Fprintln(os.Stderr, "  -t     the device to talk to")
-	fmt.Fprintln(os.Stderr, "\nrun 'livewire help <command>' for one command's options.")
-}
-
-func printGroup(g cmdGroup) {
-	for _, c := range commands {
-		if c.group == g {
-			fmt.Fprintf(os.Stderr, "  %-11s %s\n", c.name, c.summary)
-		}
-	}
 }
 
 func cmdVersion(_ []string) error {

@@ -568,7 +568,7 @@ func TestWebReplayHelpersAndFailureBranches(t *testing.T) {
 	}
 	session := trace.Sessions[0]
 	flows := engine.ExtractFlows(records)
-	if len(flows) != 1 || findWebFlow(flows, session) == nil {
+	if len(flows) != 1 {
 		t.Fatal("captured flow was not found")
 	}
 	if _, err := pickFlow(flows, -1); err != nil {
@@ -612,15 +612,6 @@ func TestWebReplayHelpersAndFailureBranches(t *testing.T) {
 	if result := runWebEntry(context.Background(), j, replay.PlanEntry{Mode: replay.ModeStateful, SessionID: udp.ID}, udp, nil, nil, nil, registry, target, baseReq, replay.ProfileFunctional, replay.VerifyLenient, engine.VerifyLenient, time.Now()); result.Error == "" {
 		t.Fatalf("UDP failure result=%+v", result)
 	}
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if waitWeb(cancelled, time.Now().Add(time.Second)) {
-		t.Fatal("waitWeb ignored cancellation")
-	}
-	if !waitWeb(context.Background(), time.Now().Add(-time.Millisecond)) {
-		t.Fatal("past wait failed")
-	}
-
 	evidence := filepath.Join(dir, "evidence.pcapng")
 	values := make([]pcapio.Record, len(records))
 	for i, record := range records {

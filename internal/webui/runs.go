@@ -14,14 +14,13 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
-	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/engine"
-	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/planexec"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
 	"github.com/kvmukilan/livewire/internal/wire"
@@ -78,7 +77,7 @@ func (r webSessionResult) verdict() iterate.Verdict {
 	if r.Error != "" {
 		return iterate.Incomplete
 	}
-	return iterate.Classify(r.Completed, r.Matched, r.Entry.Mode == replay.ModeWire)
+	return iterate.ClassifyVerified(r.Completed, r.Verified, r.Matched, r.Entry.Mode == replay.ModeWire)
 }
 
 func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
@@ -254,7 +253,7 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		doc["attempts"] = summary.Attempts
 		doc["outcome"] = summary
 		doc["transformations"] = []string{
-			"each attempt used a fresh client port and ISN so the device would not treat it as a duplicate connection",
+			"repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections",
 		}
 	}
 	if err := writeRedactedJSON(filepath.Join(s.dir, reportName), doc, req.Variables); err != nil {
@@ -268,172 +267,60 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		if summary.Intermittent {
 			verdict = "INTERMITTENT"
 		}
-		j.finish(ok, fmt.Sprintf("%d attempts: %s (%d same, %d different, %d did not complete)",
-			summary.Attempts, verdict, summary.Same, summary.Different, summary.Incomplete))
+		j.finish(ok, fmt.Sprintf("%d attempts: %s (%d same, %d different, %d unverified, %d wire-only, %d did not complete)",
+			summary.Attempts, verdict, summary.Same, summary.Different, summary.Unverified, summary.WireOnly, summary.Incomplete))
 		return
 	}
 	j.finish(ok, fmt.Sprintf("%d sessions completed", len(results)))
 }
 
-func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *replay.Session, sessions map[string]*replay.Session, raw []replay.Event, flows []*engine.Flow, registry *replay.Registry, target netip.Addr, req adaptiveRunReq, profile replay.Profile, verify replay.VerifyMode, verifyEngine engine.VerifyMode, started time.Time) (out webSessionResult) {
-	out = webSessionResult{Entry: entry}
-	if entry.Mode == replay.ModeBlocked {
-		out.Error = strings.Join(entry.Blockers, "; ")
-		j.progress("blocked", entry.SessionID, entry.SessionID+": "+out.Error)
+func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *replay.Session, sessions map[string]*replay.Session, raw []replay.Event, flows []*engine.Flow, registry *replay.Registry, target netip.Addr, req adaptiveRunReq, profile replay.Profile, verify replay.VerifyMode, verifyEngine engine.VerifyMode, started time.Time) webSessionResult {
+	trace := &replay.Trace{Raw: raw}
+	for _, item := range sessions {
+		trace.Sessions = append(trace.Sessions, item)
+	}
+	executed := planexec.ExecuteEntry(planexec.Config{
+		Context: ctx, Trace: trace, Plan: replay.ReplayPlan{Profile: profile}, Registry: registry,
+		Flows: flows, Iface: req.Iface, TargetIP: target, Variables: req.Variables, Verify: verify,
+		TCPConfig: func(flow *engine.Flow, selected *replay.Session) livereplay.Config {
+			return livereplay.Config{
+				Flow: flow, Iface: req.Iface, TargetIP: target, TargetPort: selected.Server.Port,
+				Seed: 1 + int64(req.attempt), LocalPort: iterate.ShiftPort(flow.Client.Port, req.attempt),
+				NoGuard: req.NoGuard, Verify: verifyEngine, Adaptive: profile != replay.ProfileTransport,
+			}
+		},
+		Progress: func(selected replay.PlanEntry, stage, message string) {
+			j.progress(stage, selected.SessionID, message)
+		},
+	}, entry, session, started)
+	return webResult(executed)
+}
+
+func webResult(executed planexec.Result) webSessionResult {
+	out := webSessionResult{Entry: executed.Entry}
+	if executed.Err != nil {
+		out.Error = executed.Err.Error()
+	}
+	if executed.Entry.Transport == replay.TransportTCP && executed.Entry.Mode == replay.ModeStateful {
+		out.Completed, out.Verified, out.Matched = executed.TCP.Outcome.Succeeded(), executed.TCP.Verified, executed.TCP.Matched
+		out.Sent, out.Evidence = executed.TCP.Outcome.Sent, executed.TCP.Evidence
+		for _, difference := range executed.TCP.Outcome.Mismatches {
+			out.Differences = append(out.Differences, replay.Difference{Field: "tcp-response", Actual: difference.Detail, Structural: difference.Structural})
+		}
 		return out
 	}
-	if entry.Mode == replay.ModeWire {
-		events := raw
-		if session != nil {
-			events = session.Events
-		}
-		b, err := backend.OpenSender(req.Iface)
-		if err != nil {
-			out.Error = err.Error()
-			return out
-		}
-		backendOpen := true
-		defer func() {
-			if !backendOpen {
-				return
-			}
-			if err := b.Close(); err != nil {
-				out.Error = errors.Join(errorString(out.Error), fmt.Errorf("close wire backend: %w", err)).Error()
-				out.Completed = false
-			}
-		}()
-		for _, e := range events {
-			if !waitWeb(ctx, started.Add(e.At)) {
-				out.Error = "cancelled"
-				return out
-			}
-			if err := b.Send(e.Record.Data); err != nil {
-				out.Error = err.Error()
-				return out
-			}
-			frame := append([]byte(nil), e.Record.Data...)
-			out.Evidence = append(out.Evidence, pcapio.Record{Time: b.Now(), Data: frame, CapLen: len(frame), OrigLen: len(frame), LinkType: b.LinkType()})
-			out.Sent++
-		}
-		if err := b.Close(); err != nil {
-			out.Error = fmt.Errorf("close wire backend: %w", err).Error()
-			return out
-		}
-		backendOpen = false
-		out.Completed = true
-		out.Verified = false
-		out.Matched = false
-		j.progress("wire", entry.SessionID, fmt.Sprintf("%s: sent %d frame(s), wire-only", entry.SessionID, out.Sent))
-		return out
-	}
-	if session == nil || session.Server.IP.Is4() != target.Is4() {
-		out.Error = "missing session or target address family mismatch"
-		return out
-	}
-	if entry.Mode == replay.ModeCoordinated && entry.Adapter == "ftp" {
-		script, err := ftpreplay.BuildScript(session, nil)
-		if err != nil {
-			out.Error = err.Error()
-			return out
-		}
-		data := make([]*replay.Session, 0, len(entry.RelatedSessionIDs))
-		for _, id := range entry.RelatedSessionIDs {
-			if related := sessions[id]; related != nil {
-				data = append(data, related)
-			}
-		}
-		res, err := ftpreplay.RunContext(ctx, ftpreplay.Config{
-			Control: session, Data: data, Address: netip.AddrPortFrom(target, session.Server.Port).String(), Script: script,
-			Variables: req.Variables, Timeout: 30 * time.Second, Verify: verify,
-			Progress: func(line string) { j.progress("ftp", entry.SessionID, line) },
-		})
-		out.Completed, out.Verified = res.Completed, verify != replay.VerifyOff
-		out.Matched = res.Completed && len(res.Differences) == 0
-		for _, transfer := range res.Transfers {
+	if executed.Entry.Mode == replay.ModeCoordinated && executed.Entry.Adapter == "ftp" {
+		out.Completed, out.Verified = executed.FTP.Completed, executed.FTP.Verified
+		out.Matched = executed.FTP.Verified && executed.FTP.Completed && len(executed.FTP.Differences) == 0
+		for _, transfer := range executed.FTP.Transfers {
 			out.Matched = out.Matched && transfer.Matched
 		}
-		out.Sent, out.Received, out.Differences = res.Commands, res.Replies, res.Differences
-		if err != nil {
-			out.Error = err.Error()
-		}
+		out.Sent, out.Received, out.Differences = executed.FTP.Commands, executed.FTP.Replies, executed.FTP.Differences
 		return out
 	}
-	if entry.Mode == replay.ModeSemantic && session.Transport == replay.TransportTCP {
-		res, err := replay.RunTCPSemanticContext(ctx, replay.TCPSemanticConfig{
-			Session: session, TargetIP: target, TargetPort: session.Server.Port, Adapter: registry.ByName(entry.Adapter),
-			Profile: profile, Verify: verify, Variables: req.Variables, Start: started,
-			Progress: func(p replay.ProgressEvent) { j.progress(p.Stage, p.SessionID, p.Message) },
-		})
-		out.Completed, out.Verified, out.Matched, out.Sent, out.Received, out.Differences, out.Evidence = res.Completed, res.Verified, res.Matched, res.Sent, res.Received, res.Differences, res.Evidence
-		if err != nil {
-			out.Error = err.Error()
-		}
-		return out
-	}
-	if session.Transport == replay.TransportUDP || session.Transport == replay.TransportICMP4 || session.Transport == replay.TransportICMP6 {
-		res, err := replay.RunTransportContext(ctx, replay.TransportRunConfig{
-			Session: session, Iface: req.Iface, TargetIP: target, TargetPort: session.Server.Port,
-			Profile: profile, Verify: verify, Adapter: registry.ByName(entry.Adapter), Variables: req.Variables, Start: started,
-			Progress: func(p replay.ProgressEvent) { j.progress(p.Stage, p.SessionID, p.Message) },
-		})
-		out.Completed, out.Verified, out.Matched, out.Sent, out.Received, out.Differences, out.Evidence = res.Completed, res.Verified, res.Matched, res.Sent, res.Received, res.Differences, res.Evidence
-		if err != nil {
-			out.Error = err.Error()
-		}
-		return out
-	}
-	flow := findWebFlow(flows, session)
-	if flow == nil {
-		out.Error = "TCP engine flow not found"
-		return out
-	}
-	if profile != replay.ProfileFunctional && len(session.Events) > 0 && !waitWeb(ctx, started.Add(session.Events[0].At)) {
-		out.Error = "cancelled"
-		return out
-	}
-	res, err := livereplay.RunContext(ctx, livereplay.Config{
-		Flow: flow, Iface: req.Iface, TargetIP: target, TargetPort: session.Server.Port,
-		Seed: 1 + int64(req.attempt), LocalPort: iterate.ShiftPort(flow.Client.Port, req.attempt),
-		NoGuard: req.NoGuard, Verify: verifyEngine, Adaptive: profile != replay.ProfileTransport,
-		Pace: profile == replay.ProfileTiming || profile == replay.ProfileTransport, RawL4: profile == replay.ProfileTransport,
-	}, func(line string) { j.progress("tcp", entry.SessionID, line) })
-	out.Completed, out.Verified, out.Matched, out.Sent, out.Evidence = res.Outcome.Succeeded(), res.Verified, res.Matched, res.Outcome.Sent, res.Evidence
-	for _, d := range res.Outcome.Mismatches {
-		out.Differences = append(out.Differences, replay.Difference{Field: "tcp-response", Actual: d.Detail, Structural: d.Structural})
-	}
-	if err != nil {
-		out.Error = err.Error()
-	}
+	out.Completed, out.Verified, out.Matched = executed.Transport.Completed, executed.Transport.Verified, executed.Transport.Matched
+	out.Sent, out.Received, out.Differences, out.Evidence = executed.Transport.Sent, executed.Transport.Received, executed.Transport.Differences, executed.Transport.Evidence
 	return out
-}
-
-func errorString(message string) error {
-	if message == "" {
-		return nil
-	}
-	return errors.New(message)
-}
-
-func findWebFlow(flows []*engine.Flow, s *replay.Session) *engine.Flow {
-	for _, f := range flows {
-		if f.Client.Addr == s.Client.IP && f.Client.Port == s.Client.Port && f.Server.Addr == s.Server.IP && f.Server.Port == s.Server.Port {
-			return f
-		}
-	}
-	return nil
-}
-
-func waitWeb(ctx context.Context, target time.Time) bool {
-	if d := time.Until(target); d > 0 {
-		t := time.NewTimer(d)
-		defer t.Stop()
-		select {
-		case <-ctx.Done():
-			return false
-		case <-t.C:
-		}
-	}
-	return ctx.Err() == nil
 }
 
 type labRunReq struct {

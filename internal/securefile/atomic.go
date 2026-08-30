@@ -18,8 +18,17 @@ type AtomicFile struct {
 	target string
 }
 
-// Create creates a mode-0600 temporary file beside target.
+// Create creates a mode-0600 temporary file beside an unused target. The
+// up-front check gives long-running capture/replay commands an immediate error;
+// Commit's link step remains the race-safe no-replace authority.
 func Create(target string) (*AtomicFile, error) {
+	// #nosec G703 -- target is the caller's local artifact path; Lstat prevents
+	// replacing any existing file, directory, symlink, or reparse point.
+	if _, err := os.Lstat(target); err == nil {
+		return nil, fmt.Errorf("securefile: target %q already exists: %w", target, os.ErrExist)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("securefile: inspect target %q: %w", target, err)
+	}
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -43,9 +52,10 @@ func (a *AtomicFile) Write(p []byte) (int, error) { return a.file.Write(p) }
 func (a *AtomicFile) File() *os.File              { return a.file }
 func (a *AtomicFile) Name() string                { return a.target }
 
-// Commit flushes, closes, and renames the completed file into place. Existing
-// targets are not silently removed; callers get an error instead of a gap in
-// atomic publication on platforms where rename-overwrite is unavailable.
+// Commit flushes, closes, and publishes the completed file without replacing an
+// existing target. A hard link is used for the publication step because link
+// creation is atomic and has consistent no-replace semantics on Unix and
+// Windows; os.Rename would silently overwrite on Unix but fail on Windows.
 func (a *AtomicFile) Commit() error {
 	if a == nil || a.file == nil {
 		return fmt.Errorf("securefile: no open temporary file")
@@ -59,7 +69,11 @@ func (a *AtomicFile) Commit() error {
 	}
 	a.file = nil
 	if len(errs) == 0 {
-		if err := os.Rename(a.tmp, a.target); err != nil {
+		if err := os.Link(a.tmp, a.target); err != nil {
+			errs = append(errs, err)
+		} else if err := os.Remove(a.tmp); err != nil {
+			// The target is already a complete published link. Keep tmp recorded
+			// so Abort can retry only its cleanup; it must never remove target.
 			errs = append(errs, err)
 		} else {
 			a.tmp = ""

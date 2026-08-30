@@ -165,7 +165,7 @@ func TestPassiveFTPReplayCoordinatesDataAndCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.Completed || len(result.Transfers) != 1 || !result.Transfers[0].Matched {
+	if !result.Completed || !result.Verified || len(result.Transfers) != 1 || !result.Transfers[0].Matched {
 		t.Fatalf("result=%+v", result)
 	}
 	if err := <-serverErr; err != nil {
