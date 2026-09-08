@@ -25,6 +25,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 )
 
 // cmdReproduce is the peer-facing, (almost) zero-flag entry point: give it a
@@ -40,7 +41,7 @@ func cmdReproduce(args []string) error {
 	var pcapFlag string
 	fs.StringVar(&pcapFlag, flagIn, "", "the capture file we sent you")
 	var on string
-	fs.StringVar(&on, flagIface, "", "network connection to use (asks if not given)")
+	fs.StringVar(&on, flagIface, "", "network connection for packet-based replay (asks when required)")
 	fs.StringVar(&on, "on", "", "alias for -i")
 	fs.StringVar(&on, "iface", "", "alias for -i")
 	var to string
@@ -52,10 +53,14 @@ func cmdReproduce(args []string) error {
 	fs.IntVar(&times, "times", 1, "alias for -n")
 	fs.IntVar(&times, "iterations", 1, "alias for -n")
 	underLoad := fs.Bool("under-load", false, "reproduce a timing/load issue (replay everything at the recorded speed)")
-	exactTCP := fs.Bool("exact-tcp", false, "reproduce a low-level TCP issue (send the recorded packets exactly)")
+	exactTCP := fs.Bool("exact-tcp", false, "use stateful transport replay for a low-level TCP issue")
 	details := fs.Bool(flagDetails, false, "show the expert tables: capture assessment, replay plan, and every session's verdict")
 	gap := fs.Duration("gap", time.Second, "settle time between attempts when -n is more than 1")
 	stopWhenDifferent := fs.Bool("stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
+	mode := fs.String("mode", "", "replay intent: application | transport | wire | auto (omitted: compatibility auto)")
+	dryRun := fs.Bool("dry-run", false, "preview selected sessions and requirements without network activity")
+	var selectedSessions fileFlags
+	fs.Var(&selectedSessions, "session", "select a session ID from check -details (repeatable; includes related FTP data)")
 	profileName := fs.String("profile", "functional", "replay fidelity: functional | timing | transport | wire")
 	strict := fs.Bool("strict", false, "abort a session at the first structural difference from the recording")
 	wireMode := fs.Bool("wire", false, "explicitly inject captured frames without session adaptation or response verification")
@@ -85,11 +90,13 @@ func cmdReproduce(args []string) error {
 		fmt.Println("usage: livewire reproduce <capture.pcap> [options]")
 		fmt.Println("   or: livewire reproduce -in <capture.pcap> -t <device-ip> -i <connection>")
 		fmt.Println("\nReplay a recorded exchange against your device and report whether it")
-		fmt.Println("behaves the same. Run as Administrator (Windows) or with sudo (Linux).")
-		fmt.Println("\nIf the issue comes and goes, add -n 5 to replay five times and see how")
-		fmt.Println("often it happens. If it's timing-related add -under-load; for a low-level")
-		fmt.Println("TCP issue add -exact-tcp. You normally don't need anything else.")
-		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", "wire", flagDetails)
+		fmt.Println("behaves the same. Choose --mode application, transport, or wire.")
+		fmt.Println("Use check -details to find session IDs, then --session <id> --dry-run")
+		fmt.Println("to preview the exchange. Packet-based replay may require Administrator")
+		fmt.Println("or sudo; socket-based application replay does not require a packet interface.")
+		fmt.Println("\nFor intermittent issues, add -n 5. Use --mode application -under-load")
+		fmt.Println("for recorded application pacing, or --mode transport for transport behavior.")
+		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", "wire", "mode", "session", "dry-run", flagDetails)
 	}
 	pcapPath, err := parseCaptureArgs(fs, args, &pcapFlag)
 	if err != nil {
@@ -119,23 +126,6 @@ func cmdReproduce(args []string) error {
 	if err != nil {
 		return err
 	}
-	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
-		capture: pcapPath, iface: on, target: to,
-		keylog: *keylogPath, serverName: *serverName, ca: *caPath,
-		insecure: *insecure, strict: *strict, wire: *wireMode,
-		user: *sshUser, password: *sshPass, privateKey: *sshKey, hostKey: *sshHostKey,
-		commands: sshCommands, expects: sshExpects, timeout: *secureTimeout,
-		report: *reportPath, times: times, gap: *gap, stopWhenDifferent: *stopWhenDifferent,
-		variables: variables, rulePacks: rulePacks,
-	})
-	if handled {
-		return err
-	}
-	flows := engine.ExtractFlows(recs)
-	preflight := assessCapture(recs, flows)
-	if *details {
-		printPreflight(preflight)
-	}
 	selectedProfile := *profileName
 	if *underLoad && strings.EqualFold(selectedProfile, "functional") {
 		selectedProfile = "timing"
@@ -143,11 +133,23 @@ func cmdReproduce(args []string) error {
 	if *exactTCP && !strings.EqualFold(selectedProfile, "wire") {
 		selectedProfile = "transport"
 	}
-	profile, err := parseFidelityProfile(selectedProfile)
+	if *wireMode {
+		if *mode != "" && *mode != "auto" && *mode != "wire" {
+			return fmt.Errorf("--wire conflicts with --mode %s", *mode)
+		}
+		*mode = "wire"
+	}
+	if *mode == "" && isTerminal(os.Stdin) && !*dryRun && selectedProfile == "functional" {
+		fmt.Println("Choose what to reproduce: 1) application behavior  2) transport behavior  3) captured frames  4) automatic compatibility")
+		choices := []string{"application", "transport", "wire", "auto"}
+		*mode = choices[promptChoice("Replay intent [1]: ", 0, len(choices))]
+	}
+	resolvedMode, resolvedProfile, err := replayintent.Resolve(*mode, selectedProfile)
 	if err != nil {
 		return err
 	}
-	replayProfile, err := replay.ParseProfile(profile.Name)
+	selectedProfile = string(resolvedProfile)
+	profile, err := parseFidelityProfile(selectedProfile)
 	if err != nil {
 		return err
 	}
@@ -158,19 +160,122 @@ func cmdReproduce(args []string) error {
 	if *udpIdle <= 0 || *udpIdle > time.Hour {
 		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
-	trace, plan, err := compileCoverageWithOptions(recs, replayProfile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
+	if *secureTimeout <= 0 || *secureTimeout > 10*time.Minute {
+		return fmt.Errorf("-timeout must be greater than zero and at most 10m")
+	}
+	var selectedKeyLog []byte
+	if *keylogPath != "" && resolvedMode != "wire" && detectProtocolRoute(recs).kind != protocolTLS {
+		selectedKeyLog, err = os.ReadFile(*keylogPath)
+		if err != nil {
+			return err
+		}
+	}
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: selectedKeyLog, Mode: resolvedMode, Profile: selectedProfile, Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
 	if err != nil {
 		return err
 	}
-	if len(plan.Entries) == 0 {
-		return fmt.Errorf("capture %s has no packets", pcapPath)
+	trace, plan := inspection.Trace, inspection.Plan
+	fmt.Printf("Replay intent: %s; %d selected packet(s), %d explicitly excluded.\n", inspection.Mode, inspection.SelectedPackets, inspection.ExcludedPackets)
+	secureRoute := inspection.Route.Kind == replayintent.TLS || inspection.Route.Kind == replayintent.SSH || inspection.Route.Kind == replayintent.FTP
+	if inspection.Mode != "wire" && secureRoute && inspection.Mode != "transport" {
+		if *underLoad || *exactTCP || selectedProfile != "functional" {
+			return fmt.Errorf("this fresh-session driver does not support timing or exact transport options; choose a supported intent explicitly")
+		}
+		if *actualPath != "" {
+			return fmt.Errorf("-actual-out is not supported for fresh secure sessions; use -report for redacted evidence")
+		}
 	}
-	if !strings.EqualFold(selectedProfile, "wire") {
-		for _, entry := range plan.Entries {
-			if entry.Mode == replay.ModeWire {
-				return fmt.Errorf("%s contains traffic that has no safe stateful driver; no packets were sent. Inspect it with 'livewire check %s -details', or explicitly choose raw injection with --wire -i <connection>", filepath.Base(pcapPath), pcapPath)
+	specified := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { specified[f.Name] = true })
+	unsupported := []string{}
+	if inspection.Mode == "wire" {
+		unsupported = []string{"t", "to", "target", "strict", "actual-out", "set", "gap", "stop-when-different", "keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "exact-tcp"}
+	}
+	if !secureRoute && inspection.Mode != "wire" {
+		unsupported = []string{"keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "timeout"}
+	}
+	if secureRoute && inspection.Mode != "wire" && inspection.Mode != "transport" {
+		unsupported = append(unsupported, "no-rst-guard")
+		if inspection.Route.Kind != replayintent.SSH {
+			unsupported = append(unsupported, "user", "pass", "key", "host-key", "cmd", "expect")
+		} else {
+			unsupported = append(unsupported, "keylog", "ca", "server-name", "insecure-skip-verify", "set", "rules")
+		}
+	}
+	for _, name := range unsupported {
+		if specified[name] {
+			return fmt.Errorf("-%s is not supported by the selected %s replay route", name, inspection.Mode)
+		}
+	}
+	if *details && secureRoute {
+		printCoverage(plan)
+	}
+	if *dryRun {
+		if to != "" {
+			if secureRoute && inspection.Mode != "wire" && inspection.Mode != "transport" {
+				if _, err := resolveSecureTarget(to, inspection.Route.Session.Server); err != nil {
+					return err
+				}
+			} else if inspection.Mode != "wire" {
+				if _, err := parseHostIP(to); err != nil {
+					return err
+				}
 			}
 		}
+		for _, out := range []struct{ value, name string }{{*reportPath, "-report"}, {*actualPath, "-actual-out"}} {
+			if out.value != "" {
+				if err := outputPathAvailable(out.value); err != nil {
+					return fmt.Errorf("%s: %w", out.name, err)
+				}
+			}
+		}
+		if *reportPath != "" && *actualPath != "" && sameOutputPath(*reportPath, *actualPath) {
+			return fmt.Errorf("-report and -actual-out must name different files")
+		}
+		base := strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath))
+		preferred := base + ".report.json"
+		if secureRoute || inspection.Mode == "wire" {
+			kind := inspection.Route.Kind
+			if inspection.Mode == "wire" {
+				kind = "wire"
+			}
+			preferred = defaultProtocolReportPath(pcapPath, protocolKind(kind))
+		}
+		output, err := resolveAttemptReportBase(*reportPath, preferred, times)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Report destination: %s\n", output)
+		printCoverage(plan)
+		printProtocolReadiness(readinessFromInspection(inspection.Readiness))
+		if to != "" {
+			fmt.Printf("Target: %s\n", to)
+		}
+		if on != "" {
+			fmt.Printf("Interface: %s\n", on)
+		}
+		fmt.Println("Dry run: no network connections opened and no packets sent.")
+		if !inspection.Readiness.Supported {
+			return fmt.Errorf("%s", inspection.Readiness.Blocker)
+		}
+		return nil
+	}
+	if !inspection.Readiness.Supported {
+		return fmt.Errorf("no safely executable session: %s; no packets were sent", inspection.Readiness.Blocker)
+	}
+	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
+		capture: pcapPath, iface: on, target: to, keylog: *keylogPath, serverName: *serverName, ca: *caPath,
+		insecure: *insecure, strict: *strict, wire: inspection.Mode == "wire", user: *sshUser, password: *sshPass, privateKey: *sshKey, hostKey: *sshHostKey,
+		commands: sshCommands, expects: sshExpects, timeout: *secureTimeout, report: *reportPath, times: times, gap: *gap, stopWhenDifferent: *stopWhenDifferent,
+		variables: variables, rulePacks: rulePacks, sessions: selectedSessions, inspection: inspection,
+	})
+	if handled {
+		return err
+	}
+	flows := engine.ExtractFlows(recs)
+	preflight := assessCapture(recs, flows)
+	if *details {
+		printPreflight(preflight)
 	}
 	fmt.Printf("Loaded %s: %d session(s), %d raw frame(s).\n", filepath.Base(pcapPath), len(trace.Sessions), len(trace.Raw))
 	if *details {
@@ -204,9 +309,12 @@ func cmdReproduce(args []string) error {
 		return err
 	}
 	// 2) Which network connection reaches it?
-	iface, err := chooseInterface(on, deviceIP)
-	if err != nil {
-		return err
+	iface := on
+	if inspection.Readiness.NeedsInterface {
+		iface, err = chooseInterface(on, deviceIP)
+		if err != nil {
+			return err
+		}
 	}
 	// Run the most reliable default (adaptive + reply-checking + auto-synthesis).
 	// Scenario tuning stays opt-in via flags, suggested only if the default run
@@ -239,6 +347,9 @@ func cmdReproduce(args []string) error {
 	}
 
 	rep := newReplayReport(o)
+	rep.Intent = inspection.Mode
+	rep.SelectedPackets = inspection.SelectedPackets
+	rep.ExcludedPackets = inspection.ExcludedPackets
 	rep.AdapterVersions = adapters.VersionsForRegistry(registry)
 	rep.Preflight = &preflight
 	rep.Plan = &plan

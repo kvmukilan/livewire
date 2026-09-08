@@ -2,8 +2,10 @@ package webui
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/netip"
 	"sync"
@@ -147,7 +149,7 @@ func (j *job) snapshot() map[string]any {
 func (s *Server) startJob(kind string, fn func(j *job)) (*job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.job != nil && s.job.Running {
+	if s.job != nil && s.job.snapshot()["running"] == true {
 		return nil, fmt.Errorf("a %s job is already running; stop it first", s.job.Kind)
 	}
 	if s.closed {
@@ -478,15 +480,23 @@ func loadPcap(path string) ([]*pcapio.Record, bool, error) {
 }
 
 func (s *Server) loadPcap(path string) ([]*pcapio.Record, bool, error) {
+	capture, _, err := s.loadCaptureSnapshot(path)
+	return capture.Records, capture.Nanosecond, err
+}
+
+// Hash the same byte stream that is parsed, so replacing a file cannot attach
+// a new capture's identity to an old plan or a completed replay's report.
+func (s *Server) loadCaptureSnapshot(path string) (pcapio.Capture, string, error) {
 	f, err := s.openRootedPath(path)
 	if err != nil {
-		return nil, false, err
+		return pcapio.Capture{}, "", err
 	}
-	capture, loadErr := orchestration.Load(f)
+	hash := sha256.New()
+	capture, loadErr := orchestration.Load(io.TeeReader(f, hash))
 	if err := errors.Join(loadErr, f.Close()); err != nil {
-		return nil, false, err
+		return pcapio.Capture{}, "", err
 	}
-	return capture.Records, capture.Nanosecond, nil
+	return capture, fmt.Sprintf("sha256:%x", hash.Sum(nil)), nil
 }
 
 func pickFlow(flows []*engine.Flow, sel int) (*engine.Flow, error) {

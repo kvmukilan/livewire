@@ -40,6 +40,9 @@ type flowResult struct {
 
 // replayReport is the JSON document written by -report.
 type replayReport struct {
+	Intent          string             `json:"intent,omitempty"`
+	SelectedPackets int                `json:"selectedPackets,omitempty"`
+	ExcludedPackets int                `json:"excludedPackets,omitempty"`
 	Tool            string             `json:"tool"`
 	Version         string             `json:"version"`
 	When            string             `json:"when"`

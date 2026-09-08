@@ -264,7 +264,7 @@ func TestArtifactTraversalRejectedAndDashboardOffline(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-	if w.Code != 200 || !strings.Contains(w.Body.String(), "Protocol-adaptive replay") || strings.Contains(w.Body.String(), "https://") {
+	if w.Code != 200 || !strings.Contains(w.Body.String(), "Reproduce a recorded exchange") || strings.Contains(w.Body.String(), "https://") {
 		t.Fatalf("dashboard offline/content check failed")
 	}
 }
@@ -416,37 +416,27 @@ func TestDashboardFailedJobsAndStatus(t *testing.T) {
 	}
 }
 
-func TestBlockedTLSAdaptiveJobFinalizesRedactedReport(t *testing.T) {
+func TestTLSMissingInputsRejectedBeforeStartingJob(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockedTLSPcap(t, dir)
 	s, h := testServerHandler(t, dir)
-	w := postJSON(t, h, "/api/run", map[string]any{
-		"pcap": "tls.pcap", "iface": "unused", "targetIP": "192.0.2.20",
-		"profile": "functional", "verify": "lenient",
-		"variables": map[string]string{"ftp.password": "quoted\nsecret\\value"},
-	})
-	if w.Code != http.StatusOK {
-		t.Fatalf("run status=%d body=%s", w.Code, w.Body.String())
+	w := postJSON(t, h, "/api/run", map[string]any{"pcap": "tls.pcap", "targetIP": "127.0.0.1:443", "mode": "application", "profile": "functional", "verify": "lenient", "variables": map[string]string{"ftp.password": "private-secret"}})
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "key log") {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
-	waitServerJob(t, s)
-	snapshot := s.job.snapshot()
-	if snapshot["ok"] != false || !strings.Contains(snapshot["summary"].(string), "sessions") {
-		t.Fatalf("snapshot=%v", snapshot)
+	if strings.Contains(w.Body.String(), "private-secret") {
+		t.Fatal("secret leaked")
 	}
-	artifacts := snapshot["artifacts"].([]string)
-	if len(artifacts) != 1 || !strings.HasSuffix(artifacts[0], ".run.json") {
-		t.Fatalf("artifacts=%v", artifacts)
-	}
-	report, err := os.ReadFile(filepath.Join(dir, artifacts[0]))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bytes.Contains(report, []byte("quoted")) || bytes.Contains(report, []byte("secret")) || !bytes.Contains(report, []byte("[REDACTED]")) {
-		t.Fatalf("report redaction failed: %s", report)
+	if s.job != nil {
+		t.Fatal("invalid replay started a job")
 	}
 }
 
 func TestDashboardFTPReplayCoordinatesPassiveTransfer(t *testing.T) {
+	t.Run("compatibility", func(t *testing.T) { testDashboardFTPReplay(t, false) })
+	t.Run("explicit application", func(t *testing.T) { testDashboardFTPReplay(t, true) })
+}
+func testDashboardFTPReplay(t *testing.T, unified bool) {
 	dataListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -530,10 +520,21 @@ func TestDashboardFTPReplayCoordinatesPassiveTransfer(t *testing.T) {
 	dir := t.TempDir()
 	writeFTPWebPcap(t, dir, 40000)
 	s, h := testServerHandler(t, dir)
-	w := postJSON(t, h, "/api/ftp", map[string]any{
+	endpoint := "/api/ftp"
+	body := map[string]any{
 		"pcap": "ftp.pcap", "target": controlListener.Addr().String(), "verify": "strict", "timeoutSeconds": 5,
 		"variables": map[string]string{"ftp.user": "live", "ftp.password": "live-secret"},
-	})
+	}
+	if unified {
+		endpoint = "/api/run"
+		body["mode"] = "application"
+		body["targetIP"] = body["target"]
+		delete(body, "target")
+		delete(body, "timeoutSeconds")
+		body["secure"] = map[string]any{"timeoutSeconds": 5}
+		body["sessions"] = []string{"tcp-0"}
+	}
+	w := postJSON(t, h, endpoint, body)
 	if w.Code != http.StatusOK {
 		t.Fatalf("FTP start status=%d body=%s", w.Code, w.Body.String())
 	}
@@ -542,7 +543,7 @@ func TestDashboardFTPReplayCoordinatesPassiveTransfer(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshot := s.job.snapshot()
-	if snapshot["ok"] != true || !strings.Contains(snapshot["summary"].(string), "FTP complete") {
+	if snapshot["ok"] != true {
 		t.Fatalf("snapshot=%v", snapshot)
 	}
 	artifacts := snapshot["artifacts"].([]string)

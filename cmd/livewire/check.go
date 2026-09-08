@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
@@ -22,6 +25,10 @@ func cmdCheck(args []string) error {
 	fs.StringVar(&inPath, flagIn, "", "the capture file to look at")
 	details := fs.Bool(flagDetails, false, "also show the per-session replay plan and checksum validation")
 	jsonPath := fs.String("json", "", "also write the machine-readable assessment to this file")
+	keylog := fs.String("keylog", "", "matching key log for inspecting encrypted FTP session groups")
+	mode := fs.String("mode", "auto", "replay intent: application | transport | wire | auto")
+	var selectedSessions fileFlags
+	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	profileName := fs.String("profile", "functional", "requested replay fidelity: functional | timing | transport | wire")
 	udpIdle := fs.Duration("udp-idle", 30*time.Second, "split a UDP tuple into a new session after this idle interval")
 	var rulePacks fileFlags
@@ -33,7 +40,7 @@ func cmdCheck(args []string) error {
 		fmt.Println("\nLook at a capture without touching the network: what traffic it holds, and")
 		fmt.Println("whether livewire can replay it faithfully. Run this before 'reproduce' if")
 		fmt.Println("you want to know what you were sent.")
-		printFlags(fs, flagIn, flagDetails, "json")
+		printFlags(fs, flagIn, flagDetails, "json", "mode", "session")
 	}
 
 	// Accept the capture as a bare argument too: 'check foo.pcap' is what a
@@ -71,8 +78,6 @@ func cmdCheck(args []string) error {
 	if err != nil {
 		return err
 	}
-	readiness := assessProtocolReadiness(detectProtocolRoute(recs))
-	printProtocolReadiness(readiness)
 	assessment := assessCapture(recs, engine.ExtractFlows(recs))
 	printPreflight(assessment)
 
@@ -84,10 +89,21 @@ func cmdCheck(args []string) error {
 	if err != nil {
 		return err
 	}
-	_, plan, err := compileCoverageWithOptions(recs, profile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
-	if err != nil {
-		return fmt.Errorf("compile coverage: %w", err)
+	var keys []byte
+	if *keylog != "" {
+		keys, err = os.ReadFile(*keylog)
+		if err != nil {
+			return err
+		}
 	}
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: keys, Mode: *mode, Profile: string(profile), Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
+	if err != nil {
+		return err
+	}
+	plan := inspection.Plan
+	readiness := readinessFromInspection(inspection.Readiness)
+	printProtocolReadiness(readiness)
+	fmt.Printf("Selected: %d packet(s); explicitly excluded: %d.\n", inspection.SelectedPackets, inspection.ExcludedPackets)
 	if *details {
 		printCoverage(plan)
 	} else if n := len(plan.Entries); n > 0 {
@@ -128,20 +144,50 @@ func writeAssessment(path string, assessment preflightReport, plan replay.Replay
 // silently ignore -details.
 func parseCaptureArgs(fs *flag.FlagSet, args []string, inPath *string) (string, error) {
 	positional := ""
-	if len(args) > 0 && !isFlagArg(args[0]) {
-		positional = args[0]
-		args = args[1:]
+	var flags []string
+	addPositional := func(value string) error {
+		if positional != "" {
+			return fmt.Errorf("unexpected extra argument %q; provide exactly one capture", value)
+		}
+		positional = value
+		return nil
 	}
-	if err := fs.Parse(args); err != nil {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			for _, value := range args[i+1:] {
+				if err := addPositional(value); err != nil {
+					return "", err
+				}
+			}
+			break
+		}
+		if !isFlagArg(arg) {
+			if err := addPositional(arg); err != nil {
+				return "", err
+			}
+			continue
+		}
+		flags = append(flags, arg)
+		name, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		if strings.Contains(arg, "=") {
+			continue
+		}
+		f := fs.Lookup(name)
+		if f == nil {
+			continue
+		}
+		boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+		if ok && boolean.IsBoolFlag() {
+			continue
+		}
+		if i+1 < len(args) {
+			i++
+			flags = append(flags, args[i])
+		}
+	}
+	if err := fs.Parse(flags); err != nil {
 		return "", err
-	}
-	rest := fs.Args()
-	if positional == "" && len(rest) > 0 {
-		positional = rest[0]
-		rest = rest[1:]
-	}
-	if len(rest) > 0 {
-		return "", fmt.Errorf("unexpected extra argument %q; provide exactly one capture", rest[0])
 	}
 	switch {
 	case positional != "" && *inPath != "" && positional != *inPath:

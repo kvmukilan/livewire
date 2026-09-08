@@ -9,7 +9,7 @@ func BuildPlan(t *Trace, profile Profile, registry *Registry) ReplayPlan {
 	if registry == nil {
 		registry = NewRegistry()
 	}
-	p := ReplayPlan{Profile: profile, Packets: t.Packets}
+	p := ReplayPlan{Profile: profile, Packets: t.Packets, Entries: append([]PlanEntry(nil), t.Excluded...)}
 	groups := registry.CoordinatedGroups(t)
 	groupMembers := map[string]bool{}
 	if profile == ProfileFunctional || profile == ProfileTiming {

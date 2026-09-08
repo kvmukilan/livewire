@@ -75,10 +75,11 @@ type Session struct {
 }
 
 type Trace struct {
-	Started  time.Time  `json:"started"`
-	Packets  int        `json:"packets"`
-	Sessions []*Session `json:"sessions"`
-	Raw      []Event    `json:"raw"`
+	Excluded []PlanEntry `json:"excluded,omitempty"`
+	Started  time.Time   `json:"started"`
+	Packets  int         `json:"packets"`
+	Sessions []*Session  `json:"sessions"`
+	Raw      []Event     `json:"raw"`
 }
 
 type Profile string
@@ -124,6 +125,7 @@ const (
 )
 
 type PlanEntry struct {
+	Excluded          bool      `json:"excluded,omitempty"`
 	SessionID         string    `json:"sessionId"`
 	Transport         Transport `json:"transport"`
 	Driver            string    `json:"driver"`

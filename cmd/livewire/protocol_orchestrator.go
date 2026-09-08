@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -16,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kvmukilan/livewire/internal/adapters"
-	"github.com/kvmukilan/livewire/internal/dissect"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
+	"github.com/kvmukilan/livewire/internal/secureexec"
 	"golang.org/x/term"
 )
 
@@ -45,43 +44,20 @@ type protocolRoute struct {
 }
 
 type protocolReadiness struct {
-	Route        protocolKind `json:"route"`
-	Supported    bool         `json:"supported"`
-	Requirements []string     `json:"requirements,omitempty"`
-	Blocker      string       `json:"blocker,omitempty"`
-}
-
-func assessProtocolReadiness(route protocolRoute) protocolReadiness {
-	ready := protocolReadiness{Route: route.kind, Supported: route.reason == ""}
-	if route.reason != "" {
-		ready.Blocker = route.reason
-		return ready
-	}
-	switch route.kind {
-	case protocolGeneric:
-		ready.Requirements = []string{"target device IP", "network connection for on-wire replay"}
-	case protocolTLS:
-		ready.Requirements = []string{"fresh target host:port", "matching NSS key log", "trusted server certificate or explicit lab override"}
-	case protocolFTP:
-		ready.Requirements = []string{"fresh FTP target host:port"}
-		if route.session != nil && ftpNeedsKeyLog(route.session) {
-			ready.Requirements = append(ready.Requirements, "matching NSS key log for FTPS", "trusted server certificate or explicit lab override")
-		}
-	case protocolSSH:
-		ready.Requirements = []string{"fresh SSH target host:port", "username and one credential", "pinned host key", "explicit command script"}
-	default:
-		ready.Supported = false
-		ready.Blocker = "no safe automatic driver is available"
-	}
-	return ready
+	State          string       `json:"state,omitempty"`
+	NeedsInterface bool         `json:"needsInterface"`
+	Route          protocolKind `json:"route"`
+	Supported      bool         `json:"supported"`
+	Requirements   []string     `json:"requirements,omitempty"`
+	Blocker        string       `json:"blocker,omitempty"`
 }
 
 func printProtocolReadiness(ready protocolReadiness) {
 	if !ready.Supported {
-		fmt.Printf("\nAutomatic route: BLOCKED (%s)\n", ready.Blocker)
+		fmt.Printf("\nReplay route: BLOCKED (%s)\n", ready.Blocker)
 		return
 	}
-	fmt.Printf("\nAutomatic route: %s\n", ready.Route)
+	fmt.Printf("\nReplay route: %s\n", ready.Route)
 	if len(ready.Requirements) > 0 {
 		fmt.Println("Live replay will require:")
 		for _, requirement := range ready.Requirements {
@@ -106,6 +82,8 @@ type orchestratorOptions struct {
 	stopWhenDifferent                   bool
 	variables                           map[string]string
 	rulePacks                           []string
+	sessions                            []string
+	inspection                          *replayintent.Inspection
 }
 
 // The old protocol-specific commands remain callable compatibility aliases.
@@ -140,11 +118,21 @@ func orchestrateProtocolCapture(records []*pcapio.Record, opts orchestratorOptio
 			return true, err
 		}
 		args := []string{"-in", opts.capture, "-i", opts.iface, "-multiplier", "1", "-n", fmt.Sprint(opts.times), "-report", reportPath}
+		for _, id := range opts.sessions {
+			args = append(args, "-session", id)
+		}
 		fmt.Println("Mode: explicit wire replay - captured frames will be injected without session adaptation or response verification.")
 		return true, cmdReplay(args)
 	}
 
 	route := detectProtocolRoute(records)
+	if opts.inspection != nil {
+		r := opts.inspection.Route
+		route = protocolRoute{kind: protocolKind(r.Kind), session: r.Session, trace: r.Trace, reason: r.Reason}
+		if opts.inspection.Mode == "transport" {
+			route.kind = protocolGeneric
+		}
+	}
 	if route.kind == protocolGeneric {
 		return false, nil
 	}
@@ -164,91 +152,8 @@ func orchestrateProtocolCapture(records []*pcapio.Record, opts orchestratorOptio
 }
 
 func detectProtocolRoute(records []*pcapio.Record) protocolRoute {
-	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
-	// FTP must win before generic TLS: implicit FTPS control and protected data
-	// lanes are TLS sessions, but they must be coordinated as one FTP exchange.
-	var ftp, tlsSessions, sshSessions, opaqueSessions []*replay.Session
-	for _, session := range trace.Sessions {
-		if session.Transport != replay.TransportTCP {
-			continue
-		}
-		client, server, err := replay.TCPPayloadStreams(session)
-		if err != nil {
-			continue
-		}
-		if (adapters.FTP{}).Detect(*session) >= 100 || session.Server.Port == 990 && dissect.DetectTLS(client).IsTLS {
-			ftp = append(ftp, session)
-			continue
-		}
-		switch {
-		case (adapters.SSH{}).Detect(*session) > 0:
-			sshSessions = append(sshSessions, session)
-		case isTLSSession(session):
-			tlsSessions = append(tlsSessions, session)
-		case looksOpaqueEncrypted(client) || looksOpaqueEncrypted(server):
-			opaqueSessions = append(opaqueSessions, session)
-		}
-	}
-	if len(ftp) > 0 {
-		if len(ftp) > 1 {
-			return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture contains more than one FTP/FTPS control session; isolate the intended exchange first so no session is selected by guesswork. No packets were sent"}
-		}
-		if len(sshSessions) > 0 {
-			return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture mixes FTP/FTPS with an SSH session; automatic execution would leave part of the capture unreproduced. Isolate the intended exchange first; no packets were sent"}
-		}
-		return protocolRoute{kind: protocolFTP, session: ftp[0], trace: trace}
-	}
-	if len(sshSessions) > 0 && len(tlsSessions) > 0 {
-		return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture mixes SSH and TLS sessions; each needs different fresh-session requirements. Isolate one secure exchange first; no ciphertext was sent"}
-	}
-	if len(sshSessions) > 1 {
-		return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture contains more than one SSH session; isolate the intended exchange first so credentials and commands cannot be applied to the wrong device. No ciphertext was sent"}
-	}
-	if len(tlsSessions) > 1 {
-		return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture contains more than one TLS session; isolate the intended exchange first so key material is not applied by guesswork. No ciphertext was sent"}
-	}
-	if len(opaqueSessions) > 0 && len(sshSessions)+len(tlsSessions) > 0 {
-		return protocolRoute{kind: protocolOpaque, trace: trace, reason: "capture includes a recognized secure session and another opaque session with no safe driver. Isolate the intended exchange first; no ciphertext was sent"}
-	}
-	if len(sshSessions) > 0 {
-		return protocolRoute{kind: protocolSSH, session: sshSessions[0], trace: trace}
-	}
-	if len(tlsSessions) > 0 {
-		return protocolRoute{kind: protocolTLS, session: tlsSessions[0], trace: trace}
-	}
-	if len(opaqueSessions) > 0 {
-		return protocolRoute{kind: protocolOpaque, session: opaqueSessions[0], trace: trace, reason: "a TCP session appears encrypted or opaque, but Livewire cannot identify a safe fresh-session driver. No ciphertext was sent; inspect with 'livewire check <capture> -details' or use explicit --wire only when raw injection is truly intended"}
-	}
-	return protocolRoute{kind: protocolGeneric, trace: trace}
-}
-
-// looksOpaqueEncrypted is intentionally conservative. It catches sustained,
-// high-entropy binary payloads that would otherwise be mislabeled as ordinary
-// TCP, while leaving short binary industrial messages to the normal planner.
-func looksOpaqueEncrypted(payload []byte) bool {
-	if len(payload) < 256 {
-		return false
-	}
-	counts := [256]int{}
-	printable := 0
-	for _, b := range payload {
-		counts[b]++
-		if b == '\r' || b == '\n' || b == '\t' || b >= 0x20 && b <= 0x7e {
-			printable++
-		}
-	}
-	if float64(printable)/float64(len(payload)) > 0.55 {
-		return false
-	}
-	entropy := 0.0
-	for _, count := range counts {
-		if count == 0 {
-			continue
-		}
-		p := float64(count) / float64(len(payload))
-		entropy -= p * math.Log2(p)
-	}
-	return entropy >= 7.0
+	r := replayintent.Detect(replay.ExtractTrace(records, replay.ExtractOptions{}), nil)
+	return protocolRoute{kind: protocolKind(r.Kind), session: r.Session, trace: r.Trace, reason: r.Reason}
 }
 
 func resolveProtocolRequirements(route protocolRoute, opts orchestratorOptions) (orchestratorOptions, error) {
@@ -429,6 +334,34 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 	if err != nil {
 		return err
 	}
+	var prepared *secureexec.Prepared
+	var reportRegistry *replay.Registry
+	if opts.inspection != nil {
+		cfg := secureexec.Config{Inspection: opts.inspection, Target: opts.target, ServerName: opts.serverName, User: opts.user, Password: opts.password, Commands: opts.commands, Expects: opts.expects, Variables: opts.variables, Timeout: opts.timeout, Insecure: opts.insecure, Verify: replay.VerifyLenient}
+		if opts.strict {
+			cfg.Verify = replay.VerifyStrict
+		}
+		cfg.Registry, err = registryWithRulePacks(opts.rulePacks)
+		if err != nil {
+			return err
+		}
+		for _, item := range []struct {
+			path string
+			dest *[]byte
+		}{{opts.keylog, &cfg.KeyLog}, {opts.ca, &cfg.CA}, {opts.privateKey, &cfg.PrivateKey}, {opts.hostKey, &cfg.HostKey}} {
+			if item.path != "" {
+				*item.dest, err = os.ReadFile(item.path)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		reportRegistry = cfg.Registry
+		prepared, err = secureexec.Prepare(cfg)
+		if err != nil {
+			return redactProtocolError(err, opts)
+		}
+	}
 	var errs []error
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -439,12 +372,47 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 			fmt.Printf("\n---- fresh secure attempt %d of %d ----\n", attempt, opts.times)
 		}
 		args := protocolRunnerArgs(kind, opts, attempt)
-		runErr := runProtocolCompatibility(kind, args)
+		var runErr, publicationErr error
+		var directOutcome *reterminationOutcome
+		if prepared == nil {
+			runErr = runProtocolCompatibility(kind, args)
+		} else {
+			outcome, e := prepared.Run(ctx)
+			directOutcome = &outcome
+			runErr = e
+			if e != nil {
+				outcome.Error = redactProtocolError(e, opts).Error()
+			}
+			digest, digestErr := sha256File(opts.capture)
+			report := newReterminationReport(string(kind), digest, opts.target, opts.inspection.Plan, reportRegistry, opts.variables, append(append([]string{opts.user, opts.password}, opts.commands...), opts.expects...)...)
+			report.Outcome = outcome
+			report.Transformations = []string{"fresh session executed using explicit replay intent and selected capture sessions"}
+			if opts.insecure {
+				report.Limitations = append(report.Limitations, "TLS peer identity verification was explicitly disabled")
+			}
+			path := protocolAttemptReportPath(opts.report, attempt, opts.times)
+			publicationErr = errors.Join(digestErr, report.write(path))
+			runErr = errors.Join(runErr, publicationErr)
+			fmt.Printf("RESULT: %s\n", iterate.ClassifyVerified(outcome.Completed, outcome.Verified, outcome.Matched, false).Plain())
+			if publicationErr == nil {
+				fmt.Printf("Report: %s\n", path)
+			}
+			if outcome.Completed && outcome.Verified && !outcome.Matched && (opts.strict || kind == protocolSSH) {
+				runErr = errors.Join(runErr, fmt.Errorf("response verification found differences"))
+			}
+		}
 		if runErr != nil {
 			runErr = redactProtocolError(runErr, opts)
 			errs = append(errs, fmt.Errorf("attempt %d: %w", attempt, runErr))
 		}
-		outcome, reportErr := readReterminationOutcome(protocolAttemptReportPath(opts.report, attempt, opts.times), kind)
+		var outcome reterminationOutcome
+		var reportErr error
+		if directOutcome != nil {
+			outcome = *directOutcome
+			reportErr = publicationErr
+		} else {
+			outcome, reportErr = readReterminationOutcome(protocolAttemptReportPath(opts.report, attempt, opts.times), kind)
+		}
 		var tally iterate.Tally
 		if reportErr != nil {
 			tally.Add(iterate.Incomplete)
@@ -476,6 +444,9 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 
 func protocolRunnerArgs(kind protocolKind, opts orchestratorOptions, attempt int) []string {
 	args := []string{"-in", opts.capture, "-t", opts.target, "-timeout", opts.timeout.String(), "-require-complete-capture"}
+	for _, id := range opts.sessions {
+		args = append(args, "-session", id)
+	}
 	if opts.report != "" {
 		args = append(args, "-report", protocolAttemptReportPath(opts.report, attempt, opts.times))
 	}
@@ -616,4 +587,8 @@ func readReterminationOutcome(path string, kind protocolKind) (reterminationOutc
 		return reterminationOutcome{}, fmt.Errorf("%s is not a Livewire %s report", path, kind)
 	}
 	return report.Outcome, nil
+}
+
+func readinessFromInspection(r replayintent.Readiness) protocolReadiness {
+	return protocolReadiness{Route: protocolKind(r.Route), Supported: r.Supported, Requirements: r.Requirements, Blocker: r.Blocker, State: r.State, NeedsInterface: r.NeedsInterface}
 }

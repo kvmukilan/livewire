@@ -38,3 +38,6 @@ dist/*
 !dist/v0.7.0/**
 !dist/v0.8.0/
 !dist/v0.8.0/**
+
+!dist/v0.9.0-rc.1/
+!dist/v0.9.0-rc.1/**

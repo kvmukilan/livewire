@@ -22,11 +22,18 @@ import (
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/planexec"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/runvars"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
 type adaptiveRunReq struct {
+	Shape         string       `json:"shape,omitempty"`
+	CaptureDigest string       `json:"captureDigest,omitempty"`
+	Mode          string       `json:"mode,omitempty"`
+	Sessions      []string     `json:"sessions,omitempty"`
+	Secure        secureInputs `json:"secure,omitempty"`
+
 	Pcap      string            `json:"pcap"`
 	Iface     string            `json:"iface"`
 	TargetIP  string            `json:"targetIP"`
@@ -39,8 +46,8 @@ type adaptiveRunReq struct {
 	// Attempts replays the whole plan this many times and reports how often the
 	// device behaved the same. 0 or 1 means a single run.
 	Attempts int `json:"attempts,omitempty"`
-	// GapMS is the settle time between attempts. 0 takes the default.
-	GapMS int `json:"gapMs,omitempty"`
+	// GapMS is the settle time between attempts. Omitted takes the default; explicit zero does not wait.
+	GapMS *int `json:"gapMs,omitempty"`
 	// attempt is the 0-based iteration currently running. It is internal, set by
 	// the job loop, and is what varies the seed and client port per attempt.
 	attempt int `json:"-"`
@@ -86,12 +93,12 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	if req.Pcap == "" || req.Iface == "" || req.TargetIP == "" {
-		writeErr(w, 400, fmt.Errorf("pcap, iface, and targetIP are required"))
+	if req.Shape != "" && req.Shape != "one" {
+		writeErr(w, 400, fmt.Errorf("use /api/lab for two-sided replay"))
 		return
 	}
-	if _, err := netip.ParseAddr(req.TargetIP); err != nil {
-		writeErr(w, 400, fmt.Errorf("invalid targetIP"))
+	if req.Pcap == "" {
+		writeErr(w, 400, fmt.Errorf("pcap is required"))
 		return
 	}
 	if _, err := replay.ParseProfile(req.Profile); err != nil {
@@ -110,11 +117,11 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("attempts must be between 1 and %d", maxWebAttempts))
 		return
 	}
-	if req.GapMS < 0 {
+	if req.GapMS != nil && *req.GapMS < 0 {
 		writeErr(w, 400, fmt.Errorf("gapMs must not be negative"))
 		return
 	}
-	if req.GapMS > int(10*time.Minute/time.Millisecond) {
+	if req.GapMS != nil && *req.GapMS > int(10*time.Minute/time.Millisecond) {
 		writeErr(w, 400, fmt.Errorf("gapMs must not exceed 600000"))
 		return
 	}
@@ -140,6 +147,52 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
+	capture, digest, err := s.loadCaptureSnapshot(path)
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	if req.CaptureDigest != "" && digest != req.CaptureDigest {
+		writeErr(w, 409, fmt.Errorf("capture changed since preview; inspect it again"))
+		return
+	}
+	req.CaptureDigest = digest
+	records := capture.Records
+
+	registry, err := registryForRulePacks(req.RulePacks)
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	keys, err := s.planningKeyLog(req.Secure.Keylog)
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	inspection, err := replayintent.Inspect(records, replayintent.Options{KeyLog: keys, Mode: req.Mode, Profile: req.Profile, Sessions: req.Sessions, UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond}, registry)
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	if !inspection.Readiness.Supported {
+		writeErr(w, 400, fmt.Errorf("%s", inspection.Readiness.Blocker))
+		return
+	}
+	if inspection.Readiness.NeedsInterface && req.Iface == "" {
+		writeErr(w, 400, fmt.Errorf("iface is required for this replay mode"))
+		return
+	}
+	if inspection.Mode != "wire" && inspection.Mode != "transport" && inspection.Route.Kind != replayintent.Generic {
+		s.startSecureRun(w, req, digest, inspection, registry)
+		return
+	}
+	if inspection.Mode != "wire" {
+		if _, err := netip.ParseAddr(req.TargetIP); err != nil {
+			writeErr(w, 400, fmt.Errorf("invalid targetIP"))
+			return
+		}
+	}
+	req.Profile = string(inspection.Plan.Profile)
 	if _, err := s.startJob("adaptive-replay", func(j *job) { s.runAdaptiveJob(j, path, req) }); err != nil {
 		writeErr(w, 409, err)
 		return
@@ -149,38 +202,48 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	j.protectVariables(req.Variables)
-	records, _, err := s.loadPcap(path)
+	capture, digest, err := s.loadCaptureSnapshot(path)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "load failed")
 		return
 	}
+	if req.CaptureDigest != "" && digest != req.CaptureDigest {
+		j.finish(false, "capture changed since preview; inspect it again")
+		return
+	}
+	records := capture.Records
+
 	profile, _ := replay.ParseProfile(req.Profile)
 	verifyEngine, _ := engine.ParseVerifyMode(req.Verify)
 	verify := replay.VerifyMode(verifyEngine.String())
 	target, _ := netip.ParseAddr(req.TargetIP)
-	trace := replay.ExtractTrace(records, replay.ExtractOptions{UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
-	replay.MarkIntrinsicBlockers(trace)
 	registry, err := registryForRulePacks(req.RulePacks)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "rule-pack compilation failed")
 		return
 	}
-	plan := replay.BuildPlan(trace, profile, registry)
-	if err := plan.ValidateCoverage(); err != nil {
+	inspection, err := replayintent.Inspect(records, replayintent.Options{Mode: req.Mode, Profile: req.Profile, Sessions: req.Sessions, UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond}, registry)
+	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "plan invalid")
 		return
 	}
+	if !inspection.Readiness.Supported {
+		j.log(inspection.Readiness.Blocker)
+		j.finish(false, "plan blocked")
+		return
+	}
+	trace, plan := inspection.Trace, inspection.Plan
 	flows := engine.ExtractFlows(records)
 	sessions := map[string]*replay.Session{}
 	for _, sess := range trace.Sessions {
 		sessions[sess.ID] = sess
 	}
 	gap := defaultWebGap
-	if req.GapMS > 0 {
-		gap = time.Duration(req.GapMS) * time.Millisecond
+	if req.GapMS != nil {
+		gap = time.Duration(*req.GapMS) * time.Millisecond
 	}
 	runs := iterate.Plan{Times: req.Attempts, Gap: gap}.Normalize()
 
@@ -237,17 +300,13 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 			evidenceArtifact = evidenceName
 		}
 	}
-	digest, digestErr := s.fileSHA256(path)
-	if digestErr != nil {
-		j.log("capture digest: " + digestErr.Error())
-		ok = false
-	}
+
 	doc := map[string]any{
 		"tool": "livewire", "version": s.version, "when": time.Now().UTC(), "plan": plan,
 		"adapterVersions": adapters.VersionsForRegistry(registry),
 		"captureDigest":   digest, "limitations": plan.Limitations(),
 		"target": target.String(), "interface": req.Iface, "variables": runvars.Redacted(req.Variables),
-		"results": results, "evidence": evidenceArtifact,
+		"results": results, "evidence": evidenceArtifact, "mode": inspection.Mode, "selectedPackets": inspection.SelectedPackets, "excludedPackets": inspection.ExcludedPackets, "outcome": summary,
 	}
 	if runs.Repeats() {
 		doc["attempts"] = summary.Attempts
@@ -271,7 +330,7 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 			summary.Attempts, verdict, summary.Same, summary.Different, summary.Unverified, summary.WireOnly, summary.Incomplete))
 		return
 	}
-	j.finish(ok, fmt.Sprintf("%d sessions completed", len(results)))
+	j.finish(ok, fmt.Sprintf("%s: %d same, %d different, %d unverified, %d wire-only, %d did not complete", summary.Verdict.Plain(), summary.Sessions.Same, summary.Sessions.Different, summary.Sessions.Unverified, summary.Sessions.WireOnly, summary.Sessions.Incomplete))
 }
 
 func runWebEntry(ctx context.Context, j *job, entry replay.PlanEntry, session *replay.Session, sessions map[string]*replay.Session, raw []replay.Event, flows []*engine.Flow, registry *replay.Registry, target netip.Addr, req adaptiveRunReq, profile replay.Profile, verify replay.VerifyMode, verifyEngine engine.VerifyMode, started time.Time) webSessionResult {
@@ -324,6 +383,8 @@ func webResult(executed planexec.Result) webSessionResult {
 }
 
 type labRunReq struct {
+	Mode           string       `json:"mode,omitempty"`
+	CaptureDigest  string       `json:"captureDigest,omitempty"`
 	Pcap           string       `json:"pcap"`
 	Profile        string       `json:"profile"`
 	Topology       lab.Topology `json:"topology"`
@@ -372,6 +433,30 @@ func (s *Server) handleLab(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("actorTimeoutMs must be between 0 and 600000"))
 		return
 	}
+	if req.Mode != "" {
+		records, _, err := s.loadPcap(path)
+		if err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		in, err := replayintent.InspectLab(records, replayintent.Options{Mode: req.Mode, Profile: req.Profile, UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
+		if err != nil {
+			writeErr(w, 400, err)
+			return
+		}
+		if !in.Readiness.Supported {
+			writeErr(w, 400, fmt.Errorf("%s", in.Readiness.Blocker))
+			return
+		}
+		req.Profile = string(in.Plan.Profile)
+	}
+	if req.CaptureDigest != "" {
+		digest, err := s.fileSHA256(path)
+		if err != nil || digest != req.CaptureDigest {
+			writeErr(w, 409, fmt.Errorf("capture changed since preview; inspect it again"))
+			return
+		}
+	}
 	if _, err := s.startJob("dut-lab", func(j *job) { s.runLabJob(j, path, req) }); err != nil {
 		writeErr(w, 409, err)
 		return
@@ -380,12 +465,18 @@ func (s *Server) handleLab(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runLabJob(j *job, path string, req labRunReq) {
-	records, _, err := s.loadPcap(path)
+	capture, digest, err := s.loadCaptureSnapshot(path)
 	if err != nil {
 		j.log(err.Error())
 		j.finish(false, "load failed")
 		return
 	}
+	if req.CaptureDigest != "" && digest != req.CaptureDigest {
+		j.finish(false, "capture changed since preview; inspect it again")
+		return
+	}
+	records := capture.Records
+
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
 	profile, _ := replay.ParseProfile(req.Profile)
 	plan := lab.BuildReplayPlan(trace, profile)
@@ -402,12 +493,7 @@ func (s *Server) runLabJob(j *job, path string, req labRunReq) {
 		return
 	}
 	j.artifact(evidenceName)
-	digest, digestErr := s.fileSHA256(path)
-	if digestErr != nil {
-		j.log("capture digest: " + digestErr.Error())
-		j.finish(false, "capture digest failed")
-		return
-	}
+
 	doc := map[string]any{
 		"tool": "livewire", "version": s.version, "when": time.Now().UTC(), "captureDigest": digest,
 		"plan": plan, "adapterVersions": adapters.Versions(), "variables": map[string]string{},

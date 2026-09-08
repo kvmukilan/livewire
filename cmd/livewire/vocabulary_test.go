@@ -146,9 +146,9 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 	}
 }
 
-// The front door must show exactly the two primary product commands.
+// The front door exposes the complete everyday workflow.
 func TestUsageShowsOnlyEverydayCommands(t *testing.T) {
-	want := []string{"reproduce", "live"}
+	want := []string{"reproduce", "check", "capture", "ifaces", "web"}
 	var got []string
 	for _, c := range commands {
 		if c.group == groupEveryday {
@@ -275,7 +275,7 @@ func TestBinarySurface(t *testing.T) {
 				t.Errorf("front door is missing %q:\n%s", name, out)
 			}
 		}
-		for _, name := range []string{"rstdrop", "rewrite", "tls-replay", "livewire check", "livewire capture", "livewire web"} {
+		for _, name := range []string{"rstdrop", "rewrite", "tls-replay"} {
 			if strings.Contains(out, name) {
 				t.Errorf("front door should not list the advanced command %q:\n%s", name, out)
 			}
@@ -295,7 +295,7 @@ func TestBinarySurface(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("successful help must not look like a PowerShell error; stderr was:\n%s", stderr)
 		}
-		if !strings.Contains(stdout, "Two commands cover the normal workflow:") {
+		if !strings.Contains(stdout, "Inspect, choose your replay intent, preview, then run:") {
 			t.Errorf("stdout did not contain the help hub:\n%s", stdout)
 		}
 	})

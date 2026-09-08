@@ -142,8 +142,8 @@ func assessCapture(recs []*pcapio.Record, flows []*engine.Flow) preflightReport 
 }
 
 func printPreflight(r preflightReport) {
-	fmt.Printf("Preflight: %d%% replay confidence (%d packets, %d session(s): %d TCP, %d UDP, %d ICMP; %d raw)\n",
-		r.Confidence, r.Packets, r.Sessions, r.TCPFlows, r.UDP, r.ICMP, r.RawFrames)
+	fmt.Printf("Capture quality: %d packets, %d session(s): %d TCP, %d UDP, %d ICMP; %d raw\n",
+		r.Packets, r.Sessions, r.TCPFlows, r.UDP, r.ICMP, r.RawFrames)
 	for _, f := range r.Findings {
 		mark := "note"
 		if f.Severity == "warning" {

@@ -1,7 +1,7 @@
 # Livewire Feature Audit (historical v0.5.0 review)
 
 > Historical record: this document describes the v0.5.0 command surface and
-> its follow-up cleanup. For the current v0.8.0 security, replay orchestration,
+> its follow-up cleanup. For the current 0.9 release candidate security, replay orchestration,
 > FTP/FTPS, CI, and release disposition, see `RELEASE_AUDIT.md`; code pointers below are not a
 > current inventory.
 

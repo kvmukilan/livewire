@@ -15,6 +15,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/sshreplay"
 	"golang.org/x/crypto/ssh"
 )
@@ -36,6 +37,8 @@ func runSSHReplayArgs(args []string) error {
 	keyPath := fs.String("key", "", "path to a PEM private key (alternative to -pass)")
 	hostKeyPath := fs.String("host-key", "", "OpenSSH public host key to pin (recommended)")
 	reportPath := fs.String("report", "", "output redacted JSON report (default: <capture>.ssh.report.json)")
+	var selectedSessions fileFlags
+	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	requireComplete := fs.Bool("require-complete-capture", false, "refuse to run when any capture lane would be left unreplayed")
 	timeout := fs.Duration("timeout", 15*time.Second, "connection timeout")
 	var cmds multiFlag
@@ -81,6 +84,10 @@ func runSSHReplayArgs(args []string) error {
 		return err
 	}
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
+	trace, err = replayintent.Select(trace, selectedSessions, nil)
+	if err != nil {
+		return err
+	}
 	var session *replay.Session
 	for _, candidate := range trace.Sessions {
 		if candidate.Transport == replay.TransportTCP && (adapters.SSH{}).Detect(*candidate) > 0 {

@@ -30,6 +30,13 @@ func ExecutePlan[T any](ctx context.Context, trace *replay.Trace, plan replay.Re
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	entries := make([]replay.PlanEntry, 0, len(plan.Entries))
+	for _, entry := range plan.Entries {
+		if !entry.Excluded {
+			entries = append(entries, entry)
+		}
+	}
+	plan.Entries = entries
 	sessions := make(map[string]*replay.Session, len(trace.Sessions))
 	for _, session := range trace.Sessions {
 		sessions[session.ID] = session

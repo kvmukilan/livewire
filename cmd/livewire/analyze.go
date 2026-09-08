@@ -7,6 +7,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 )
 
 // cmdAnalyze is the compatibility entry point for the merged 'check' command: it
@@ -51,13 +52,14 @@ func cmdAnalyze(args []string) error {
 	if err != nil {
 		return err
 	}
-	_, plan, err := compileCoverageWithOptions(recs, profile, registry, replay.ExtractOptions{UDPIdle: *udpIdle})
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{Profile: string(profile), UDPIdle: *udpIdle}, registry)
 	if err != nil {
 		return fmt.Errorf("compile coverage: %w", err)
 	}
+	plan := inspection.Plan
 	printCoverage(plan)
 	if *jsonPath != "" {
-		readiness := assessProtocolReadiness(detectProtocolRoute(recs))
+		readiness := readinessFromInspection(inspection.Readiness)
 		if err := writeAssessment(*jsonPath, assessment, plan, registry, readiness); err != nil {
 			return err
 		}

@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
-	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 )
 
@@ -40,25 +39,14 @@ type analysisDocument struct {
 	AutomaticRoute  protocolReadiness `json:"automaticRoute"`
 }
 
-func compileCoverageWithOptions(records []*pcapio.Record, profile replay.Profile, registry *replay.Registry, opts replay.ExtractOptions) (*replay.Trace, replay.ReplayPlan, error) {
-	if registry == nil {
-		registry = adapters.DefaultRegistry()
-	}
-	trace := replay.ExtractTrace(records, opts)
-	replay.MarkIntrinsicBlockers(trace)
-	plan := replay.BuildPlan(trace, profile, registry)
-	if err := plan.ValidateCoverage(); err != nil {
-		return nil, replay.ReplayPlan{}, err
-	}
-	return trace, plan, nil
-}
-
 func printCoverage(plan replay.ReplayPlan) {
 	fmt.Printf("\nProtocol coverage (%s profile):\n", plan.Profile)
 	fmt.Printf("  %-12s %-7s %-12s %-12s %-16s %s\n", "session", "proto", "driver", "fidelity", "adapter", "notes")
 	for _, e := range plan.Entries {
 		note := ""
-		if len(e.Blockers) > 0 {
+		if e.Excluded {
+			note = "EXCLUDED by session selection"
+		} else if len(e.Blockers) > 0 {
 			note = "BLOCKER: " + e.Blockers[0]
 		} else if len(e.Warnings) > 0 {
 			note = e.Warnings[0]

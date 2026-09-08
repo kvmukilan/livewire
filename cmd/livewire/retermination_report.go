@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
-	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runvars"
+	"github.com/kvmukilan/livewire/internal/secureexec"
 )
 
 // reterminationReport gives TLS and SSH the same auditable report envelope as
@@ -32,30 +32,8 @@ type reterminationReport struct {
 	secretValues    []string
 }
 
-type reterminationOutcome struct {
-	Completed           bool                       `json:"completed"`
-	Verified            bool                       `json:"verified"`
-	Matched             bool                       `json:"matched"`
-	Adapter             string                     `json:"adapter"`
-	ProtocolVersion     string                     `json:"protocolVersion,omitempty"`
-	CipherSuite         string                     `json:"cipherSuite,omitempty"`
-	ALPN                string                     `json:"alpn,omitempty"`
-	PeerIdentityChecked bool                       `json:"peerIdentityChecked"`
-	Requests            int                        `json:"requests"`
-	Responses           int                        `json:"responses"`
-	Mismatches          int                        `json:"mismatches"`
-	Differences         []replay.Difference        `json:"differences,omitempty"`
-	Commands            []commandEvidence          `json:"commands,omitempty"`
-	Transfers           []ftpreplay.TransferResult `json:"transfers,omitempty"`
-	Error               string                     `json:"error,omitempty"`
-}
-
-type commandEvidence struct {
-	Index        int    `json:"index"`
-	OutputBytes  int    `json:"outputBytes"`
-	OutputSHA256 string `json:"outputSha256"`
-	Matched      bool   `json:"matched"`
-}
+type reterminationOutcome = secureexec.Outcome
+type commandEvidence = secureexec.CommandEvidence
 
 func newReterminationReport(kind, captureDigest, target string, plan replay.ReplayPlan, registry *replay.Registry, variables map[string]string, secrets ...string) *reterminationReport {
 	versions := adapters.Versions()
@@ -92,7 +70,7 @@ func (r *reterminationReport) write(path string) error {
 // selected encrypted session is executable by the specialized command; every
 // other lane is explicit and blocked instead of being silently discarded.
 func buildReterminationPlan(trace *replay.Trace, selected *replay.Session, adapter, driver string) replay.ReplayPlan {
-	plan := replay.ReplayPlan{Profile: replay.ProfileFunctional, Packets: trace.Packets}
+	plan := replay.ReplayPlan{Profile: replay.ProfileFunctional, Packets: trace.Packets, Entries: append([]replay.PlanEntry(nil), trace.Excluded...)}
 	for _, session := range trace.Sessions {
 		entry := replay.PlanEntry{
 			SessionID: session.ID, Transport: session.Transport,
@@ -154,6 +132,9 @@ func validateReterminationExecution(plan replay.ReplayPlan, requireComplete bool
 	executable := 0
 	var blocked []error
 	for _, entry := range plan.Entries {
+		if entry.Excluded {
+			continue
+		}
 		if entry.Mode != replay.ModeBlocked {
 			executable++
 			continue

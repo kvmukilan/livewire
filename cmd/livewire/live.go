@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,10 +36,15 @@ func isTerminal(f *os.File) bool {
 // the historical `live -in ...` form keeps its original TCP dry-run/on-wire
 // behavior and flags unchanged.
 func cmdLive(args []string) error {
-	if len(args) > 0 && !isFlagArg(args[0]) {
-		return cmdReproduce(args)
+	for _, arg := range args {
+		if arg == "-in" || arg == "--in" || strings.HasPrefix(arg, "-in=") || strings.HasPrefix(arg, "--in=") {
+			return cmdLiveLegacy(args)
+		}
 	}
-	return cmdLiveLegacy(args)
+	if len(args) == 0 || len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "-all-flags") {
+		return cmdLiveLegacy(args)
+	}
+	return cmdReproduce(args)
 }
 
 func cmdLiveLegacy(args []string) error {

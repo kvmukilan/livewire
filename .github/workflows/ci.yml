@@ -9,6 +9,7 @@ permissions:
 
 env:
   RELEASE_GO: "1.26.7"
+  GOTOOLCHAIN: local
 
 jobs:
   compatibility:
@@ -17,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.25.14", "1.26.7", "1.27.x"]
+        go: ["1.26.7", "1.27.x"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -26,6 +27,7 @@ jobs:
           check-latest: true
           cache: true
       - run: go mod verify
+      - run: node --test scripts/dashboard.test.cjs
       - run: go test -count=1 ./...
       - run: go vet ./...
 
@@ -38,8 +40,16 @@ jobs:
         with:
           go-version: ${{ env.RELEASE_GO }}
           cache: true
+      - run: node --test scripts/dashboard.test.cjs
       - run: go test -count=1 ./...
       - run: go run ./cmd/livewire version
+      - name: Compare published replay behavior
+        shell: pwsh
+        run: |
+          go build -o livewire.exe ./cmd/livewire
+          if ($LASTEXITCODE -ne 0) { throw "Comparison build failed" }
+          python scripts/compare-releases.py --output "$env:RUNNER_TEMP/release-comparison"
+          if ($LASTEXITCODE -ne 0) { throw "Published replay regression failed" }
 
   quality:
     name: Static, vulnerability, fuzz, and coverage gates

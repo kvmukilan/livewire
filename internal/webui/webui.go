@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net"
@@ -193,6 +194,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	page := bytes.Replace(indexHTML, []byte("__LIVEWIRE_CSRF__"), []byte(s.csrfToken), 1)
+	page = bytes.ReplaceAll(page, []byte("__LIVEWIRE_VERSION__"), []byte(html.EscapeString(s.version)))
 	_, _ = w.Write(page)
 }
 

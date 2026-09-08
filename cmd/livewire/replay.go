@@ -13,23 +13,26 @@ import (
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/stateless"
 )
 
 type wireReplayReport struct {
-	Tool          string    `json:"tool"`
-	Version       string    `json:"version"`
-	When          time.Time `json:"when"`
-	CaptureDigest string    `json:"captureDigest"`
-	Interface     string    `json:"interface,omitempty"`
-	Mode          string    `json:"mode"`
-	FramesPerPass int       `json:"framesPerPass"`
-	Passes        int       `json:"passes"`
-	FramesSent    int       `json:"framesSent"`
-	Completed     bool      `json:"completed"`
-	Verified      bool      `json:"verified"`
-	Limitations   []string  `json:"limitations"`
-	Error         string    `json:"error,omitempty"`
+	Selection     *replay.ReplayPlan `json:"selection,omitempty"`
+	Tool          string             `json:"tool"`
+	Version       string             `json:"version"`
+	When          time.Time          `json:"when"`
+	CaptureDigest string             `json:"captureDigest"`
+	Interface     string             `json:"interface,omitempty"`
+	Mode          string             `json:"mode"`
+	FramesPerPass int                `json:"framesPerPass"`
+	Passes        int                `json:"passes"`
+	FramesSent    int                `json:"framesSent"`
+	Completed     bool               `json:"completed"`
+	Verified      bool               `json:"verified"`
+	Limitations   []string           `json:"limitations"`
+	Error         string             `json:"error,omitempty"`
 }
 
 // cmdReplay is a tcpreplay-style stateless send: blast a capture's frames onto
@@ -49,6 +52,8 @@ func cmdReplay(args []string) (retErr error) {
 	var loop int
 	fs.IntVar(&loop, flagCount, 1, "send the capture this many times (0 = forever)")
 	fs.IntVar(&loop, "loop", 1, "alias for -n")
+	var selectedSessions fileFlags
+	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	dryRun := fs.Bool("dry-run", false, "compute and print the schedule without sending")
 	reportPath := fs.String("report", "", "write a JSON execution report without packet payloads")
 	allFlags := registerAllFlags(fs)
@@ -84,6 +89,30 @@ func cmdReplay(args []string) (retErr error) {
 		return fmt.Errorf("no records in %s", inPath)
 	}
 
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{Mode: "wire", Sessions: selectedSessions}, nil)
+	if err != nil {
+		return err
+	}
+	if !inspection.Readiness.Supported {
+		return fmt.Errorf("%s", inspection.Readiness.Blocker)
+	}
+	if len(selectedSessions) > 0 {
+		indexes := map[int]bool{}
+		for _, e := range inspection.Plan.Entries {
+			if !e.Excluded {
+				for _, i := range e.PacketIndexes {
+					indexes[i] = true
+				}
+			}
+		}
+		filtered := make([]*pcapio.Record, 0)
+		for i, r := range recs {
+			if indexes[i] {
+				filtered = append(filtered, r)
+			}
+		}
+		recs = filtered
+	}
 	pace := stateless.Pace{TopSpeed: *topspeed, PPS: *pps, Mbps: *mbps, Multiplier: *mult}
 	sched := stateless.Schedule(recs, pace)
 	fmt.Printf("%d frames, one pass takes %s at the chosen rate\n", len(recs), stateless.TotalDuration(sched))
@@ -104,7 +133,7 @@ func cmdReplay(args []string) (retErr error) {
 			mode = "dry-run"
 		}
 		report = &wireReplayReport{
-			Tool: "livewire", Version: version, When: time.Now().UTC(), CaptureDigest: digest,
+			Tool: "livewire", Version: version, When: time.Now().UTC(), CaptureDigest: digest, Selection: &inspection.Plan,
 			Interface: iface, Mode: mode, FramesPerPass: len(recs), Verified: false,
 			Limitations: []string{"captured frames are not adapted to a live session and replies are not compared with the recording"},
 		}

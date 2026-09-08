@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.8.0",
+    [string]$Version = "0.9.0-rc.1",
     [string]$OutputRoot = "dist"
 )
 
@@ -31,7 +31,7 @@ $targets = @(
     @{ GOOS = "linux"; GOARCH = "arm64"; Name = "livewire-$Version-linux-arm64" },
     @{ GOOS = "windows"; GOARCH = "amd64"; Name = "livewire-$Version-windows-amd64.exe" }
 )
-$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md")
+$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md")
 
 Push-Location $repo
 try {
@@ -85,7 +85,7 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
         "SETUP.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
-        "RELEASE_AUDIT.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
+        "RELEASE_AUDIT.md", "WORKFLOW.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
     }

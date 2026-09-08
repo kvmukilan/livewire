@@ -20,6 +20,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/dissect"
 	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/tlsreplay"
 )
 
@@ -36,6 +37,8 @@ func runFTPReplayArgs(args []string) error {
 	verifyText := fs.String("verify", "lenient", "response verification: off, lenient, or strict")
 	timeout := fs.Duration("timeout", 30*time.Second, "control and data operation timeout")
 	reportPath := fs.String("report", "", "output redacted JSON report (default: <capture>.ftp.report.json)")
+	var selectedSessions fileFlags
+	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	requireComplete := fs.Bool("require-complete-capture", false, "refuse to run when any capture lane would be left unreplayed")
 	var variables setFlags
 	fs.Var(&variables, "set", "set an FTP variable such as ftp.user, ftp.password, ftp.account, or ftp.advertise-ip")
@@ -70,6 +73,10 @@ func runFTPReplayArgs(args []string) error {
 		return err
 	}
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
+	trace, err = replayintent.Select(trace, selectedSessions, nil)
+	if err != nil {
+		return err
+	}
 	control, err := selectFTPControl(trace)
 	if err != nil {
 		return err
@@ -225,7 +232,7 @@ func ftpTLSConfig(target, serverName, caPath string, insecure bool) (*tls.Config
 }
 
 func buildFTPPlan(trace *replay.Trace, control *replay.Session, data []*replay.Session) replay.ReplayPlan {
-	plan := replay.ReplayPlan{Profile: replay.ProfileFunctional, Packets: trace.Packets}
+	plan := replay.ReplayPlan{Profile: replay.ProfileFunctional, Packets: trace.Packets, Entries: append([]replay.PlanEntry(nil), trace.Excluded...)}
 	selected := map[string]bool{control.ID: true}
 	entry := replay.PlanEntry{SessionID: control.ID, Transport: replay.TransportTCP, Driver: "ftp-coordinator", Adapter: "ftp", Mode: replay.ModeCoordinated, Fidelity: replay.FidelitySemantic, PacketIndexes: reterminationPacketIndexes(control.Events)}
 	for _, session := range data {

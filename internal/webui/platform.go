@@ -12,10 +12,15 @@ import (
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/replayintent"
 	"github.com/kvmukilan/livewire/internal/supportbundle"
 )
 
 type planReq struct {
+	Shape     string            `json:"shape,omitempty"`
+	Secure    secureInputs      `json:"secure,omitempty"`
+	Mode      string            `json:"mode,omitempty"`
+	Sessions  []string          `json:"sessions,omitempty"`
 	Pcap      string            `json:"pcap"`
 	Profile   string            `json:"profile"`
 	RulePacks []json.RawMessage `json:"rulePacks,omitempty"`
@@ -49,7 +54,8 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	records, _, err := s.loadPcap(path)
+	capture, digest, err := s.loadCaptureSnapshot(path)
+	records := capture.Records
 	if err != nil {
 		writeErr(w, 400, err)
 		return
@@ -67,21 +73,33 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, fmt.Errorf("udpIdleMs must not exceed 3600000"))
 		return
 	}
-	trace := replay.ExtractTrace(records, replay.ExtractOptions{UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
-	replay.MarkIntrinsicBlockers(trace)
 	registry, err := registryForRulePacks(req.RulePacks)
 	if err != nil {
 		writeErr(w, 400, err)
 		return
 	}
-	plan := replay.BuildPlan(trace, profile, registry)
-	if err := plan.ValidateCoverage(); err != nil {
-		writeErr(w, 500, err)
+	keys, err := s.planningKeyLog(req.Secure.Keylog)
+	if err != nil {
+		writeErr(w, 400, err)
 		return
 	}
+	inspection, err := replayintent.Inspect(records, replayintent.Options{KeyLog: keys, Mode: req.Mode, Profile: string(profile), Sessions: req.Sessions, UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond}, registry)
+	if req.Shape == "lab" {
+		inspection, err = replayintent.InspectLab(records, replayintent.Options{Mode: req.Mode, Profile: req.Profile, Sessions: req.Sessions, UDPIdle: time.Duration(req.UDPIdleMS) * time.Millisecond})
+	} else if req.Shape != "" && req.Shape != "one" {
+		writeErr(w, 400, fmt.Errorf("shape must be one or lab"))
+		return
+	}
+	if err != nil {
+		writeErr(w, 400, err)
+		return
+	}
+	trace, plan := inspection.Trace, inspection.Plan
 	writeJSON(w, map[string]any{
-		"capture": map[string]any{"packets": trace.Packets, "sessions": len(trace.Sessions), "rawFrames": len(trace.Raw)},
-		"plan":    plan, "limitations": plan.Limitations(), "adapters": registry.Names(), "adapterVersions": adapters.VersionsForRegistry(registry), "sessions": trace.Sessions,
+		"captureDigest": digest,
+		"capture":       map[string]any{"packets": trace.Packets, "sessions": len(trace.Sessions), "rawFrames": len(trace.Raw)},
+		"mode":          inspection.Mode, "readiness": inspection.Readiness, "selectedPackets": inspection.SelectedPackets, "excludedPackets": inspection.ExcludedPackets,
+		"plan": plan, "limitations": plan.Limitations(), "adapters": registry.Names(), "adapterVersions": adapters.VersionsForRegistry(registry), "sessions": trace.Sessions,
 	})
 }
 
