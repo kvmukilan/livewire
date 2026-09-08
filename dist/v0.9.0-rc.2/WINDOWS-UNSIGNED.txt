@@ -1,0 +1,7 @@
+Livewire v0.9.0-rc.2 for Windows is not Authenticode-signed.
+
+Verify SHA256SUMS before execution and obtain the release only from:
+https://github.com/kvmukilan/livewire/releases/tag/v0.9.0-rc.2
+
+GitHub publishes build provenance attestations for the binaries, ZIP, SBOM,
+and checksum manifest. Windows may display an unknown-publisher warning.

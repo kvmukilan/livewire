@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.9.0-rc.1",
+    [string]$Version = "0.9.0-rc.2",
     [string]$OutputRoot = "dist"
 )
 
@@ -42,6 +42,10 @@ function Copy-ReleaseText([string]$Source, [string]$Destination) {
 
 Push-Location $repo
 try {
+    # go:embed preserves bytes. Canonicalize this text input just as Git does,
+    # so a CRLF editor cannot change executable hashes relative to CI checkout.
+    $embeddedDashboard = Join-Path $repo "internal\webui\index.html"
+    Copy-ReleaseText $embeddedDashboard $embeddedDashboard
     $env:SOURCE_DATE_EPOCH = "946684800"
     foreach ($target in $targets) {
         $env:GOOS = $target.GOOS
