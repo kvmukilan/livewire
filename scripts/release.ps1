@@ -33,6 +33,13 @@ $targets = @(
 )
 $documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md")
 
+function Copy-ReleaseText([string]$Source, [string]$Destination) {
+    # Match .gitattributes even when an editor produced CRLF in the worktree.
+    # Otherwise Git normalizes committed documents after checksums were made.
+    $text = [IO.File]::ReadAllText($Source).Replace("`r`n", "`n")
+    [IO.File]::WriteAllText($Destination, $text, [Text.UTF8Encoding]::new($false))
+}
+
 Push-Location $repo
 try {
     $env:SOURCE_DATE_EPOCH = "946684800"
@@ -61,9 +68,9 @@ try {
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
             throw "Release document is missing: $document"
         }
-        Copy-Item -LiteralPath $source -Destination (Join-Path $output $document)
+        Copy-ReleaseText $source (Join-Path $output $document)
     }
-    Copy-Item -LiteralPath (Join-Path $repo "scripts\setup-windows.ps1") -Destination (Join-Path $output "setup-windows.ps1")
+    Copy-ReleaseText (Join-Path $repo "scripts\setup-windows.ps1") (Join-Path $output "setup-windows.ps1")
 
     $unsignedNotice = @"
 Livewire v$Version for Windows is not Authenticode-signed.
@@ -74,7 +81,7 @@ https://github.com/kvmukilan/livewire/releases/tag/v$Version
 GitHub publishes build provenance attestations for the binaries, ZIP, SBOM,
 and checksum manifest. Windows may display an unknown-publisher warning.
 "@
-    [IO.File]::WriteAllText((Join-Path $output "WINDOWS-UNSIGNED.txt"), $unsignedNotice.Trim() + "`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $output "WINDOWS-UNSIGNED.txt"), $unsignedNotice.Trim().Replace("`r`n", "`n") + "`n", [Text.UTF8Encoding]::new($false))
 
     $sbomPath = Join-Path $output "livewire-$Version.cdx.json"
     & go run ./scripts/releasegen.go sbom -version $Version -output $sbomPath
