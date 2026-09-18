@@ -4,18 +4,19 @@ For prerequisite diagnostics, failure recovery, supported platforms, and the
 stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-The release candidate is `0.9.0-rc.2`. Automatic inspection remains useful;
-replay intent is now a separate choice. It is a prerelease; 0.8.0 remains the stable download.
+This guide describes the 0.9 line, currently a release candidate; 0.8.0 remains
+the stable download. Automatic inspection remains useful; replay intent is now
+a separate choice.
 
 ## Inspect, select, preview, run
 
 ```sh
 livewire check issue.pcap -details
-livewire reproduce issue.pcap --mode application --session tcp-0 --dry-run
-livewire reproduce issue.pcap --mode application --session tcp-0 -t 192.168.1.50
+livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run
+livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50
 ```
 
-Use the session IDs shown for that capture. Repeat `--session` to include more
+Use the session IDs shown for that capture. Repeat `-session` to include more
 than one exchange. Selecting FTP control or data includes the entire related
 group. Changing the capture can change its session IDs; inspect it again.
 
@@ -35,7 +36,7 @@ Plain application/transport targets are IP addresses and use captured ports.
 Secure targets accept `host:port`. Socket-based application replay does not need
 a packet interface or packet-driver elevation. Packet drivers still do.
 
-`--dry-run` inspects the capture, validates the chosen mode and supplied target,
+`-dry-run` inspects the capture, validates the chosen mode and supplied target,
 and shows requirements and report destinations. It sends nothing and writes no
 report. Missing credentials are listed as requirements; preview alone does not
 prove keys/certificates will work against a live peer. A blocked preview exits
@@ -45,9 +46,9 @@ blocked capture; inspect its structured readiness when automating.
 ## Secure exchanges
 
 ```sh
-livewire reproduce tls.pcap --mode application -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
-livewire check ftps.pcap --mode application -keylog sslkeys.log -details
-livewire reproduce ssh.pcap --mode application -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
+livewire reproduce tls.pcap -mode application -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
+livewire check ftps.pcap -mode application -keylog sslkeys.log -details
+livewire reproduce ssh.pcap -mode application -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
 ```
 
 FTPS negotiation is decrypted offline to associate data sessions when a matching
@@ -91,9 +92,9 @@ session selection and fresh secure application replay are one-sided features.
 
 - `live <capture>` aliases `reproduce`, including flags on either side of the
   positional capture. `live -in <capture>` keeps the historical TCP engine.
-- Noninteractive commands without `--mode` retain automatic routing. Interactive
+- Noninteractive commands without `-mode` retain automatic routing. Interactive
   reproduction asks for intent unless an explicit mode/profile was provided.
-- `--wire` and `-profile wire` select explicit wire replay. Existing protocol
+- `-wire` and `-profile wire` select explicit wire replay. Existing protocol
   commands remain available for compatibility.
 - `/api/plan` accepts `mode`, `sessions`, `shape` (`one`/`lab`), and
   `secure.keylog`. It returns shared `readiness`, `mode`, selected/excluded packet

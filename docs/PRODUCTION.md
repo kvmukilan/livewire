@@ -14,11 +14,11 @@ Socket application replay needs neither packet-driver elevation nor `-i`.
 
 ```sh
 livewire doctor
-livewire doctor -json --out-dir .
+livewire doctor -json -out-dir .
 livewire ifaces
 livewire check issue.pcap -details
-livewire reproduce issue.pcap --mode application --session tcp-0 --dry-run
-livewire reproduce issue.pcap --mode application --session tcp-0 -t 192.168.1.50 -report application.json
+livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run
+livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50 -report application.json
 livewire bundle -report application.json -o application-support.zip
 ```
 
@@ -28,15 +28,15 @@ reply-equivalence claim. Inspect captured destinations before using it.
 
 ```sh
 livewire doctor -i eth1
-livewire reproduce issue.pcap --mode transport --session tcp-0 --dry-run
-livewire reproduce issue.pcap --mode transport --session tcp-0 -i eth1 -t 192.168.1.50 -report transport.json
-livewire reproduce issue.pcap --mode wire --session tcp-0 --dry-run
-livewire reproduce issue.pcap --mode wire --session tcp-0 -i eth1 -report wire.json
+livewire reproduce issue.pcap -mode transport -session tcp-0 -dry-run
+livewire reproduce issue.pcap -mode transport -session tcp-0 -i eth1 -t 192.168.1.50 -report transport.json
+livewire reproduce issue.pcap -mode wire -session tcp-0 -dry-run
+livewire reproduce issue.pcap -mode wire -session tcp-0 -i eth1 -report wire.json
 ```
 
 For a two-interface DUT, use `livewire help lab` and the topology examples in
 DOCUMENTATION.md. Map every captured endpoint to its intended live side before
-running. `lab` uses its existing `-profile` flag (not `--mode`) and requires
+running. `lab` uses its existing `-profile` flag (not `-mode`) and requires
 different client/server interfaces. It does not provide application equivalence.
 
 ```sh
@@ -48,13 +48,13 @@ livewire bundle -report dut.json -evidence dut.pcapng -o dut-support.zip
 ```
 
 Automatic inspection remains useful. Interactive replay asks for intent;
-scripts omitting `--mode` retain compatibility. Never use a different execution
+scripts omitting `-mode` retain compatibility. Never use a different execution
 mode merely to hide a blocker. Resolve missing security inputs or select the
 intended exchange. `livewire help troubleshoot` contains further recovery steps.
 
 ## Diagnostics and reports
 
-`doctor [-i <interface>] [--json] [--out-dir <existing-directory>]` sends no
+`doctor [-i <interface>] [-json] [-out-dir <existing-directory>]` sends no
 traffic, opens no capture handle, and changes no host configuration. It creates,
 writes, syncs, and removes one temporary output probe. It does not reserve disk
 space. JSON stdout contains version, platform, interface, outputDir, ready, and
@@ -148,7 +148,7 @@ and recovery, not an exit-zero replay. Never disable a real interface or fill
 a real disk outside the dedicated test host/volume.
 
 On each platform, repeat the selected supported workflow for at least two hours.
-Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap --mode application -t 192.168.1.50`
+Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -mode application -t 192.168.1.50`
 on the selected lab host. Every attempt has separate transcripts; report-path
 arguments may contain `{attempt}` for unique filenames. The harness stops on
 an unexpected exit and leaves behavior/cleanup qualification pending review.

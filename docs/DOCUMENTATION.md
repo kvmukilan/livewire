@@ -1,4 +1,4 @@
-# Livewire v0.9.0-rc.2 Operator Guide
+# Livewire Operator Guide
 
 This is the 0.9 release candidate guide. Start with [Replay workflow](WORKFLOW.md)
 for explicit intent, session selection, and offline preview.
@@ -44,8 +44,8 @@ this guide from beginning to end.
 
 - Use an isolated lab and a target you are authorized to test. A capture can
   contain destructive application operations.
-- Choose `--mode application`, `transport`, or `wire` explicitly. Use
-  `--session <id> --dry-run` to preview the intended exchange before execution.
+- Choose `-mode application`, `transport`, or `wire` explicitly. Use
+  `-session <id> -dry-run` to preview the intended exchange before execution.
   Application pacing can use the `timing` profile for supported plaintext protocols.
 - Capture both directions, without snap-length truncation, and include the TCP
   handshake when possible.
@@ -119,12 +119,10 @@ go build -trimpath -o .\bin\livewire.exe .\cmd\livewire
 ```
 
 If you received a release binary, place it at `bin\livewire.exe` and skip the
-Go build. For the repository's locally built release artifact, the equivalent
-copy command is:
-
-```powershell
-Copy-Item .\dist\v0.9.0-rc.2\livewire-0.9.0-rc.2-windows-amd64.exe .\bin\livewire.exe
-```
+Go build. Release binaries are published only on the
+[Releases page](https://github.com/kvmukilan/livewire/releases); the
+repository keeps just each release's checksum manifest under `dist/`.
+[SETUP.md](SETUP.md) has the download and verification commands.
 
 Copy the WinDivert files beside `livewire.exe`. This example matches the
 official WinDivert 2.2.2 binary archive layout:
@@ -281,10 +279,12 @@ CGO_ENABLED=0 go build -trimpath -o ./bin/livewire ./cmd/livewire
 ./bin/livewire version
 ```
 
-If you received a release binary, install it locally and skip the Go build:
+If you received a release binary, install it locally and skip the Go build.
+[SETUP.md](SETUP.md) has the download and verification commands; after
+verifying the checksum:
 
 ```bash
-install -m 0755 ./dist/v0.9.0-rc.2/livewire-0.9.0-rc.2-linux-amd64 ./bin/livewire
+install -m 0755 ./livewire-<version>-linux-amd64 ./bin/livewire
 ```
 
 Verify the Linux tools used for address resolution and TCP RST suppression:
@@ -872,7 +872,7 @@ Linux:
 
 PCAP payloads can still contain credentials or personal data. Treat them as
 sensitive even though Livewire does not place supplied secrets in metadata. See
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## 14. Troubleshooting
 
@@ -935,7 +935,7 @@ Capture the original SYN and SYN-ACK when possible.
 - DNP3 Secure Authentication needs a purpose-built adapter.
 - Unknown opaque sessions are blocked. Livewire never guesses plaintext or
   fresh cryptographic state and never falls back to wire injection automatically.
-- Raw injection requires `--wire`; the older explicitly selected `-profile wire`
+- Raw injection requires `-wire`; the older explicitly selected `-profile wire`
   remains a compatibility spelling for scripts that already use it.
 
 ## 15. Command reference
@@ -999,7 +999,7 @@ The same idea keeps the same name on every command that has it.
 `reproduce`, positional `live`, and `check` accept a bare capture. The primary
 `live` form requires it first; historical `live -in ...` keeps its exact parser.
 
-Superseded spellings — `--to`, `--on`, `-iface`, `-target`, `-out`, `-loop`,
+Superseded spellings — `-to`, `-on`, `-iface`, `-target`, `-out`, `-loop`,
 `-count`, `-ip`, `-times`, `-iterations`, `-dry-run` — remain accepted wherever
 they previously worked, so existing scripts and older copies of these docs keep
 running. They are omitted from the default help to keep the visible surface
@@ -1034,7 +1034,7 @@ for an intermittent fault. The dashboard exposes the same control as an
 
 Run `livewire <command> -h` for the common flags, or `-all-flags` for all of them.
 
-## 16. Deliberate v0.9.0-rc.2 boundaries
+## 16. Deliberate 0.9 boundaries
 
 - No distributed replay agents.
 - No TRex-scale throughput target.
@@ -1072,7 +1072,7 @@ Windows ZIP, and writes SHA-256 checksums into `dist/v<version>/`:
 
 ```powershell
 $env:GOTOOLCHAIN='go1.26.7'
-./scripts/release.ps1 -Version 0.9.0-rc.2
+./scripts/release.ps1 -Version <x.y.z>
 ```
 
 It refuses to build unless the toolchain is exactly Go 1.26.7 and
@@ -1081,10 +1081,13 @@ centralized in `internal/buildinfo`. Inputs are sorted, VCS metadata is disabled
 paths are trimmed, ZIP timestamps are fixed, and the script emits a deterministic
 CycloneDX SBOM, unsigned-Windows notice, and `SHA256SUMS`.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which repeats tests,
-regenerates and byte-compares the committed files, validates the SBOM and ZIP,
-attests the release artifacts, publishes only that version's changelog section,
-then downloads every asset and verifies its checksum.
+Commit only `SHA256SUMS` and the SBOM from `dist/v<version>/`; the binaries and
+packaged documents are ignored and live only on the Releases page. Pushing a
+`v*` tag runs `.github/workflows/release.yml`, which repeats the tests, rebuilds
+every artifact, proves the rebuilt `SHA256SUMS` is byte-identical to the
+committed one, validates the SBOM and ZIP, attests the rebuilt artifacts,
+publishes them with only that version's changelog section, then downloads every
+asset and verifies it against the committed manifest.
 
 ### Pre-release gate
 

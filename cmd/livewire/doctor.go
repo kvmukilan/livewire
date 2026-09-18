@@ -45,7 +45,7 @@ func runDoctor(args []string, out io.Writer, deps doctorDeps) error {
 	dir := fs.String("out-dir", ".", "existing output directory to test with a temporary file")
 	all := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Fprintln(out, "usage: livewire doctor [-i <interface>] [--json] [--out-dir <directory>]")
+		fmt.Fprintln(out, "usage: livewire doctor [-i <interface>] [-json] [-out-dir <directory>]")
 		fmt.Fprintln(out, "Checks local prerequisites without sending traffic or changing host configuration.")
 		fmt.Fprintln(out, "Output writability uses a temporary file which is removed after the check.")
 		fs.PrintDefaults()
@@ -78,7 +78,7 @@ func runDoctor(args []string, out io.Writer, deps doctorDeps) error {
 			if nic.Flags&net.FlagUp == 0 {
 				r.Findings = append(r.Findings, doctorFinding{"interface-down", "blocker", "Selected interface is down", "Enable the adapter and connect the lab cable, then rerun livewire doctor -i <interface>."})
 			} else {
-				r.Findings = append(r.Findings, doctorFinding{"interface-up", "info", "Selected OS interface is up", "Preview the capture with livewire reproduce <capture> --mode <intent> --dry-run."})
+				r.Findings = append(r.Findings, doctorFinding{"interface-up", "info", "Selected OS interface is up", "Preview the capture with livewire reproduce <capture> -mode <intent> -dry-run."})
 			}
 		}
 		if !found && runtime.GOOS != "windows" {
@@ -86,11 +86,11 @@ func runDoctor(args []string, out io.Writer, deps doctorDeps) error {
 		}
 	}
 	if err := deps.writable(*dir); err != nil {
-		r.Findings = append(r.Findings, doctorFinding{"output-unwritable", "blocker", err.Error(), "Choose an existing writable directory with livewire doctor --out-dir <directory>; check free disk space and permissions."})
+		r.Findings = append(r.Findings, doctorFinding{"output-unwritable", "blocker", err.Error(), "Choose an existing writable directory with livewire doctor -out-dir <directory>; check free disk space and permissions."})
 	} else {
 		r.Findings = append(r.Findings, doctorFinding{"output-writable", "info", "Temporary output creation, write, sync, and cleanup succeeded", "Keep enough disk space for reports and packet evidence; this check does not reserve space."})
 	}
-	r.Findings = append(r.Findings, doctorFinding{"qualification-boundary", "info", "Local checks do not prove driver access, target reachability, or DUT behavior", "Review livewire reproduce <capture> --mode <intent> --dry-run before a controlled lab replay."})
+	r.Findings = append(r.Findings, doctorFinding{"qualification-boundary", "info", "Local checks do not prove driver access, target reachability, or DUT behavior", "Review livewire reproduce <capture> -mode <intent> -dry-run before a controlled lab replay."})
 	for _, f := range r.Findings {
 		if f.Severity == "blocker" {
 			r.Ready = false

@@ -305,9 +305,9 @@ func TestBinarySurface(t *testing.T) {
 			topic string
 			want  []string
 		}{
-			{topic: "examples", want: []string{"-n 5", "-keylog", "--wire"}},
+			{topic: "examples", want: []string{"-n 5", "-keylog", "-wire"}},
 			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
-			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "--wire"}},
+			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "-wire"}},
 			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
 			{topic: "commands", want: []string{"Primary commands:", "Advanced commands:", "tls-replay"}},
 		}

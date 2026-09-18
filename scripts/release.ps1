@@ -31,12 +31,30 @@ $targets = @(
     @{ GOOS = "linux"; GOARCH = "arm64"; Name = "livewire-$Version-linux-arm64" },
     @{ GOOS = "windows"; GOARCH = "amd64"; Name = "livewire-$Version-windows-amd64.exe" }
 )
-$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md")
+# Packaged documents sit flat beside the executable. The operator guides live
+# under docs/ in the repository, so their relative links are rewritten to match.
+$documents = @(
+    @{ Source = "LICENSE"; Name = "LICENSE" },
+    @{ Source = "README.md"; Name = "README.md" },
+    @{ Source = "CHANGELOG.md"; Name = "CHANGELOG.md" },
+    @{ Source = "SECURITY.md"; Name = "SECURITY.md" },
+    @{ Source = "docs/SETUP.md"; Name = "SETUP.md" },
+    @{ Source = "docs/COMMANDS.md"; Name = "COMMANDS.md" },
+    @{ Source = "docs/WINDOWS-QUICKSTART.md"; Name = "WINDOWS-QUICKSTART.md" },
+    @{ Source = "docs/DOCUMENTATION.md"; Name = "DOCUMENTATION.md" },
+    @{ Source = "docs/RELEASE_AUDIT.md"; Name = "RELEASE_AUDIT.md" },
+    @{ Source = "docs/WORKFLOW.md"; Name = "WORKFLOW.md" },
+    @{ Source = "docs/PRODUCTION.md"; Name = "PRODUCTION.md" }
+)
 
 function Copy-ReleaseText([string]$Source, [string]$Destination) {
     # Match .gitattributes even when an editor produced CRLF in the worktree.
     # Otherwise Git normalizes committed documents after checksums were made.
     $text = [IO.File]::ReadAllText($Source).Replace("`r`n", "`n")
+    if ($Destination.EndsWith(".md")) {
+        # Every packaged document sits in one flat folder.
+        $text = $text.Replace("](../", "](").Replace("](docs/", "](")
+    }
     [IO.File]::WriteAllText($Destination, $text, [Text.UTF8Encoding]::new($false))
 }
 
@@ -68,11 +86,11 @@ try {
     }
 
     foreach ($document in $documents) {
-        $source = Join-Path $repo $document
+        $source = Join-Path $repo $document.Source
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "Release document is missing: $document"
+            throw "Release document is missing: $($document.Source)"
         }
-        Copy-ReleaseText $source (Join-Path $output $document)
+        Copy-ReleaseText $source (Join-Path $output $document.Name)
     }
     Copy-ReleaseText (Join-Path $repo "scripts\setup-windows.ps1") (Join-Path $output "setup-windows.ps1")
 
@@ -95,7 +113,7 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     New-Item -ItemType Directory -Path $windowsStage -Force | Out-Null
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
-        "SETUP.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
+        "SETUP.md", "COMMANDS.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
         "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
