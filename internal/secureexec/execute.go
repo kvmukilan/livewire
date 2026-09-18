@@ -40,7 +40,20 @@ type Prepared struct {
 	run func(context.Context) (Outcome, error)
 }
 
-func (p *Prepared) Run(ctx context.Context) (Outcome, error) { return p.run(ctx) }
+func (p *Prepared) Run(ctx context.Context) (Outcome, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return Outcome{Status: replay.ResultStatus(false, false, false, false, err)}, err
+	}
+	o, err := p.run(ctx)
+	if err == nil {
+		err = ctx.Err()
+	}
+	o.Finalize(ctx, err)
+	return o, err
+}
 
 func Prepare(c Config) (*Prepared, error) {
 	if c.Inspection == nil || !c.Inspection.Readiness.Supported {

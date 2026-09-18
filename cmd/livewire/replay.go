@@ -19,6 +19,7 @@ import (
 )
 
 type wireReplayReport struct {
+	Status        string             `json:"status,omitempty"`
 	Selection     *replay.ReplayPlan `json:"selection,omitempty"`
 	Tool          string             `json:"tool"`
 	Version       string             `json:"version"`
@@ -80,10 +81,11 @@ func cmdReplay(args []string) (retErr error) {
 		return fmt.Errorf("-n must not exceed %d (0 still means run until interrupted)", maxReplayAttempts)
 	}
 
-	recs, nanos, err := loadRecords(inPath)
+	capture, captureDigest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
+	recs, nanos := capture.Records, capture.Nanosecond
 	_ = nanos
 	if len(recs) == 0 {
 		return fmt.Errorf("no records in %s", inPath)
@@ -124,21 +126,21 @@ func cmdReplay(args []string) (retErr error) {
 			return err
 		}
 		*reportPath = resolved
-		digest, err := sha256File(inPath)
-		if err != nil {
-			return fmt.Errorf("capture digest: %w", err)
-		}
 		mode := "wire"
 		if *dryRun {
 			mode = "dry-run"
 		}
 		report = &wireReplayReport{
-			Tool: "livewire", Version: version, When: time.Now().UTC(), CaptureDigest: digest, Selection: &inspection.Plan,
+			Tool: "livewire", Version: version, When: time.Now().UTC(), CaptureDigest: captureDigest, Selection: &inspection.Plan,
 			Interface: iface, Mode: mode, FramesPerPass: len(recs), Verified: false,
 			Limitations: []string{"captured frames are not adapted to a live session and replies are not compared with the recording"},
 		}
 		defer func() {
 			report.Completed = retErr == nil
+			report.Status = replay.ResultStatus(report.Completed, false, false, !*dryRun, retErr)
+			if *dryRun && retErr == nil {
+				report.Status = "preview"
+			}
 			if retErr != nil {
 				report.Error = retErr.Error()
 			}

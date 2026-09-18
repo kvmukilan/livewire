@@ -68,10 +68,11 @@ func runFTPReplayArgs(args []string) error {
 	if err := validateNetworkTarget(target, "-target"); err != nil {
 		return err
 	}
-	records, _, err := loadRecords(inPath)
+	capture, digest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
+	records := capture.Records
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
 	trace, err = replayintent.Select(trace, selectedSessions, nil)
 	if err != nil {
@@ -122,10 +123,6 @@ func runFTPReplayArgs(args []string) error {
 		return err
 	}
 	*reportPath = resolvedReport
-	digest, err := sha256File(inPath)
-	if err != nil {
-		return err
-	}
 	report := newReterminationReport("ftp", digest, target, plan, nil, variables)
 	report.Transformations = []string{
 		"FTP control messages decoded and replayed on a fresh connection",
@@ -162,6 +159,7 @@ func runFTPReplayArgs(args []string) error {
 	if runErr != nil {
 		report.Outcome.Error = redactRunText(runErr.Error(), variables)
 	}
+	report.Outcome.Finalize(ctx, runErr)
 	if err := report.write(*reportPath); err != nil {
 		return fmt.Errorf("write FTP report: %w", err)
 	}
