@@ -12,6 +12,27 @@ permissions:
   contents: read
 
 jobs:
+  qualification:
+    name: Stable release field qualification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python -m unittest discover -s scripts -p "test_*.py"
+      - name: Require qualification for stable tags
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Release candidate: field qualification remains pending."
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            python scripts/qualification.py validate qualification/stable.json --version "$version" --artifacts "dist/v$version"
+          else
+            echo "Unsupported release tag" >&2
+            exit 1
+          fi
   compatibility:
     name: Release compatibility - Go ${{ matrix.go }}
     runs-on: ubuntu-latest
@@ -30,6 +51,7 @@ jobs:
       - run: go mod verify
       - run: go test -count=1 ./...
       - run: go vet ./...
+      - run: python scripts/qualification.py corpus --output "${{ runner.temp }}/qualification-corpus"
 
   quality:
     name: Release security, race, fuzz, and coverage gates
@@ -82,7 +104,7 @@ jobs:
   release:
     name: Verify and publish release
     runs-on: windows-latest
-    needs: [compatibility, quality]
+    needs: [compatibility, quality, qualification]
     permissions:
       contents: write
       id-token: write
