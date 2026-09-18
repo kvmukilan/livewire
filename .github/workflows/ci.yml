@@ -11,6 +11,8 @@ env:
   RELEASE_GO: "1.26.7"
   GOTOOLCHAIN: local
 
+# Every gate below is a target of scripts/task, so `go run ./scripts/task all`
+# reproduces this pipeline locally with the same pinned tool versions.
 jobs:
   compatibility:
     name: Go ${{ matrix.go }} compatibility
@@ -27,11 +29,7 @@ jobs:
           check-latest: true
           cache: true
       - run: go mod verify
-      - run: node --test scripts/dashboard.test.cjs
-      - run: python -m unittest discover -s scripts -p "test_*.py"
-      - run: python scripts/qualification.py corpus --output "${{ runner.temp }}/qualification-corpus"
-      - run: go test -count=1 ./...
-      - run: go vet ./...
+      - run: go run ./scripts/task build vet test dashboard corpus
 
   windows-runtime:
     name: Windows runtime tests
@@ -42,16 +40,12 @@ jobs:
         with:
           go-version: ${{ env.RELEASE_GO }}
           cache: true
-      - run: node --test scripts/dashboard.test.cjs
-      - run: go test -count=1 ./...
+      - run: go run ./scripts/task test dashboard
       - run: go run ./cmd/livewire version
       - name: Compare published replay behavior
-        shell: pwsh
-        run: |
-          go build -o livewire.exe ./cmd/livewire
-          if ($LASTEXITCODE -ne 0) { throw "Comparison build failed" }
-          python scripts/compare-releases.py --output "$env:RUNNER_TEMP/release-comparison"
-          if ($LASTEXITCODE -ne 0) { throw "Published replay regression failed" }
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: go run ./scripts/task compare-releases -output "${{ runner.temp }}/release-comparison"
 
   quality:
     name: Static, vulnerability, fuzz, and coverage gates
@@ -62,46 +56,7 @@ jobs:
         with:
           go-version: ${{ env.RELEASE_GO }}
           cache: true
-      - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
-      - name: staticcheck
-        run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
-      - name: gosec high-confidence findings
-        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 -severity high -confidence high -exclude-generated ./...
-      - name: Shuffle and repeat
-        run: |
-          go test -shuffle=on -count=3 ./...
-          go test -shuffle=on -count=20 ./internal/webui
-      - name: Fuzz smoke
-        run: |
-          go test ./internal/adapters -run='^$' -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/adapters -run='^$' -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/lab -run='^$' -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/tlsreplay -run='^$' -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/replay -run='^$' -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
-      - name: Coverage floors
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p coverage
-          go test -coverprofile=coverage/aggregate.out ./...
-          go test -coverprofile=coverage/pcapio.out ./internal/pcapio
-          go test -coverprofile=coverage/webui.out ./internal/webui
-          go test -coverprofile=coverage/cmd.out ./cmd/livewire
-          go test -coverprofile=coverage/backend.out ./internal/backend
-          check_floor() {
-            local profile="$1" floor="$2" label="$3" actual
-            actual="$(go tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
-            printf '%s coverage: %s%% (required %s%%)\n' "$label" "$actual" "$floor"
-            awk -v actual="$actual" -v floor="$floor" 'BEGIN { exit !(actual + 0 >= floor + 0) }'
-          }
-          check_floor coverage/aggregate.out 60 aggregate
-          check_floor coverage/pcapio.out 85 pcapio
-          check_floor coverage/webui.out 60 webui
-          check_floor coverage/cmd.out 30 cmd/livewire
-          check_floor coverage/backend.out 20 backend
+      - run: go run ./scripts/task lint shuffle fuzz cover
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -118,7 +73,7 @@ jobs:
         with:
           go-version: ${{ env.RELEASE_GO }}
           cache: true
-      - run: go test -race -count=1 ./...
+      - run: go run ./scripts/task race
 
   cross-build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
