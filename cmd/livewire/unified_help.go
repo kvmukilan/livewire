@@ -61,6 +61,7 @@ func help(args []string) error {
 func printHelpHub(w io.Writer) {
 	fmt.Fprintf(w, "livewire %s - reproduce a network problem from a capture\n\n", version)
 	fmt.Fprintln(w, "Inspect, choose your replay intent, preview, then run:")
+	fmt.Fprintln(w, "  livewire doctor                      (local prerequisite diagnostics)")
 	fmt.Fprintln(w, "  livewire check issue.pcap -details")
 	fmt.Fprintln(w, "  livewire reproduce issue.pcap --mode application --session tcp-0 --dry-run")
 	fmt.Fprintln(w, "  livewire reproduce issue.pcap --mode application --session tcp-0 -t 192.168.1.50")
@@ -112,6 +113,7 @@ func printExamples(w io.Writer) {
 }
 
 func printTroubleshooting(w io.Writer) {
+	fmt.Fprintln(w, "Start with: livewire doctor; for packet access: livewire doctor -i <interface>")
 	fmt.Fprintln(w, "Livewire troubleshooting")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Capture not found")
