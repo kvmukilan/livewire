@@ -13,36 +13,35 @@ __pycache__/
 *.pyc
 !testdata/**
 
+# local test and verification output
+coverage/
+.coverage/
+dist-verify*/
+
 # editor / OS
 .vscode/
 .idea/
 .DS_Store
 
-# AI/agent scratch docs — keep only README.md and SETUP.md
+# AI/agent scratch docs and workspaces
 AGENTS.md
 CLAUDE.md
 INSTALL.md
 QUICKSTART.md
 .claude/
+.agents/
+.codex/
 
-# internal reference, not distributed (documented in DOCUMENTATION.md instead)
+# internal reference, not distributed (documented in docs/DOCUMENTATION.md instead)
 REPRODUCE.md
 
-# release artifacts: intermediate build output stays out of the repository, but a
-# tagged release folder is committed so the published binaries are browsable here
-# as well as on the Releases page. Order matters — these negations must follow the
-# *.exe rule above, since git applies the last pattern that matches, and the
-# directory has to be re-included before anything inside it can be.
+# release artifacts: binaries and packaged documents are published on the GitHub
+# Releases page and are never committed. Each tagged version keeps only its
+# checksum manifest and SBOM here, so CI can prove a rebuilt release is
+# byte-identical to what was published and the repository stays small enough to
+# clone. Order matters: a directory must be re-included before its contents.
 dist/*
-!dist/v0.6.0/
-!dist/v0.6.0/**
-!dist/v0.7.0/
-!dist/v0.7.0/**
-!dist/v0.8.0/
-!dist/v0.8.0/**
-
-!dist/v0.9.0-rc.1/
-!dist/v0.9.0-rc.1/**
-
-!dist/v0.9.0-rc.2/
-!dist/v0.9.0-rc.2/**
+!dist/v*/
+dist/v*/*
+!dist/v*/SHA256SUMS
+!dist/v*/*.cdx.json
