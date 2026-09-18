@@ -2,7 +2,7 @@
 
 > Historical record: this document describes the v0.5.0 command surface and
 > its follow-up cleanup. For the current 0.9 release candidate security, replay orchestration,
-> FTP/FTPS, CI, and release disposition, see `RELEASE_AUDIT.md`; code pointers below are not a
+> FTP/FTPS, CI, and release disposition, see `../RELEASE_AUDIT.md`; code pointers below are not a
 > current inventory.
 
 **Scope:** every user-facing command in `cmd/livewire/` and every package under

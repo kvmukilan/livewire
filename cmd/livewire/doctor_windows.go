@@ -13,7 +13,7 @@ func doctorPlatform(iface string) []doctorFinding {
 	out := []doctorFinding{{"platform", "info", "Windows Npcap backend is compiled in", "Socket application replay needs neither Npcap nor elevation."}}
 	devs, err := backend.ListPcapDevices()
 	if err != nil {
-		out = append(out, doctorFinding{"npcap-unavailable", packetSeverity(iface), err.Error(), "Install Npcap using SETUP.md, then run livewire ifaces and livewire doctor."})
+		out = append(out, doctorFinding{"npcap-unavailable", packetSeverity(iface), err.Error(), "Install Npcap using docs/SETUP.md, then run livewire ifaces and livewire doctor."})
 	} else {
 		out = append(out, doctorFinding{"npcap-available", "info", "Npcap loaded and device enumeration succeeded", "Use a Npcap device name from livewire ifaces for -i."})
 		if iface != "" {
@@ -41,7 +41,7 @@ func doctorPlatform(iface string) []doctorFinding {
 	exe, err := os.Executable()
 	if err == nil {
 		if _, err := os.Stat(filepath.Join(filepath.Dir(exe), "WinDivert.dll")); err != nil {
-			out = append(out, doctorFinding{"rst-driver", "warning", "WinDivert.dll is missing beside the executable", "Follow SETUP.md for stateful packet TCP RST suppression; wire and socket application replay do not need it."})
+			out = append(out, doctorFinding{"rst-driver", "warning", "WinDivert.dll is missing beside the executable", "Follow docs/SETUP.md for stateful packet TCP RST suppression; wire and socket application replay do not need it."})
 		}
 	}
 	return out

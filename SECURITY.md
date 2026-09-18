@@ -6,7 +6,7 @@ Security fixes target the current development/release-candidate line (0.9).
 0.8 remains the latest stable release until 0.9 passes field qualification;
 it is not a substitute for the fixes in the candidate. Older release lines,
 including 0.7, do not receive routine backports. Upgrade to the qualified stable
-0.9 release when available. See PRODUCTION.md for support and qualification limits.
+0.9 release when available. See docs/PRODUCTION.md for support and qualification limits.
 
 ## Reporting a vulnerability
 
@@ -95,7 +95,7 @@ NIC/DUT qualification remain required before promoting 0.9 to a stable release.
 
 ## Windows release trust
 
-The v0.9.0-rc.2 Windows executable and ZIP are not Authenticode-signed. Download only
+The 0.9 Windows executables and ZIPs are not Authenticode-signed. Download only
 from the official GitHub release, compare the file against `SHA256SUMS`, and
 verify the GitHub artifact attestation before allowing an unknown publisher.
 The setup helper separately pins the official WinDivert v2.2.2 archive by

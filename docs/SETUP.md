@@ -4,9 +4,12 @@ Copy-paste instructions to get Livewire working on a machine that has nothing
 installed. Pick your operating system, run the blocks in order, then confirm with
 [Check it works](#check-it-works).
 
-These instructions download **0.9.0-rc.2**, a prerelease for validation.
+Each download block starts with the release it fetches. The value there is the
+current 0.9 release candidate; change it to `0.8.0` for the stable release, or
+to any version listed on the
+[Releases page](https://github.com/kvmukilan/livewire/releases).
 For replay intent and a preview before sending, start with [WORKFLOW.md](WORKFLOW.md).
-Once it runs, [README.md](README.md) explains every command.
+Once it runs, [COMMANDS.md](COMMANDS.md) explains every command.
 
 - [Windows](#windows)
 - [Linux](#linux)
@@ -27,15 +30,13 @@ Socket-based application replay, including HTTP/TLS/FTP/SSH, needs neither drive
 Open **PowerShell** (a normal one is fine for this step) and paste:
 
 ```powershell
+$Version = "0.9.0-rc.2"
+$Release = "https://github.com/kvmukilan/livewire/releases/download/v$Version"
 New-Item -ItemType Directory -Force C:\livewire | Out-Null
 Set-Location C:\livewire
-Invoke-WebRequest -UseBasicParsing `
-  -Uri https://github.com/kvmukilan/livewire/releases/download/v0.9.0-rc.2/livewire-0.9.0-rc.2-windows-amd64.zip `
-  -OutFile livewire.zip
-Invoke-WebRequest -UseBasicParsing `
-  -Uri https://github.com/kvmukilan/livewire/releases/download/v0.9.0-rc.2/SHA256SUMS `
-  -OutFile SHA256SUMS
-$expected = (Select-String -Path .\SHA256SUMS -Pattern 'livewire-0.9.0-rc.2-windows-amd64.zip$').Line.Split(' ')[0]
+Invoke-WebRequest -UseBasicParsing -Uri "$Release/livewire-$Version-windows-amd64.zip" -OutFile livewire.zip
+Invoke-WebRequest -UseBasicParsing -Uri "$Release/SHA256SUMS" -OutFile SHA256SUMS
+$expected = (Select-String -Path .\SHA256SUMS -Pattern "livewire-$Version-windows-amd64.zip$").Line.Split(' ')[0]
 $actual = (Get-FileHash .\livewire.zip -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -ne $expected) { throw 'Livewire ZIP checksum mismatch' }
 Expand-Archive -Path livewire.zip -DestinationPath . -Force
@@ -110,15 +111,18 @@ to list them, and paste the whole `\Device\NPF_{...}` value:
 ### 1. Download it
 
 ```bash
-curl -fsSLO https://github.com/kvmukilan/livewire/releases/download/v0.9.0-rc.2/livewire-0.9.0-rc.2-linux-amd64
-chmod +x livewire-0.9.0-rc.2-linux-amd64
-sudo mv livewire-0.9.0-rc.2-linux-amd64 /usr/local/bin/livewire
+VERSION=0.9.0-rc.2
+curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/livewire-$VERSION-linux-amd64"
+curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/SHA256SUMS"
+sha256sum --check --ignore-missing SHA256SUMS
+chmod +x "livewire-$VERSION-linux-amd64"
+sudo mv "livewire-$VERSION-linux-amd64" /usr/local/bin/livewire
 livewire version
 ```
 
-On a 64-bit ARM machine (Raspberry Pi 4/5, AWS Graviton) use
-`livewire-0.9.0-rc.2-linux-arm64` instead. Native arm64 execution is not part of the
-v0.9.0-rc.2 automated qualification; validate it on your target before relying on it.
+On a 64-bit ARM machine (Raspberry Pi 4/5, AWS Graviton) download
+`livewire-$VERSION-linux-arm64` instead. Native arm64 execution is not part of
+the automated qualification; validate it on your target before relying on it.
 
 There are no drivers to install. Packet access is built in, and RST suppression
 uses `iptables`/`ip6tables`, which your distribution already has.
@@ -156,7 +160,7 @@ Two commands, on either platform. Neither sends a packet, so they are safe to ru
 anywhere.
 
 ```bash
-livewire version    # prints: livewire 0.9.0-rc.2
+livewire version    # prints the version you downloaded
 livewire ifaces     # lists your network connections
 ```
 
@@ -198,8 +202,9 @@ report file.
 
 ## Build from source
 
-Only needed if you are changing Livewire. Compatibility starts at **Go 1.26.7**;
-official v0.9.0-rc.2 artifacts are reproducibly built with **Go 1.26.7**.
+Only needed if you are changing Livewire. Compatibility starts at **Go 1.26.7**,
+which is also the toolchain the official artifacts are reproducibly built with.
+[CONTRIBUTING.md](../CONTRIBUTING.md) covers the full developer workflow.
 
 ```bash
 git clone https://github.com/kvmukilan/livewire.git
@@ -227,10 +232,7 @@ remain available for older scripts. The build is pure Go — no cgo or C toolcha
 Before sending changes:
 
 ```bash
-go mod verify
-go build ./...
-go vet ./...
-go test ./...
+go run ./scripts/task check
 ```
 
 Cross-compilation and release procedures are in
