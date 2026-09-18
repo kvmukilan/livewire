@@ -1,5 +1,9 @@
 # Replay an exchange deliberately
 
+For prerequisite diagnostics, failure recovery, supported platforms, and the
+stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
+`livewire doctor` before choosing a packet interface.
+
 The release candidate is `0.9.0-rc.2`. Automatic inspection remains useful;
 replay intent is now a separate choice. It is a prerelease; 0.8.0 remains the stable download.
 

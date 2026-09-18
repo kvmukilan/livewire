@@ -28,6 +28,8 @@ jobs:
           cache: true
       - run: go mod verify
       - run: node --test scripts/dashboard.test.cjs
+      - run: python -m unittest discover -s scripts -p "test_*.py"
+      - run: python scripts/qualification.py corpus --output "${{ runner.temp }}/qualification-corpus"
       - run: go test -count=1 ./...
       - run: go vet ./...
 

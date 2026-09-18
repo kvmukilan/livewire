@@ -9,6 +9,8 @@
 *.pcap
 *.pcapng
 *.cache
+__pycache__/
+*.pyc
 !testdata/**
 
 # editor / OS

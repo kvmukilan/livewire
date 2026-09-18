@@ -2,7 +2,11 @@
 
 ## Supported version
 
-Security fixes are currently made for the v0.7 line.
+Security fixes target the current development/release-candidate line (0.9).
+0.8 remains the latest stable release until 0.9 passes field qualification;
+it is not a substitute for the fixes in the candidate. Older release lines,
+including 0.7, do not receive routine backports. Upgrade to the qualified stable
+0.9 release when available. See PRODUCTION.md for support and qualification limits.
 
 ## Reporting a vulnerability
 

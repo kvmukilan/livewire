@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.9.0-rc.2",
+    [string]$Version = "0.9.0-dev",
     [string]$OutputRoot = "dist"
 )
 
@@ -17,21 +17,21 @@ if ((& go env GOVERSION).Trim() -ne $requiredGo) {
     throw "Release artifacts require $requiredGo; set GOTOOLCHAIN=$requiredGo"
 }
 if (Test-Path -LiteralPath $output) {
-    Remove-Item -LiteralPath $output -Recurse -Force
+    throw "Refusing to replace existing artifacts at $output; use a new version or a fresh -OutputRoot"
 }
-New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $reported = (& go run ./cmd/livewire version 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $reported -ne "livewire $Version") {
     throw "Version mismatch: expected livewire $Version, got '$reported'"
 }
+New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $targets = @(
     @{ GOOS = "linux"; GOARCH = "amd64"; Name = "livewire-$Version-linux-amd64" },
     @{ GOOS = "linux"; GOARCH = "arm64"; Name = "livewire-$Version-linux-arm64" },
     @{ GOOS = "windows"; GOARCH = "amd64"; Name = "livewire-$Version-windows-amd64.exe" }
 )
-$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md")
+$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md")
 
 function Copy-ReleaseText([string]$Source, [string]$Destination) {
     # Match .gitattributes even when an editor produced CRLF in the worktree.
@@ -96,7 +96,7 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
         "SETUP.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
-        "RELEASE_AUDIT.md", "WORKFLOW.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
+        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
     }

@@ -2,6 +2,20 @@
 
 All notable changes to Livewire are documented here.
 
+## Unreleased - 0.9 production hardening
+
+- Add `doctor` with actionable text/JSON diagnostics and an output-directory probe.
+- Stop blocked FTP control/data I/O on cancellation; bound SSH channel/command
+  waits by the configured timeout and release raced active FTP accepts.
+- Add explicit report statuses, preserve completed attempts on cancellation,
+  and prevent compatibility secure commands from claiming unverified matches.
+- Hash the exact loaded CLI capture bytes, including secure, wire, and lab paths.
+- Add maintained regression corpus, size/memory benchmark, command recorder,
+  soak harness, and an evidence-bound stable-release gate.
+- Preserve existing release directories and include PRODUCTION.md in packages.
+- Field NIC/DUT, browser, two-hour platform soaks, and five-engineer pilot remain
+  required. This development build does not promote or replace a public release.
+
 ## [0.9.0-rc.2] - 2026-09-08
 
 Prerelease for network/QA validation. Browser visual/keyboard QA and physical
