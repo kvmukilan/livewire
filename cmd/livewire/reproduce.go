@@ -122,10 +122,11 @@ func cmdReproduce(args []string) error {
 		return fmt.Errorf("-gap must not exceed 10m")
 	}
 
-	recs, _, err := loadRecords(pcapPath)
+	capture, captureDigest, err := loadCaptureSnapshot(pcapPath)
 	if err != nil {
 		return err
 	}
+	recs := capture.Records
 	selectedProfile := *profileName
 	if *underLoad && strings.EqualFold(selectedProfile, "functional") {
 		selectedProfile = "timing"
@@ -256,15 +257,16 @@ func cmdReproduce(args []string) error {
 		}
 		fmt.Println("Dry run: no network connections opened and no packets sent.")
 		if !inspection.Readiness.Supported {
-			return fmt.Errorf("%s", inspection.Readiness.Blocker)
+			return blockedReplayError(pcapPath, inspection.Readiness.Blocker)
 		}
 		return nil
 	}
 	if !inspection.Readiness.Supported {
-		return fmt.Errorf("no safely executable session: %s; no packets were sent", inspection.Readiness.Blocker)
+		return blockedReplayError(pcapPath, inspection.Readiness.Blocker)
 	}
 	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
-		capture: pcapPath, iface: on, target: to, keylog: *keylogPath, serverName: *serverName, ca: *caPath,
+		captureDigest: captureDigest,
+		capture:       pcapPath, iface: on, target: to, keylog: *keylogPath, serverName: *serverName, ca: *caPath,
 		insecure: *insecure, strict: *strict, wire: inspection.Mode == "wire", user: *sshUser, password: *sshPass, privateKey: *sshKey, hostKey: *sshHostKey,
 		commands: sshCommands, expects: sshExpects, timeout: *secureTimeout, report: *reportPath, times: times, gap: *gap, stopWhenDifferent: *stopWhenDifferent,
 		variables: variables, rulePacks: rulePacks, sessions: selectedSessions, inspection: inspection,
@@ -354,7 +356,7 @@ func cmdReproduce(args []string) error {
 	rep.Preflight = &preflight
 	rep.Plan = &plan
 	rep.Limitations = plan.Limitations()
-	rep.CaptureDigest, _ = sha256File(pcapPath)
+	rep.CaptureDigest = captureDigest
 
 	var mu sync.Mutex
 	var actualFrames []pcapio.Record
@@ -427,7 +429,7 @@ func cmdReproduce(args []string) error {
 	}
 
 	per := runs.Run(ctx, attempt)
-	summary := iterate.Summarize(per, runs.Times)
+	summary := iterate.SummarizeContext(ctx, per, runs.Times)
 	if runs.Repeats() {
 		rep.recordIterations(summary)
 	}

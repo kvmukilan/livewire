@@ -193,6 +193,10 @@ func TestUnifiedReproduceReterminatesVerifiedTLS(t *testing.T) {
 	cert, ca := testTLSCertificate(t)
 	events, keylog := captureHTTPOverTLS(t, cert)
 	capture, keylogPath, caPath := writeTLSFixture(t, t.TempDir(), events, keylog, ca)
+	wantDigest, err := sha256File(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	listener, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
 		Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12,
@@ -215,7 +219,10 @@ func TestUnifiedReproduceReterminatesVerifiedTLS(t *testing.T) {
 			serverDone <- err
 			return
 		}
-		_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+		err = os.WriteFile(capture, []byte("replacement during secure replay"), 0600)
+		if err == nil {
+			_, err = conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+		}
 		serverDone <- err
 	}()
 
@@ -230,6 +237,9 @@ func TestUnifiedReproduceReterminatesVerifiedTLS(t *testing.T) {
 	body, err := os.ReadFile(report)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !bytes.Contains(body, []byte(wantDigest)) {
+		t.Fatalf("secure report did not preserve loaded capture digest: %s", body)
 	}
 	for _, want := range [][]byte{[]byte(`"kind": "tls"`), []byte(`"completed": true`), []byte(`"peerIdentityChecked": true`)} {
 		if !bytes.Contains(body, want) {

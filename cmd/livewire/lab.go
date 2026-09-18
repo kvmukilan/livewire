@@ -82,10 +82,11 @@ func cmdLab(args []string) error {
 	if err != nil {
 		return err
 	}
-	records, _, err := loadRecords(inPath)
+	capture, digest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
+	records := capture.Records
 	if *udpIdle <= 0 || *udpIdle > time.Hour {
 		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
@@ -132,7 +133,6 @@ func cmdLab(args []string) error {
 	if err := lab.WriteEvidence(*evidencePath, result, topology); err != nil {
 		return fmt.Errorf("write evidence: %w", err)
 	}
-	digest, _ := sha256File(inPath)
 	report := labReport{
 		Tool: "livewire", Version: version, CaptureDigest: digest, ReplayPlan: plan,
 		AdapterVersions: adapters.Versions(), Topology: topology, Scenario: scenario,

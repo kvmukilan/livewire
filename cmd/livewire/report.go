@@ -15,6 +15,7 @@ import (
 
 // flowResult is one flow's outcome in a replay report.
 type flowResult struct {
+	Status string `json:"status,omitempty"`
 	// Attempt is the 1-based iteration this result came from, omitted for a
 	// single run so a one-shot report is byte-for-byte what it always was.
 	Attempt              int      `json:"attempt,omitempty"`
@@ -89,6 +90,7 @@ func (r *replayReport) recordIterations(s iterate.Summary) {
 }
 
 type sessionResult struct {
+	Status string `json:"status,omitempty"`
 	// Attempt is the 1-based iteration this result came from, omitted for a
 	// single run.
 	Attempt     int                 `json:"attempt,omitempty"`
@@ -165,7 +167,9 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 	}
 	if p.Err != nil {
 		sr.Error = p.Err.Error()
+		sr.Completed, sr.Matched = false, false
 	}
+	sr.Status = replay.ResultStatus(sr.Completed, sr.Verified, sr.Matched, p.Entry.Mode == replay.ModeWire, p.Err)
 	r.Sessions = append(r.Sessions, sr)
 }
 
@@ -202,6 +206,7 @@ func (r *replayReport) add(idx int, f *engine.Flow, target, mode string, res liv
 			fr.Diagnosis = diagnose(out, mode)
 		}
 	}
+	fr.Status = replay.ResultStatus(fr.StimulusCompleted, fr.Verified, fr.RepliesMatched, false, err)
 	r.Flows = append(r.Flows, fr)
 }
 

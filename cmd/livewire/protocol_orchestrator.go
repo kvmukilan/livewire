@@ -70,6 +70,7 @@ func printProtocolReadiness(ready protocolReadiness) {
 // positional `live` experience. It deliberately contains values, not flag-set
 // details, so protocol runners do not need to know which front door was used.
 type orchestratorOptions struct {
+	captureDigest                       string
 	capture, iface, target              string
 	keylog, serverName, ca              string
 	insecure, strict, wire              bool
@@ -383,15 +384,14 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 			if e != nil {
 				outcome.Error = redactProtocolError(e, opts).Error()
 			}
-			digest, digestErr := sha256File(opts.capture)
-			report := newReterminationReport(string(kind), digest, opts.target, opts.inspection.Plan, reportRegistry, opts.variables, append(append([]string{opts.user, opts.password}, opts.commands...), opts.expects...)...)
+			report := newReterminationReport(string(kind), opts.captureDigest, opts.target, opts.inspection.Plan, reportRegistry, opts.variables, append(append([]string{opts.user, opts.password}, opts.commands...), opts.expects...)...)
 			report.Outcome = outcome
 			report.Transformations = []string{"fresh session executed using explicit replay intent and selected capture sessions"}
 			if opts.insecure {
 				report.Limitations = append(report.Limitations, "TLS peer identity verification was explicitly disabled")
 			}
 			path := protocolAttemptReportPath(opts.report, attempt, opts.times)
-			publicationErr = errors.Join(digestErr, report.write(path))
+			publicationErr = report.write(path)
 			runErr = errors.Join(runErr, publicationErr)
 			fmt.Printf("RESULT: %s\n", iterate.ClassifyVerified(outcome.Completed, outcome.Verified, outcome.Matched, false).Plain())
 			if publicationErr == nil {
@@ -431,7 +431,7 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 		errs = append(errs, ctx.Err())
 	}
 	if opts.times > 1 {
-		summary := iterate.Summarize(per, runs.Times)
+		summary := iterate.SummarizeContext(ctx, per, runs.Times)
 		fmt.Print(summary.Plain())
 		if len(per) > 0 {
 			fmt.Printf("Secure report paths: %s through %s\n",
