@@ -42,8 +42,10 @@ func (c command) matches(name string) bool { return c.name == name }
 // commands is the whole command surface, everyday commands first so the order
 // here is the order a reader sees.
 var commands = []command{
+	{name: "doctor", group: groupAdvanced, run: cmdDoctor,
+		summary: "check local prerequisites without sending traffic"},
 	{name: "reproduce", group: groupEveryday, run: cmdReproduce,
-		summary: "guided, safe reproduction with automatic protocol handling"},
+		summary: "replay selected exchanges with explicit intent and a preview"},
 	{name: "live", group: groupAdvanced, run: cmdLive,
 		summary: "protocol-aware live replay plus advanced compatibility controls"},
 
