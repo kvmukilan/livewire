@@ -34,6 +34,9 @@ type command struct {
 	summary string
 	group   cmdGroup
 	run     func(args []string) error
+	// replacement names the command a groupCompat entry point should be
+	// replaced with. It is printed as a notice when the old name is used.
+	replacement string
 }
 
 // matches reports whether name selects this command.
@@ -45,7 +48,7 @@ var commands = []command{
 	{name: "doctor", group: groupAdvanced, run: cmdDoctor,
 		summary: "check local prerequisites without sending traffic"},
 	{name: "reproduce", group: groupEveryday, run: cmdReproduce,
-		summary: "replay selected exchanges with explicit intent and a preview"},
+		summary: "replay a recorded exchange on your device and say whether it behaved the same"},
 	{name: "live", group: groupAdvanced, run: cmdLive,
 		summary: "protocol-aware live replay plus advanced compatibility controls"},
 
@@ -74,15 +77,15 @@ var commands = []command{
 
 	// 'check' merged these two. Both keep their exact previous behaviour so
 	// existing scripts and older copies of the docs still work.
-	{name: "info", group: groupCompat, run: cmdInfo,
+	{name: "info", group: groupCompat, run: cmdInfo, replacement: "check",
 		summary: "capture summary only (now part of 'check')"},
-	{name: "analyze", group: groupCompat, run: cmdAnalyze,
+	{name: "analyze", group: groupCompat, run: cmdAnalyze, replacement: "check",
 		summary: "replayability assessment only (now part of 'check')"},
-	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay,
+	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay, replacement: "reproduce",
 		summary: "TLS-specific compatibility entry point (automatic in reproduce/live)"},
-	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay,
+	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay, replacement: "reproduce",
 		summary: "FTP/FTPS compatibility entry point (automatic in reproduce/live)"},
-	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay,
+	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay, replacement: "reproduce",
 		summary: "SSH-specific compatibility entry point (automatic in reproduce/live)"},
 }
 
@@ -102,6 +105,11 @@ func main() {
 	for _, c := range commands {
 		if !c.matches(name) {
 			continue
+		}
+		if c.group == groupCompat && c.replacement != "" {
+			// The old name keeps working exactly as before; the notice goes to
+			// stderr so scripts that consume stdout are unaffected.
+			fmt.Fprintf(os.Stderr, "note: 'livewire %s' is a compatibility entry point and will be removed in %s; use 'livewire %s'\n", name, deprecationRemoval, c.replacement)
 		}
 		err := c.run(os.Args[2:])
 		switch {
