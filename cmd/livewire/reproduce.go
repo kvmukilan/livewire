@@ -37,50 +37,129 @@ import (
 // because a fault that shows up one time in five is the common field case and a
 // single replay cannot tell the difference between "fixed" and "intermittent".
 func cmdReproduce(args []string) error {
+	o, err := parseReproduceFlags(args)
+	if err != nil {
+		return err
+	}
+	capture, captureDigest, err := loadCaptureSnapshot(o.capture)
+	if err != nil {
+		return err
+	}
+	recs := capture.Records
+	profile, registry, err := resolveReproduceIntent(&o)
+	if err != nil {
+		return err
+	}
+	inspection, secureRoute, err := inspectReproduce(&o, recs, registry)
+	if err != nil {
+		return err
+	}
+	if o.dryRun {
+		return reproduceDryRun(o, inspection, secureRoute)
+	}
+	if !inspection.Readiness.Supported {
+		return blockedReplayError(o.capture, inspection.Readiness.Blocker)
+	}
+	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
+		captureDigest: captureDigest,
+		capture:       o.capture, iface: o.iface, target: o.target, keylog: o.keylog, serverName: o.serverName, ca: o.ca,
+		insecure: o.insecure, strict: o.strict, wire: inspection.Mode == "wire", user: o.sshUser, password: o.sshPass, privateKey: o.sshKey, hostKey: o.sshHostKey,
+		commands: o.sshCommands, expects: o.sshExpects, timeout: o.timeout, report: o.report, times: o.times, gap: o.gap, stopWhenDifferent: o.stopWhenDifferent,
+		variables: o.variables, rulePacks: o.rulePacks, sessions: o.sessions, inspection: inspection,
+	})
+	if handled {
+		return err
+	}
+	return runGenericReproduce(o, recs, captureDigest, inspection, profile, registry)
+}
+
+// reproduceOptions is everything the command learned from its flags and
+// arguments, so each phase below takes one value instead of thirty locals.
+type reproduceOptions struct {
+	capture           string
+	iface             string
+	target            string
+	times             int
+	gap               time.Duration
+	stopWhenDifferent bool
+	underLoad         bool
+	exactTCP          bool
+	details           bool
+	dryRun            bool
+	strict            bool
+	wire              bool
+	noGuard           bool
+	insecure          bool
+	// mode and profile hold the raw request until resolveReproduceIntent
+	// replaces them with the resolved intent and fidelity profile.
+	mode        string
+	profile     string
+	sessions    []string
+	rulePacks   []string
+	report      string
+	actual      string
+	udpIdle     time.Duration
+	timeout     time.Duration
+	variables   map[string]string
+	keylog      string
+	serverName  string
+	ca          string
+	sshUser     string
+	sshPass     string
+	sshKey      string
+	sshHostKey  string
+	sshCommands []string
+	sshExpects  []string
+	// specified records which flags were given explicitly, so a flag the
+	// selected route cannot honor is refused instead of silently ignored.
+	specified map[string]bool
+}
+
+// parseReproduceFlags declares the command line, parses it, and applies the
+// checks that need nothing but the flags themselves.
+func parseReproduceFlags(args []string) (reproduceOptions, error) {
+	var o reproduceOptions
 	fs := flag.NewFlagSet("reproduce", flag.ContinueOnError)
 	var pcapFlag string
 	fs.StringVar(&pcapFlag, flagIn, "", "the capture file we sent you")
-	var on string
-	fs.StringVar(&on, flagIface, "", "network connection for packet-based replay (asks when required)")
-	fs.StringVar(&on, "on", "", "alias for -i")
-	fs.StringVar(&on, "iface", "", "alias for -i")
-	var to string
-	fs.StringVar(&to, flagTarget, "", "device IP or fresh secure target host:port (asks if not given)")
-	fs.StringVar(&to, "to", "", "alias for -t")
-	fs.StringVar(&to, "target", "", "alias for -t")
-	var times int
-	fs.IntVar(&times, flagCount, 1, "how many times to replay; more than 1 reports how often the issue appears")
-	fs.IntVar(&times, "times", 1, "alias for -n")
-	fs.IntVar(&times, "iterations", 1, "alias for -n")
-	underLoad := fs.Bool("under-load", false, "reproduce a timing/load issue (replay everything at the recorded speed)")
-	exactTCP := fs.Bool("exact-tcp", false, "use stateful transport replay for a low-level TCP issue")
-	details := fs.Bool(flagDetails, false, "show the expert tables: capture assessment, replay plan, and every session's verdict")
-	gap := fs.Duration("gap", time.Second, "settle time between attempts when -n is more than 1")
-	stopWhenDifferent := fs.Bool("stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
-	mode := fs.String("mode", "", "replay intent: application | transport | wire | auto (omitted: compatibility auto)")
-	dryRun := fs.Bool("dry-run", false, "preview selected sessions and requirements without network activity")
+	fs.StringVar(&o.iface, flagIface, "", "network connection for packet-based replay (asks when required)")
+	fs.StringVar(&o.iface, "on", "", "alias for -i")
+	fs.StringVar(&o.iface, "iface", "", "alias for -i")
+	fs.StringVar(&o.target, flagTarget, "", "device IP or fresh secure target host:port (asks if not given)")
+	fs.StringVar(&o.target, "to", "", "alias for -t")
+	fs.StringVar(&o.target, "target", "", "alias for -t")
+	fs.IntVar(&o.times, flagCount, 1, "how many times to replay; more than 1 reports how often the issue appears")
+	fs.IntVar(&o.times, "times", 1, "alias for -n")
+	fs.IntVar(&o.times, "iterations", 1, "alias for -n")
+	fs.BoolVar(&o.underLoad, "under-load", false, "reproduce a timing/load issue (replay everything at the recorded speed)")
+	fs.BoolVar(&o.exactTCP, "exact-tcp", false, "use stateful transport replay for a low-level TCP issue")
+	fs.BoolVar(&o.details, flagDetails, false, "show the expert tables: capture assessment, replay plan, and every session's verdict")
+	fs.DurationVar(&o.gap, "gap", time.Second, "settle time between attempts when -n is more than 1")
+	fs.BoolVar(&o.stopWhenDifferent, "stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
+	fs.StringVar(&o.mode, "mode", "", "replay intent: application | transport | wire | auto (omitted: asks, or compatibility auto)")
+	fs.BoolVar(&o.dryRun, "dry-run", false, "preview selected sessions and requirements without network activity")
 	var selectedSessions fileFlags
 	fs.Var(&selectedSessions, "session", "select a session ID from check -details (repeatable; includes related FTP data)")
-	profileName := fs.String("profile", "functional", "replay fidelity: functional | timing | transport | wire")
-	strict := fs.Bool("strict", false, "abort a session at the first structural difference from the recording")
-	wireMode := fs.Bool("wire", false, "explicitly inject captured frames without session adaptation or response verification")
-	reportPath := fs.String("report", "", "where to save the shareable report (default: <capture>.report.json)")
-	actualPath := fs.String("actual-out", "", "where to save actual replay traffic (default: <capture>.actual.pcap)")
-	noGuard := fs.Bool("no-rst-guard", false, "advanced: don't suppress the host's RST (usually leave this off)")
-	udpIdle := fs.Duration("udp-idle", 30*time.Second, "split a UDP tuple into a new session after this idle interval")
+	fs.StringVar(&o.profile, "profile", "functional", "replay fidelity: functional | timing | transport | wire")
+	fs.BoolVar(&o.strict, "strict", false, "abort a session at the first structural difference from the recording")
+	fs.BoolVar(&o.wire, "wire", false, "explicitly inject captured frames without session adaptation or response verification")
+	fs.StringVar(&o.report, "report", "", "where to save the shareable report (default: <capture>.report.json)")
+	fs.StringVar(&o.actual, "actual-out", "", "where to save actual replay traffic (default: <capture>.actual.pcap)")
+	fs.BoolVar(&o.noGuard, "no-rst-guard", false, "advanced: don't suppress the host's RST (usually leave this off)")
+	fs.DurationVar(&o.udpIdle, "udp-idle", 30*time.Second, "split a UDP tuple into a new session after this idle interval")
 	var variables setFlags
 	fs.Var(&variables, "set", "set a run variable (repeatable name=value; secret names are redacted from reports)")
 	var rulePacks fileFlags
 	fs.Var(&rulePacks, "rules", "JSON adapter rule pack (repeatable)")
-	keylogPath := fs.String("keylog", "", "matching NSS key log for TLS/FTPS (never auto-consumed or logged)")
-	serverName := fs.String("server-name", "", "TLS certificate DNS name (default: target host)")
-	caPath := fs.String("ca", "", "optional PEM CA bundle for TLS/FTPS verification")
-	insecure := fs.Bool("insecure-skip-verify", false, "explicitly disable TLS certificate verification (lab only)")
-	secureTimeout := fs.Duration("timeout", 30*time.Second, "fresh TLS, FTPS, or SSH connection timeout")
-	sshUser := fs.String("user", "", "SSH username")
-	sshPass := fs.String("pass", "", "SSH password (or use -key; never written to reports)")
-	sshKey := fs.String("key", "", "SSH private-key file (alternative to -pass)")
-	sshHostKey := fs.String("host-key", "", "pinned OpenSSH public host-key file (required in unified mode)")
+	fs.StringVar(&o.keylog, "keylog", "", "matching NSS key log for TLS/FTPS (never auto-consumed or logged)")
+	fs.StringVar(&o.serverName, "server-name", "", "TLS certificate DNS name (default: target host)")
+	fs.StringVar(&o.ca, "ca", "", "optional PEM CA bundle for TLS/FTPS verification")
+	fs.BoolVar(&o.insecure, "insecure-skip-verify", false, "explicitly disable TLS certificate verification (lab only)")
+	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "fresh TLS, FTPS, or SSH connection timeout")
+	fs.StringVar(&o.sshUser, "user", "", "SSH username")
+	fs.StringVar(&o.sshPass, "pass", "", "SSH password (prefer the prompt or LIVEWIRE_SSH_PASSWORD; never written to reports)")
+	fs.StringVar(&o.sshKey, "key", "", "SSH private-key file (alternative to -pass)")
+	fs.StringVar(&o.sshHostKey, "host-key", "", "pinned OpenSSH public host-key file (required in unified mode)")
 	var sshCommands multiFlag
 	var sshExpects multiFlag
 	fs.Var(&sshCommands, "cmd", "explicit SSH command to run (repeatable)")
@@ -101,95 +180,121 @@ func cmdReproduce(args []string) error {
 	}
 	pcapPath, err := parseCaptureArgs(fs, args, &pcapFlag)
 	if err != nil {
-		return err
+		return o, err
 	}
 	if handleAllFlags(fs, *allFlags, reproduceAliases) {
-		return errAllFlags
+		return o, errAllFlags
 	}
 	warnDeprecatedFlags(fs)
 	if pcapPath == "" {
 		fs.Usage()
-		return errReproduceCaptureRequired
+		return o, errReproduceCaptureRequired
 	}
-	if times < 1 {
-		return fmt.Errorf("-n must be at least 1")
+	if o.times < 1 {
+		return o, fmt.Errorf("-n must be at least 1")
 	}
-	if times > maxReplayAttempts {
-		return fmt.Errorf("-n must not exceed %d", maxReplayAttempts)
+	if o.times > maxReplayAttempts {
+		return o, fmt.Errorf("-n must not exceed %d", maxReplayAttempts)
 	}
-	if *gap < 0 {
-		return fmt.Errorf("-gap cannot be negative")
+	if o.gap < 0 {
+		return o, fmt.Errorf("-gap cannot be negative")
 	}
-	if *gap > 10*time.Minute {
-		return fmt.Errorf("-gap must not exceed 10m")
+	if o.gap > 10*time.Minute {
+		return o, fmt.Errorf("-gap must not exceed 10m")
 	}
+	o.capture = pcapPath
+	o.sessions = []string(selectedSessions)
+	o.rulePacks = []string(rulePacks)
+	o.variables = map[string]string(variables)
+	o.sshCommands = []string(sshCommands)
+	o.sshExpects = []string(sshExpects)
+	o.specified = map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { o.specified[f.Name] = true })
+	return o, nil
+}
 
-	capture, captureDigest, err := loadCaptureSnapshot(pcapPath)
-	if err != nil {
-		return err
-	}
-	recs := capture.Records
-	selectedProfile := *profileName
-	if *underLoad && strings.EqualFold(selectedProfile, "functional") {
+// resolveReproduceIntent turns the requested mode, profile, and shortcuts into
+// one resolved intent and fidelity profile, asking the operator when nothing
+// was chosen and a terminal is attached.
+func resolveReproduceIntent(o *reproduceOptions) (fidelityProfile, *replay.Registry, error) {
+	selectedProfile := o.profile
+	if o.underLoad && strings.EqualFold(selectedProfile, "functional") {
 		selectedProfile = "timing"
 	}
-	if *exactTCP && !strings.EqualFold(selectedProfile, "wire") {
+	if o.exactTCP && !strings.EqualFold(selectedProfile, "wire") {
 		selectedProfile = "transport"
 	}
-	if *wireMode {
-		if *mode != "" && *mode != "auto" && *mode != "wire" {
-			return fmt.Errorf("-wire conflicts with -mode %s", *mode)
+	if o.wire {
+		if o.mode != "" && o.mode != "auto" && o.mode != "wire" {
+			return fidelityProfile{}, nil, fmt.Errorf("-wire conflicts with -mode %s", o.mode)
 		}
-		*mode = "wire"
+		o.mode = "wire"
 	}
-	if *mode == "" && isTerminal(os.Stdin) && !*dryRun && selectedProfile == "functional" {
+	if o.mode == "" && isTerminal(os.Stdin) && !o.dryRun && selectedProfile == "functional" {
 		fmt.Println("Choose what to reproduce: 1) application behavior  2) transport behavior  3) captured frames  4) automatic compatibility")
 		choices := []string{"application", "transport", "wire", "auto"}
-		*mode = choices[promptChoice("Replay intent [1]: ", 0, len(choices))]
+		o.mode = choices[promptChoice("Replay intent [1]: ", 0, len(choices))]
 	}
-	resolvedMode, resolvedProfile, err := replayintent.Resolve(*mode, selectedProfile)
+	resolvedMode, resolvedProfile, err := replayintent.Resolve(o.mode, selectedProfile)
 	if err != nil {
-		return err
+		return fidelityProfile{}, nil, err
 	}
-	selectedProfile = string(resolvedProfile)
-	profile, err := parseFidelityProfile(selectedProfile)
+	o.mode, o.profile = resolvedMode, string(resolvedProfile)
+	profile, err := parseFidelityProfile(o.profile)
 	if err != nil {
-		return err
+		return fidelityProfile{}, nil, err
 	}
-	registry, err := registryWithRulePacks(rulePacks)
+	registry, err := registryWithRulePacks(o.rulePacks)
 	if err != nil {
-		return err
+		return fidelityProfile{}, nil, err
 	}
-	if *udpIdle <= 0 || *udpIdle > time.Hour {
-		return fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
+	if o.udpIdle <= 0 || o.udpIdle > time.Hour {
+		return fidelityProfile{}, nil, fmt.Errorf("-udp-idle must be greater than zero and at most 1h")
 	}
-	if *secureTimeout <= 0 || *secureTimeout > 10*time.Minute {
-		return fmt.Errorf("-timeout must be greater than zero and at most 10m")
+	if o.timeout <= 0 || o.timeout > 10*time.Minute {
+		return fidelityProfile{}, nil, fmt.Errorf("-timeout must be greater than zero and at most 10m")
 	}
+	return profile, registry, nil
+}
+
+// inspectReproduce compiles the replay plan for the resolved intent and refuses
+// any flag the selected route cannot honor. It reports whether the route opens
+// fresh secure sessions, which changes what the later phases may claim.
+func inspectReproduce(o *reproduceOptions, recs []*pcapio.Record, registry *replay.Registry) (*replayintent.Inspection, bool, error) {
 	var selectedKeyLog []byte
-	if *keylogPath != "" && resolvedMode != "wire" && detectProtocolRoute(recs).kind != protocolTLS {
-		selectedKeyLog, err = os.ReadFile(*keylogPath)
+	if o.keylog != "" && o.mode != "wire" && detectProtocolRoute(recs).kind != protocolTLS {
+		var err error
+		selectedKeyLog, err = os.ReadFile(o.keylog)
 		if err != nil {
-			return err
+			return nil, false, err
 		}
 	}
-	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: selectedKeyLog, Mode: resolvedMode, Profile: selectedProfile, Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: selectedKeyLog, Mode: o.mode, Profile: o.profile, Sessions: o.sessions, UDPIdle: o.udpIdle}, registry)
 	if err != nil {
-		return err
+		return nil, false, err
 	}
-	trace, plan := inspection.Trace, inspection.Plan
 	fmt.Printf("Replay intent: %s; %d selected packet(s), %d explicitly excluded.\n", inspection.Mode, inspection.SelectedPackets, inspection.ExcludedPackets)
 	secureRoute := inspection.Route.Kind == replayintent.TLS || inspection.Route.Kind == replayintent.SSH || inspection.Route.Kind == replayintent.FTP
 	if inspection.Mode != "wire" && secureRoute && inspection.Mode != "transport" {
-		if *underLoad || *exactTCP || selectedProfile != "functional" {
-			return fmt.Errorf("this fresh-session driver does not support timing or exact transport options; choose a supported intent explicitly")
+		if o.underLoad || o.exactTCP || o.profile != "functional" {
+			return nil, false, fmt.Errorf("this fresh-session driver does not support timing or exact transport options; choose a supported intent explicitly")
 		}
-		if *actualPath != "" {
-			return fmt.Errorf("-actual-out is not supported for fresh secure sessions; use -report for redacted evidence")
+		if o.actual != "" {
+			return nil, false, fmt.Errorf("-actual-out is not supported for fresh secure sessions; use -report for redacted evidence")
 		}
 	}
-	specified := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { specified[f.Name] = true })
+	if err := refuseUnsupportedFlags(o, inspection, secureRoute); err != nil {
+		return nil, false, err
+	}
+	if o.details && secureRoute {
+		printCoverage(inspection.Plan)
+	}
+	return inspection, secureRoute, nil
+}
+
+// refuseUnsupportedFlags rejects an explicitly given flag that the selected
+// route would silently ignore, so a peer never believes a control took effect.
+func refuseUnsupportedFlags(o *reproduceOptions, inspection *replayintent.Inspection, secureRoute bool) error {
 	unsupported := []string{}
 	if inspection.Mode == "wire" {
 		unsupported = []string{"t", "to", "target", "strict", "actual-out", "set", "gap", "stop-when-different", "keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "exact-tcp"}
@@ -206,83 +311,78 @@ func cmdReproduce(args []string) error {
 		}
 	}
 	for _, name := range unsupported {
-		if specified[name] {
+		if o.specified[name] {
 			return fmt.Errorf("-%s is not supported by the selected %s replay route", name, inspection.Mode)
 		}
 	}
-	if *details && secureRoute {
-		printCoverage(plan)
-	}
-	if *dryRun {
-		if to != "" {
-			if secureRoute && inspection.Mode != "wire" && inspection.Mode != "transport" {
-				if _, err := resolveSecureTarget(to, inspection.Route.Session.Server); err != nil {
-					return err
-				}
-			} else if inspection.Mode != "wire" {
-				if _, err := parseHostIP(to); err != nil {
-					return err
-				}
+	return nil
+}
+
+// reproduceDryRun validates the target and output paths and prints what a real
+// run would do, without opening an interface or a connection.
+func reproduceDryRun(o reproduceOptions, inspection *replayintent.Inspection, secureRoute bool) error {
+	if o.target != "" {
+		if secureRoute && inspection.Mode != "wire" && inspection.Mode != "transport" {
+			if _, err := resolveSecureTarget(o.target, inspection.Route.Session.Server); err != nil {
+				return err
+			}
+		} else if inspection.Mode != "wire" {
+			if _, err := parseHostIP(o.target); err != nil {
+				return err
 			}
 		}
-		for _, out := range []struct{ value, name string }{{*reportPath, "-report"}, {*actualPath, "-actual-out"}} {
-			if out.value != "" {
-				if err := outputPathAvailable(out.value); err != nil {
-					return fmt.Errorf("%s: %w", out.name, err)
-				}
+	}
+	for _, out := range []struct{ value, name string }{{o.report, "-report"}, {o.actual, "-actual-out"}} {
+		if out.value != "" {
+			if err := outputPathAvailable(out.value); err != nil {
+				return fmt.Errorf("%s: %w", out.name, err)
 			}
 		}
-		if *reportPath != "" && *actualPath != "" && sameOutputPath(*reportPath, *actualPath) {
-			return fmt.Errorf("-report and -actual-out must name different files")
-		}
-		base := strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath))
-		preferred := base + ".report.json"
-		if secureRoute || inspection.Mode == "wire" {
-			kind := inspection.Route.Kind
-			if inspection.Mode == "wire" {
-				kind = "wire"
-			}
-			preferred = defaultProtocolReportPath(pcapPath, protocolKind(kind))
-		}
-		output, err := resolveAttemptReportBase(*reportPath, preferred, times)
-		if err != nil {
-			return err
-		}
-		fmt.Printf("Report destination: %s\n", output)
-		printCoverage(plan)
-		printProtocolReadiness(readinessFromInspection(inspection.Readiness))
-		if to != "" {
-			fmt.Printf("Target: %s\n", to)
-		}
-		if on != "" {
-			fmt.Printf("Interface: %s\n", on)
-		}
-		fmt.Println("Dry run: no network connections opened and no packets sent.")
-		if !inspection.Readiness.Supported {
-			return blockedReplayError(pcapPath, inspection.Readiness.Blocker)
-		}
-		return nil
 	}
-	if !inspection.Readiness.Supported {
-		return blockedReplayError(pcapPath, inspection.Readiness.Blocker)
+	if o.report != "" && o.actual != "" && sameOutputPath(o.report, o.actual) {
+		return fmt.Errorf("-report and -actual-out must name different files")
 	}
-	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
-		captureDigest: captureDigest,
-		capture:       pcapPath, iface: on, target: to, keylog: *keylogPath, serverName: *serverName, ca: *caPath,
-		insecure: *insecure, strict: *strict, wire: inspection.Mode == "wire", user: *sshUser, password: *sshPass, privateKey: *sshKey, hostKey: *sshHostKey,
-		commands: sshCommands, expects: sshExpects, timeout: *secureTimeout, report: *reportPath, times: times, gap: *gap, stopWhenDifferent: *stopWhenDifferent,
-		variables: variables, rulePacks: rulePacks, sessions: selectedSessions, inspection: inspection,
-	})
-	if handled {
+	base := strings.TrimSuffix(o.capture, filepath.Ext(o.capture))
+	preferred := base + ".report.json"
+	if secureRoute || inspection.Mode == "wire" {
+		kind := inspection.Route.Kind
+		if inspection.Mode == "wire" {
+			kind = "wire"
+		}
+		preferred = defaultProtocolReportPath(o.capture, protocolKind(kind))
+	}
+	output, err := resolveAttemptReportBase(o.report, preferred, o.times)
+	if err != nil {
 		return err
 	}
+	fmt.Printf("Report destination: %s\n", output)
+	printCoverage(inspection.Plan)
+	printProtocolReadiness(readinessFromInspection(inspection.Readiness))
+	if o.target != "" {
+		fmt.Printf("Target: %s\n", o.target)
+	}
+	if o.iface != "" {
+		fmt.Printf("Interface: %s\n", o.iface)
+	}
+	fmt.Println("Dry run: no network connections opened and no packets sent.")
+	if !inspection.Readiness.Supported {
+		return blockedReplayError(o.capture, inspection.Readiness.Blocker)
+	}
+	return nil
+}
+
+// runGenericReproduce drives the plaintext and transport plan: choose the
+// device and interface, replay every selected session as many times as asked,
+// then save the evidence and print the verdict.
+func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDigest string, inspection *replayintent.Inspection, profile fidelityProfile, registry *replay.Registry) error {
+	trace, plan := inspection.Trace, inspection.Plan
 	flows := engine.ExtractFlows(recs)
 	preflight := assessCapture(recs, flows)
-	if *details {
+	if o.details {
 		printPreflight(preflight)
 	}
-	fmt.Printf("Loaded %s: %d session(s), %d raw frame(s).\n", filepath.Base(pcapPath), len(trace.Sessions), len(trace.Raw))
-	if *details {
+	fmt.Printf("Loaded %s: %d session(s), %d raw frame(s).\n", filepath.Base(o.capture), len(trace.Sessions), len(trace.Raw))
+	if o.details {
 		printCoverage(plan)
 	}
 	if blockers := planBlockers(plan); len(blockers) > 0 {
@@ -294,12 +394,12 @@ func cmdReproduce(args []string) error {
 			return fmt.Errorf("the capture has no safely executable session; no packets were sent")
 		}
 	}
-	base := strings.TrimSuffix(pcapPath, filepath.Ext(pcapPath))
-	out, err := resolveOutputPath(*reportPath, base+".report.json", "-report")
+	base := strings.TrimSuffix(o.capture, filepath.Ext(o.capture))
+	out, err := resolveOutputPath(o.report, base+".report.json", "-report")
 	if err != nil {
 		return err
 	}
-	actual, err := resolveOutputPath(*actualPath, base+".actual.pcap", "-actual-out")
+	actual, err := resolveOutputPath(o.actual, base+".actual.pcap", "-actual-out")
 	if err != nil {
 		return err
 	}
@@ -308,14 +408,14 @@ func cmdReproduce(args []string) error {
 	}
 
 	// 1) Which device? (its IP; the port comes from the capture)
-	deviceIP, err := chooseDeviceIP(to)
+	deviceIP, err := chooseDeviceIP(o.target)
 	if err != nil {
 		return err
 	}
 	// 2) Which network connection reaches it?
-	iface := on
+	iface := o.iface
 	if inspection.Readiness.NeedsInterface {
-		iface, err = chooseInterface(on, deviceIP)
+		iface, err = chooseInterface(o.iface, deviceIP)
 		if err != nil {
 			return err
 		}
@@ -323,34 +423,28 @@ func cmdReproduce(args []string) error {
 	// Run the most reliable default (adaptive + reply-checking + auto-synthesis).
 	// Scenario tuning stays opt-in via flags, suggested only if the default run
 	// doesn't reproduce the issue.
-	pace, raw := profile.Pace, profile.RawL4
-
 	verify := profile.Verify
-	if *strict {
+	if o.strict {
 		verify = engine.VerifyStrict
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	o := liveOpts{
+	live := liveOpts{
 		ctx:    ctx,
-		target: deviceIP.String(), iface: iface, seed: 1, noGuard: *noGuard,
-		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: pace, rawL4: raw,
-		variables: variables,
+		target: deviceIP.String(), iface: iface, seed: 1, noGuard: o.noGuard,
+		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: profile.Pace, rawL4: profile.RawL4,
+		variables: o.variables,
 	}
 
 	fmt.Printf("\nProfile: %s — %s\n", profile.Name, profile.Description)
 	fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
 
-	runs := iterate.Plan{Times: times, Gap: *gap, StopWhenDifferent: *stopWhenDifferent}.Normalize()
-	// Quiet mode is the default for a repeated run: N copies of the progress log
-	// and N verdict blocks bury the one number the reader wants, which is how
-	// often it happened. -details restores the full per-attempt output.
-	quiet := runs.Repeats() && !*details
+	runs := iterate.Plan{Times: o.times, Gap: o.gap, StopWhenDifferent: o.stopWhenDifferent}.Normalize()
 	if runs.Repeats() {
 		fmt.Printf("Running %d attempts, %s apart. Each attempt opens a fresh connection.\n", runs.Times, runs.Gap)
 	}
 
-	rep := newReplayReport(o)
+	rep := newReplayReport(live)
 	rep.Intent = inspection.Mode
 	rep.SelectedPackets = inspection.SelectedPackets
 	rep.ExcludedPackets = inspection.ExcludedPackets
@@ -360,99 +454,135 @@ func cmdReproduce(args []string) error {
 	rep.Limitations = plan.Limitations()
 	rep.CaptureDigest = captureDigest
 
-	var mu sync.Mutex
-	var actualFrames []pcapio.Record
-	baseSeed := o.seed
-
-	attempt := func(i int) iterate.Tally {
-		// Every attempt must look like a new connection to the device: the same
-		// four-tuple and ISN sent twice in a row is an old duplicate segment as
-		// far as TCP is concerned, and the device resets it. That would read as
-		// a failure to reproduce when it is really an artefact of repeating.
-		att := o
-		att.seed = baseSeed + int64(i)
-		att.portStride = i
-		if runs.Repeats() {
-			rep.startAttempt(i + 1)
-		}
-		logf := func(idx int, line string) {
-			if quiet {
-				return
-			}
-			line = redactRunText(line, variables)
-			mu.Lock()
-			defer mu.Unlock()
-			switch {
-			case runs.Repeats():
-				fmt.Printf("  [attempt %d] %s\n", i+1, line)
-			case idx < 0 || len(plan.Entries) == 1:
-				fmt.Printf("  %s\n", line)
-			default:
-				fmt.Printf("  [session %d] %s\n", idx, line)
-			}
-		}
-		if !quiet && runs.Repeats() {
-			fmt.Printf("\n---- attempt %d of %d ----\n", i+1, runs.Times)
-		}
-
-		results := executeReplayPlan(executePlanConfig{
-			Context: ctx, Trace: trace, Plan: plan, Registry: registry,
-			Flows: flows, Iface: iface, TargetIP: deviceIP, Variables: variables, Live: att, Log: logf,
-		})
-
-		var tally iterate.Tally
-		note := ""
-		for _, result := range results {
-			target := deviceIP.String()
-			if result.Session != nil && result.Session.Server.Port != 0 {
-				target = netip.AddrPortFrom(deviceIP, result.Session.Server.Port).String()
-			}
-			rep.addPlanned(result, target)
-			actualFrames = append(actualFrames, result.TCP.Evidence...)
-			actualFrames = append(actualFrames, result.Transport.Evidence...)
-
-			verdict, why := sessionVerdict(result, variables)
-			tally.Add(verdict)
-			if note == "" && why != "" {
-				note = why
-			}
-			if !quiet {
-				printSessionResult(result, variables)
-			}
-		}
-		if runs.Repeats() {
-			line := fmt.Sprintf("Attempt %d of %d: %s", i+1, runs.Times, tally.Worst().Plain())
-			if note != "" {
-				line += " — " + note
-			}
-			fmt.Println(line)
-		}
-		return tally
+	run := &genericReproduceRun{
+		options: o, ctx: ctx, trace: trace, plan: plan, registry: registry, flows: flows,
+		iface: iface, deviceIP: deviceIP, live: live, runs: runs, report: rep,
+		// Quiet mode is the default for a repeated run: N copies of the progress
+		// log and N verdict blocks bury the one number the reader wants, which
+		// is how often it happened. -details restores the full per-attempt output.
+		quiet: runs.Repeats() && !o.details,
 	}
-
-	per := runs.Run(ctx, attempt)
+	per := runs.Run(ctx, run.attempt)
 	summary := iterate.SummarizeContext(ctx, per, runs.Times)
 	if runs.Repeats() {
 		rep.recordIterations(summary)
 	}
+	artifactErrs := run.publish(out, actual)
+	printReproduceSummary(summary, runs, profile, o.strict)
+	return errors.Join(artifactErrs...)
+}
 
-	var artifactErrs []error
-	if len(actualFrames) > 0 {
-		if aerr := writeFrames(actual, actualFrames, true); aerr != nil {
-			artifactErrs = append(artifactErrs, fmt.Errorf("save actual replay capture: %w", aerr))
-			fmt.Printf("\n(could not save actual replay capture: %v)\n", aerr)
-		} else {
-			rep.ActualCapture = actual
-			fmt.Printf("\nActual replay traffic was saved to %s.\n", actual)
+// genericReproduceRun is the state one replay run accumulates across attempts.
+type genericReproduceRun struct {
+	options  reproduceOptions
+	ctx      context.Context
+	trace    *replay.Trace
+	plan     replay.ReplayPlan
+	registry *replay.Registry
+	flows    []*engine.Flow
+	iface    string
+	deviceIP netip.Addr
+	live     liveOpts
+	runs     iterate.Plan
+	report   *replayReport
+	quiet    bool
+
+	mu           sync.Mutex
+	actualFrames []pcapio.Record
+}
+
+// attempt replays every selected session once and tallies the session verdicts.
+func (r *genericReproduceRun) attempt(i int) iterate.Tally {
+	// Every attempt must look like a new connection to the device: the same
+	// four-tuple and ISN sent twice in a row is an old duplicate segment as
+	// far as TCP is concerned, and the device resets it. That would read as
+	// a failure to reproduce when it is really an artefact of repeating.
+	att := r.live
+	att.seed = r.live.seed + int64(i)
+	att.portStride = i
+	if r.runs.Repeats() {
+		r.report.startAttempt(i + 1)
+	}
+	logf := func(idx int, line string) {
+		if r.quiet {
+			return
+		}
+		line = redactRunText(line, r.options.variables)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		switch {
+		case r.runs.Repeats():
+			fmt.Printf("  [attempt %d] %s\n", i+1, line)
+		case idx < 0 || len(r.plan.Entries) == 1:
+			fmt.Printf("  %s\n", line)
+		default:
+			fmt.Printf("  [session %d] %s\n", idx, line)
 		}
 	}
-	if werr := rep.write(out); werr != nil {
-		artifactErrs = append(artifactErrs, fmt.Errorf("save replay report: %w", werr))
-		fmt.Printf("\n(could not save report: %v)\n", werr)
-	} else {
-		fmt.Printf("\nA shareable report was saved to %s — send this back so we can see what happened.\n", out)
+	if !r.quiet && r.runs.Repeats() {
+		fmt.Printf("\n---- attempt %d of %d ----\n", i+1, r.runs.Times)
 	}
 
+	results := executeReplayPlan(executePlanConfig{
+		Context: r.ctx, Trace: r.trace, Plan: r.plan, Registry: r.registry,
+		Flows: r.flows, Iface: r.iface, TargetIP: r.deviceIP, Variables: r.options.variables, Live: att, Log: logf,
+	})
+
+	var tally iterate.Tally
+	note := ""
+	for _, result := range results {
+		target := r.deviceIP.String()
+		if result.Session != nil && result.Session.Server.Port != 0 {
+			target = netip.AddrPortFrom(r.deviceIP, result.Session.Server.Port).String()
+		}
+		r.report.addPlanned(result, target)
+		r.actualFrames = append(r.actualFrames, result.TCP.Evidence...)
+		r.actualFrames = append(r.actualFrames, result.Transport.Evidence...)
+
+		verdict, why := sessionVerdict(result, r.options.variables)
+		tally.Add(verdict)
+		if note == "" && why != "" {
+			note = why
+		}
+		if !r.quiet {
+			printSessionResult(result, r.options.variables)
+		}
+	}
+	if r.runs.Repeats() {
+		line := fmt.Sprintf("Attempt %d of %d: %s", i+1, r.runs.Times, tally.Worst().Plain())
+		if note != "" {
+			line += " — " + note
+		}
+		fmt.Println(line)
+	}
+	return tally
+}
+
+// publish saves the actual traffic and the report, telling the reader where
+// each landed. A failure to save is reported, not hidden.
+func (r *genericReproduceRun) publish(reportPath, actualPath string) []error {
+	var errs []error
+	if len(r.actualFrames) > 0 {
+		if err := writeFrames(actualPath, r.actualFrames, true); err != nil {
+			errs = append(errs, fmt.Errorf("save actual replay capture: %w", err))
+			fmt.Printf("\n(could not save actual replay capture: %v)\n", err)
+		} else {
+			r.report.ActualCapture = actualPath
+			fmt.Printf("\nActual replay traffic was saved to %s.\n", actualPath)
+		}
+	}
+	if err := r.report.write(reportPath); err != nil {
+		errs = append(errs, fmt.Errorf("save replay report: %w", err))
+		fmt.Printf("\n(could not save report: %v)\n", err)
+	} else {
+		fmt.Printf("\nA shareable report was saved to %s — send this back so we can see what happened.\n", reportPath)
+	}
+	return errs
+}
+
+// printReproduceSummary prints the one-line answer and, when the issue did not
+// reproduce, the opt-in tuning worth trying next.
+func printReproduceSummary(summary iterate.Summary, runs iterate.Plan, profile fidelityProfile, strict bool) {
 	if runs.Repeats() {
 		fmt.Print(summary.Plain())
 	} else {
@@ -460,9 +590,7 @@ func cmdReproduce(args []string) error {
 		fmt.Printf("\nSummary: %d same as recording, %d different, %d unverified, %d wire-only, %d did not complete.\n",
 			s.Same, s.Different, s.Unverified, s.WireOnly, s.Incomplete)
 	}
-
-	// If the run didn't reproduce the issue, suggest the opt-in tuning.
-	if (summary.Sessions.Different+summary.Sessions.Incomplete) > 0 && !pace && !raw && !*strict {
+	if (summary.Sessions.Different+summary.Sessions.Incomplete) > 0 && !profile.Pace && !profile.RawL4 && !strict {
 		fmt.Println("\nIf you expected the issue to reproduce and it didn't, try one of these:")
 		if !runs.Repeats() {
 			fmt.Println("  - if it only happens sometimes:      add  -n 5")
@@ -472,7 +600,6 @@ func cmdReproduce(args []string) error {
 		fmt.Println("  - to flag every small difference:    add  -strict")
 		fmt.Println("Otherwise, send us the report file above and we'll take a look.")
 	}
-	return errors.Join(artifactErrs...)
 }
 
 var errReproduceCaptureRequired = fmt.Errorf("give the capture file we sent you, e.g. livewire reproduce issue.pcap")
