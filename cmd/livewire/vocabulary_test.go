@@ -295,7 +295,7 @@ func TestBinarySurface(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("successful help must not look like a PowerShell error; stderr was:\n%s", stderr)
 		}
-		if !strings.Contains(stdout, "Inspect, choose your replay intent, preview, then run:") {
+		if !strings.Contains(stdout, "Reproduce a recorded exchange on your device:") {
 			t.Errorf("stdout did not contain the help hub:\n%s", stdout)
 		}
 	})

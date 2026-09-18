@@ -32,6 +32,26 @@ const allFlagsName = "all-flags"
 // first-time user has to read.
 type aliasSet map[string]bool
 
+// deprecatedAliases are the spellings kept only until the next major release,
+// each mapped to the flag a script should use instead. They parse exactly as
+// before; the only change is a one-line warning and a mark in -all-flags, so a
+// saved command keeps working while its author learns the canonical name.
+var deprecatedAliases = map[string]string{"on": flagIface, "to": flagTarget, "iterations": flagCount}
+
+// deprecationRemoval names the release that drops deprecated spellings and
+// compatibility entry points.
+const deprecationRemoval = "1.0"
+
+// warnDeprecatedFlags tells a script author which spelling to move to. It is
+// called once after parsing and never changes behavior.
+func warnDeprecatedFlags(fs *flag.FlagSet) {
+	fs.Visit(func(f *flag.Flag) {
+		if canonical, ok := deprecatedAliases[f.Name]; ok {
+			fmt.Fprintf(os.Stderr, "warning: -%s is deprecated and will be removed in %s; use -%s\n", f.Name, deprecationRemoval, canonical)
+		}
+	})
+}
+
 // usageWriter is where command help goes. Requested help always uses stdout so
 // shells such as Windows PowerShell do not present successful help as an error.
 var usageWriter = os.Stdout
@@ -89,7 +109,9 @@ func printAllFlags(fs *flag.FlagSet, aliases aliasSet) {
 	for _, n := range names {
 		f := fs.Lookup(n)
 		line := flagLine(f)
-		if aliases[n] {
+		if canonical, deprecated := deprecatedAliases[n]; deprecated {
+			line = strings.TrimRight(line, "\n") + fmt.Sprintf("  (deprecated alias of -%s; removed in %s)\n", canonical, deprecationRemoval)
+		} else if aliases[n] {
 			line = strings.TrimRight(line, "\n") + "  (alias)\n"
 		}
 		fmt.Fprint(usageWriter, line)

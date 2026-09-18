@@ -98,6 +98,7 @@ func cmdLiveLegacy(args []string) error {
 	if handleAllFlags(fs, *allFlagsOn, liveAliases) {
 		return errAllFlags
 	}
+	warnDeprecatedFlags(fs)
 	if inPath == "" {
 		fs.Usage()
 		return fmt.Errorf("-in is required")

@@ -87,15 +87,16 @@ func cmdReproduce(args []string) error {
 	fs.Var(&sshExpects, "expect", "expected SSH output substring, one per -cmd")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire reproduce <capture.pcap> [options]")
+		fmt.Println("usage: livewire reproduce <capture.pcap> -t <device-ip> [options]")
 		fmt.Println("   or: livewire reproduce -in <capture.pcap> -t <device-ip> -i <connection>")
 		fmt.Println("\nReplay a recorded exchange against your device and report whether it")
-		fmt.Println("behaves the same. Choose -mode application, transport, or wire.")
-		fmt.Println("Use check -details to find session IDs, then -session <id> -dry-run")
-		fmt.Println("to preview the exchange. Packet-based replay may require Administrator")
-		fmt.Println("or sudo; socket-based application replay does not require a packet interface.")
-		fmt.Println("\nFor intermittent issues, add -n 5. Use -mode application -under-load")
-		fmt.Println("for recorded application pacing, or -mode transport for transport behavior.")
+		fmt.Println("behaves the same. Anything not given is asked for, with the likely answer")
+		fmt.Println("pre-selected. To be precise about what is replayed, run check -details to")
+		fmt.Println("find session IDs, then -session <id> -dry-run to preview without sending.")
+		fmt.Println("Packet-based replay may need Administrator or sudo; socket-based")
+		fmt.Println("application replay does not.")
+		fmt.Println("\nFor intermittent issues, add -n 5. Use -under-load for the recorded pacing,")
+		fmt.Println("or -mode transport for transport-level behavior.")
 		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", "wire", "mode", "session", "dry-run", flagDetails)
 	}
 	pcapPath, err := parseCaptureArgs(fs, args, &pcapFlag)
@@ -105,6 +106,7 @@ func cmdReproduce(args []string) error {
 	if handleAllFlags(fs, *allFlags, reproduceAliases) {
 		return errAllFlags
 	}
+	warnDeprecatedFlags(fs)
 	if pcapPath == "" {
 		fs.Usage()
 		return errReproduceCaptureRequired
