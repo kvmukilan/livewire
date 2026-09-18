@@ -33,7 +33,7 @@ response-equivalence claim. Script invocations omitting mode retain compatibilit
 
 ## Reproduced published-binary comparison
 
-`scripts/compare-releases.py` generates checksummed Ethernet/IP/TCP PCAPs, starts
+`go run ./scripts/task compare-releases` generates checksummed Ethernet/IP/TCP PCAPs, starts
 only localhost HTTP servers, and compares published 0.7/0.8 with the current EXE.
 The mixed-capture case is inspected offline in old releases; no raw interface is
 opened by the comparison. The script is now required in Windows CI and release CI.
@@ -48,7 +48,7 @@ opened by the comparison. The script is now required in Windows CI and release C
 Run from the repository after building `livewire.exe`:
 
 ```powershell
-python scripts/compare-releases.py --output coverage/new-comparison
+go run ./scripts/task compare-releases -output coverage/new-comparison
 ```
 
 The output directory must be new. It contains captures, command transcripts,

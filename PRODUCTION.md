@@ -14,7 +14,7 @@ Socket application replay needs neither packet-driver elevation nor `-i`.
 
 ```sh
 livewire doctor
-livewire doctor --json --out-dir .
+livewire doctor -json --out-dir .
 livewire ifaces
 livewire check issue.pcap -details
 livewire reproduce issue.pcap --mode application --session tcp-0 --dry-run
@@ -119,11 +119,11 @@ captures and leave memory headroom. Reproduce measurements for the target host.
 ## Maintainer qualification and stable promotion
 
 ```sh
-python scripts/qualification.py corpus --output coverage/corpus-new
-python scripts/qualification.py benchmark --output coverage/benchmark-new
-python scripts/qualification.py init qualification/stable.json
-python scripts/qualification.py record --output coverage/doctor-new -- livewire doctor --json
-python scripts/qualification.py validate qualification/stable.json --version 0.9.0 --artifacts dist/v0.9.0
+go run ./scripts/qualify corpus -output coverage/corpus-new
+go run ./scripts/qualify benchmark -output coverage/benchmark-new
+go run ./scripts/qualify init qualification/stable.json
+go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
+go run ./scripts/qualify validate qualification/stable.json -version 0.9.0 -artifacts dist/v0.9.0
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -148,7 +148,7 @@ and recovery, not an exit-zero replay. Never disable a real interface or fill
 a real disk outside the dedicated test host/volume.
 
 On each platform, repeat the selected supported workflow for at least two hours.
-Use `python scripts/qualification.py soak --output coverage/soak-new --seconds 7200 -- livewire reproduce issue.pcap --mode application -t 192.168.1.50`
+Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap --mode application -t 192.168.1.50`
 on the selected lab host. Every attempt has separate transcripts; report-path
 arguments may contain `{attempt}` for unique filenames. The harness stops on
 an unexpected exit and leaves behavior/cleanup qualification pending review.
