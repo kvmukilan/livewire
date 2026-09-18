@@ -84,7 +84,7 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 
 	per := runs.Run(liveContext(o), pass)
 	if runs.Repeats() {
-		summary := iterate.Summarize(per, runs.Times)
+		summary := iterate.SummarizeContext(liveContext(o), per, runs.Times)
 		rep.recordIterations(summary)
 		fmt.Print(summary.Plain())
 	}

@@ -285,7 +285,7 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	}
 
 	per := runs.Run(j.ctx, attempt)
-	summary := iterate.Summarize(per, runs.Times)
+	summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
 	stamp := time.Now().UTC().Format("20060102T150405.000Z")
 	base := strings.TrimSuffix(filepath.Base(req.Pcap), filepath.Ext(req.Pcap)) + "." + stamp
 	reportName := base + ".run.json"

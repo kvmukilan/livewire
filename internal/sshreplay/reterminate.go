@@ -65,6 +65,13 @@ func ReTerminateContext(ctx context.Context, cfg Config) (res *Result, retErr er
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	// Bound the complete attempt, including opening channels and waiting for a
+	// command's exit status; a successful handshake must not remove the timeout.
+	if cfg.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
+	}
 	res = &Result{}
 	hostKeyCB := ssh.HostKeyCallback(func(_ string, _ net.Addr, key ssh.PublicKey) error {
 		res.HostKey = key

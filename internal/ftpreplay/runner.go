@@ -55,6 +55,15 @@ type Result struct {
 }
 
 func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	defer func() {
+		if ctx.Err() != nil {
+			retErr = errors.Join(ctx.Err(), retErr)
+			result.Completed = false
+		}
+	}()
 	if cfg.Control == nil || cfg.Address == "" {
 		return Result{}, fmt.Errorf("ftpreplay: control session and target address are required")
 	}
@@ -78,6 +87,10 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 	}
 	dialer := net.Dialer{Timeout: cfg.Timeout}
 	raw, err := dialer.DialContext(ctx, "tcp", cfg.Address)
+	if err != nil {
+		return Result{}, err
+	}
+	raw, err = bindConnection(ctx, raw, cfg.Timeout)
 	if err != nil {
 		return Result{}, err
 	}
@@ -178,6 +191,10 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 			if err != nil {
 				return result, fmt.Errorf("ftpreplay: passive data connection: %w", err)
 			}
+			dataConn, err = bindConnection(ctx, dataConn, cfg.Timeout)
+			if err != nil {
+				return result, err
+			}
 		}
 		if replyCommand.name == "AUTH" && code/100 == 2 && !result.TLS {
 			if cfg.TLSConfig == nil {
@@ -204,7 +221,10 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 				if err != nil {
 					return result, err
 				}
-				dataConn = accepted
+				dataConn, err = bindConnection(ctx, accepted, cfg.Timeout)
+				if err != nil {
+					return result, err
+				}
 				if err := active.Close(); err != nil {
 					active = nil
 					return result, fmt.Errorf("ftpreplay: close accepted active listener: %w", err)
@@ -382,7 +402,12 @@ func acceptContext(ctx context.Context, listener net.Listener, timeout time.Dura
 	go func() { conn, err := listener.Accept(); ch <- answer{conn, err} }()
 	select {
 	case <-ctx.Done():
-		return nil, errors.Join(ctx.Err(), wrapClose("active listener", listener.Close()))
+		closeErr := wrapClose("active listener", listener.Close())
+		result := <-ch
+		if result.conn != nil {
+			closeErr = errors.Join(closeErr, wrapClose("cancelled accepted data connection", result.conn.Close()))
+		}
+		return nil, errors.Join(ctx.Err(), closeErr)
 	case result := <-ch:
 		return result.conn, result.err
 	}
