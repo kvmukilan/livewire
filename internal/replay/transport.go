@@ -10,6 +10,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/backend"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/runstate"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
@@ -21,6 +22,7 @@ type ProgressEvent struct {
 }
 
 type TransportRunConfig struct {
+	cleanup    func() error
 	Session    *Session
 	Iface      string
 	TargetIP   netip.Addr
@@ -35,17 +37,21 @@ type TransportRunConfig struct {
 }
 
 type TransportResult struct {
-	SessionID   string          `json:"sessionId"`
-	Mode        Mode            `json:"mode"`
-	Fidelity    Fidelity        `json:"fidelity"`
-	Completed   bool            `json:"completed"`
-	Verified    bool            `json:"verified"`
-	Matched     bool            `json:"matched"`
-	Sent        int             `json:"sent"`
-	Received    int             `json:"received"`
-	Differences []Difference    `json:"differences,omitempty"`
-	Evidence    []pcapio.Record `json:"-"`
-	Error       string          `json:"error,omitempty"`
+	VerificationEvidence
+	SessionID   string       `json:"sessionId"`
+	Mode        Mode         `json:"mode"`
+	Fidelity    Fidelity     `json:"fidelity"`
+	Completed   bool         `json:"completed"`
+	Verified    bool         `json:"verified"`
+	Matched     bool         `json:"matched"`
+	Sent        int          `json:"sent"`
+	Received    int          `json:"received"`
+	Differences []Difference `json:"differences,omitempty"`
+	// Timing compares live reply times with the recording. It is nil when no
+	// request/response turn completed.
+	Timing   *SessionTiming  `json:"timing,omitempty"`
+	Evidence []pcapio.Record `json:"-"`
+	Error    string          `json:"error,omitempty"`
 }
 
 func (r TransportResult) Succeeded() bool { return r.Completed && r.Error == "" }
@@ -71,9 +77,16 @@ func RunTransportContext(ctx context.Context, cfg TransportRunConfig) (result Tr
 	if err != nil {
 		return TransportResult{}, err
 	}
+	closed := false
+	cfg.cleanup = func() error { closed = true; return lb.Backend.Close() }
 	defer func() {
+		if closed {
+			return
+		}
 		if err := lb.Backend.Close(); err != nil {
 			retErr = errors.Join(retErr, fmt.Errorf("close transport backend: %w", err))
+			result.Completed, result.Matched = false, false
+			result.Error = retErr.Error()
 		}
 	}()
 	return RunTransportWithBackendContext(ctx, cfg, lb)
@@ -81,11 +94,43 @@ func RunTransportContext(ctx context.Context, cfg TransportRunConfig) (result Tr
 
 // RunTransportWithBackendContext is the injectable core used by CI and the lab
 // harness. The supplied backend is closed by its owner.
-func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig, lb *backend.LiveBackend) (TransportResult, error) {
+func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig, lb *backend.LiveBackend) (result TransportResult, retErr error) {
+	defer func() {
+		result.Verified = result.Verified && result.Received > 0
+		result.Matched = result.Matched && result.Verified && result.Completed && retErr == nil
+		result.Scope = "transport responses"
+		result.Observed = result.Received
+		result.ReasonCode = FailureReason(result.Completed, result.Verified, result.Matched, retErr)
+	}()
 	s := cfg.Session
 	if s == nil || lb == nil || lb.Backend == nil {
 		return TransportResult{}, fmt.Errorf("replay: session and live backend are required")
 	}
+	var saved *runstate.Result
+	var err error
+	ctx, saved, err = BeginSession(ctx, s.ID, false)
+	if err != nil {
+		return result, err
+	}
+	if saved != nil {
+		return TransportResult{SessionID: s.ID, Mode: ModeStateful, Fidelity: FidelityTransport, Completed: saved.Completed, Verified: saved.Verified, Matched: saved.Matched, Sent: saved.Sent, Received: saved.Received}, nil
+	}
+	defer func() {
+		if cfg.cleanup != nil {
+			if err := cfg.cleanup(); err != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("close transport backend: %w", err))
+				result.Cleanup = "failed"
+			} else {
+				result.Cleanup = "complete"
+			}
+		}
+		retErr = errors.Join(retErr, FinishSession(ctx, runstate.Result{Completed: result.Completed && retErr == nil, Verified: result.Verified && result.Received > 0, Matched: result.Matched && result.Completed && result.Received > 0 && retErr == nil, Sent: result.Sent, Received: result.Received}))
+		if retErr != nil {
+			result.Completed = false
+			result.Matched = false
+			result.Error = retErr.Error()
+		}
+	}()
 	if s.Transport != TransportUDP && s.Transport != TransportICMP4 && s.Transport != TransportICMP6 {
 		return TransportResult{}, fmt.Errorf("replay: transport runner does not handle %s", s.Transport)
 	}
@@ -102,20 +147,27 @@ func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig,
 	}
 	verified := cfg.Verify != VerifyOff
 	res := TransportResult{SessionID: s.ID, Mode: mode, Fidelity: fidelity, Verified: verified, Matched: verified}
+	for _, ev := range s.Events {
+		if ev.Direction == ServerToClient && (!ev.Fragmented || len(ev.Reassembled) > 0) {
+			res.Expected++
+		}
+	}
 
 	var wireBackend backend.PacketBackend = backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
-	recorder := &recordingBackend{PacketBackend: wireBackend, link: wireBackend.LinkType()}
+	recorder := &recordingBackend{PacketBackend: wireBackend, link: wireBackend.LinkType(), sink: Execution(ctx).Evidence}
 	b := backend.NewTupleRewriter(recorder, backend.TupleRewrite{
 		CapturedClient: backend.TupleEndpoint{IP: s.Client.IP, Port: s.Client.Port},
 		CapturedServer: backend.TupleEndpoint{IP: s.Server.IP, Port: s.Server.Port},
 		LiveClient:     backend.TupleEndpoint{IP: lb.LocalIP, Port: s.Client.Port},
 		LiveServer:     backend.TupleEndpoint{IP: cfg.TargetIP, Port: port},
 	})
-	state := &RuntimeState{Variables: copyVariables(cfg.Variables), Learned: map[string][]byte{}}
+	state := NewRuntimeState(cfg.Variables)
+	var inbox DatagramInbox
 	start := cfg.Start
 	if start.IsZero() {
 		start = b.Now()
 	}
+	var timing timingRecorder
 	for _, ev := range s.Events {
 		if ev.Fragmented && len(ev.Reassembled) == 0 {
 			continue
@@ -126,7 +178,11 @@ func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig,
 			return res, ctx.Err()
 		}
 		if ev.Direction == ClientToServer {
-			if paced(cfg.Profile) && !waitUntil(ctx, b, start.Add(ev.At)) {
+			var scheduled time.Time
+			if paced(cfg.Profile) {
+				scheduled = start.Add(ev.At)
+			}
+			if paced(cfg.Profile) && !waitUntil(ctx, b, scheduled) {
 				res.Error = "cancelled"
 				res.Evidence = recorder.frames
 				return res, ctx.Err()
@@ -140,20 +196,23 @@ func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig,
 				}
 				frame = prepared
 			}
+			if err := RecordOperation(ctx, "intent", res.Sent+1); err != nil {
+				return res, err
+			}
 			if err := b.Send(frame); err != nil {
 				res.Error = err.Error()
 				res.Evidence = recorder.frames
 				return res, err
 			}
 			res.Sent++
+			timing.sent(ev.At, b.Now(), scheduled)
 			emitProgress(cfg, "send", fmt.Sprintf("sent packet %d", ev.PacketIndex))
 			continue
 		}
 		if ev.Direction != ServerToClient {
 			continue
 		}
-		buf := make([]byte, 64*1024)
-		n, ok, err := recvContext(ctx, b, buf, cfg.Timeout)
+		frame, ok, err := inbox.Receive(ctx, b, ev, cfg.Adapter, state, cfg.Timeout)
 		if err != nil {
 			res.Error = err.Error()
 			res.Evidence = recorder.frames
@@ -162,20 +221,25 @@ func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig,
 		if !ok {
 			res.Matched = false
 			res.Differences = append(res.Differences, Difference{Field: "response", Expected: fmt.Sprintf("packet %d", ev.PacketIndex), Actual: "timeout", Structural: true})
-			if cfg.Verify == VerifyStrict {
-				res.Error = "live peer response timed out"
-				res.Evidence = recorder.frames
-				return res, fmt.Errorf("%s", res.Error)
-			}
-			continue
+			res.Error = "live peer response timed out"
+			res.Evidence = recorder.frames
+			return res, fmt.Errorf("%s: %w", res.Error, context.DeadlineExceeded)
 		}
 		res.Received++
-		diffs := compareFramePayload(ev, buf[:n], cfg.Adapter, state, cfg.Verify)
+		if cfg.Verify != VerifyOff {
+			res.Compared++
+		}
+		if err := RecordOperation(ctx, "ack", res.Received); err != nil {
+			return res, err
+		}
+		timing.received(ev.At, b.Now())
+		diffs := compareFramePayload(ev, frame, cfg.Adapter, state, cfg.Verify)
 		if len(diffs) > 0 {
 			res.Matched = false
 			res.Differences = append(res.Differences, diffs...)
 			if cfg.Verify == VerifyStrict {
 				res.Error = "live peer response differs from capture"
+				res.Timing = timing.result()
 				res.Evidence = recorder.frames
 				return res, fmt.Errorf("%s", res.Error)
 			}
@@ -183,6 +247,7 @@ func RunTransportWithBackendContext(ctx context.Context, cfg TransportRunConfig,
 		emitProgress(cfg, "receive", fmt.Sprintf("received response for packet %d", ev.PacketIndex))
 	}
 	res.Completed = true
+	res.Timing = timing.result()
 	res.Evidence = recorder.frames
 	return res, nil
 }
@@ -227,23 +292,32 @@ type recordingBackend struct {
 	backend.PacketBackend
 	link   wire.LinkType
 	frames []pcapio.Record
+	sink   func(pcapio.Record) error
+	bytes  int
 }
 
-func (r *recordingBackend) record(frame []byte) {
+func (r *recordingBackend) record(frame []byte) error {
+	if r.sink != nil {
+		return r.sink(pcapio.Record{Time: r.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: r.link})
+	}
+	if r.bytes+len(frame) > 64<<20 {
+		return fmt.Errorf("in-memory packet evidence exceeds 64 MiB; configure a streaming evidence sink")
+	}
 	b := append([]byte(nil), frame...)
 	r.frames = append(r.frames, pcapio.Record{Time: r.Now(), CapLen: len(b), OrigLen: len(b), Data: b, LinkType: r.link})
+	r.bytes += len(frame)
+	return nil
 }
 func (r *recordingBackend) Send(frame []byte) error {
 	if err := r.PacketBackend.Send(frame); err != nil {
 		return err
 	}
-	r.record(frame)
-	return nil
+	return r.record(frame)
 }
 func (r *recordingBackend) Recv(buf []byte, timeout time.Duration) (int, bool, error) {
 	n, ok, err := r.PacketBackend.Recv(buf, timeout)
 	if err == nil && ok {
-		r.record(buf[:n])
+		err = r.record(buf[:n])
 	}
 	return n, ok, err
 }
@@ -305,6 +379,13 @@ func preparePayload(frame []byte, link wire.LinkType, dir Direction, a Adapter, 
 		if err != nil {
 			return nil, err
 		}
+		live, err := a.Decode(dir, b)
+		if err != nil || len(live) != 1 {
+			return nil, fmt.Errorf("prepared datagram has invalid framing")
+		}
+		if err := Observe(a, dir, m, live[0], state); err != nil {
+			return nil, err
+		}
 		payload = append(payload, b...)
 	}
 	return p.RebuildWithPayload(payload), nil
@@ -316,7 +397,7 @@ func compareFramePayload(expected Event, actual []byte, a Adapter, state *Runtim
 	if eerr != nil || aerr != nil {
 		return []Difference{{Field: "frame", Expected: "parseable", Actual: "unparseable", Structural: true}}
 	}
-	if mode == VerifyOff {
+	if mode == VerifyOff && a == nil {
 		return nil
 	}
 	if a == nil {
@@ -363,8 +444,12 @@ func compareFramePayload(expected Event, actual []byte, a Adapter, state *Runtim
 		m := a.Correlate(exp[i], got[i], state)
 		if !m.Matched {
 			out = append(out, Difference{Field: "correlation", Expected: exp[i].String(), Actual: got[i].String(), Structural: true})
+		} else if err := Observe(a, ServerToClient, exp[i], got[i], state); err != nil {
+			out = append(out, Difference{Field: "state", Actual: err.Error(), Structural: true})
 		}
-		out = append(out, a.Compare(exp[i], got[i], mode)...)
+		if mode != VerifyOff {
+			out = append(out, a.Compare(exp[i], got[i], mode)...)
+		}
 	}
 	return out
 }

@@ -54,6 +54,8 @@ var commands = []command{
 
 	{name: "check", group: groupEveryday, run: cmdCheck,
 		summary: "look at a capture: what's in it, and whether it can be replayed"},
+	{name: "compare", group: groupAdvanced, run: cmdCompare,
+		summary: "compare recorded and live responses with the replay comparison policy"},
 	{name: "capture", group: groupEveryday, run: cmdCapture,
 		summary: "record traffic from a network connection into a file"},
 	{name: "ifaces", group: groupEveryday, run: cmdIfaces,

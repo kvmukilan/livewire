@@ -15,6 +15,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/evidence"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/lab"
 	"github.com/kvmukilan/livewire/internal/livereplay"
@@ -63,6 +64,7 @@ const maxWebAttempts = 100
 const defaultWebGap = time.Second
 
 type webSessionResult struct {
+	replay.VerificationEvidence
 	// Attempt is the 1-based iteration this result came from, omitted for a
 	// single run so an un-repeated report is unchanged.
 	Attempt     int                 `json:"attempt,omitempty"`
@@ -73,8 +75,11 @@ type webSessionResult struct {
 	Sent        int                 `json:"sent"`
 	Received    int                 `json:"received"`
 	Differences []replay.Difference `json:"differences,omitempty"`
-	Error       string              `json:"error,omitempty"`
-	Evidence    []pcapio.Record     `json:"-"`
+	// Timing compares live reply times with the recording for the drivers
+	// that measure it.
+	Timing   *replay.SessionTiming `json:"timing,omitempty"`
+	Error    string                `json:"error,omitempty"`
+	Evidence []pcapio.Record       `json:"-"`
 }
 
 // verdict reduces one session result to the shared verdict vocabulary. Wire mode
@@ -250,10 +255,17 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	// The loop lives inside this one job because the server permits a single job
 	// at a time: N attempts must not be N jobs, or the second would be refused.
 	var (
-		results  []webSessionResult
-		evidence []pcapio.Record
-		ok       = true
+		results []webSessionResult
+		ok      = true
 	)
+	stamp := time.Now().UTC().Format("20060102T150405.000Z")
+	base := strings.TrimSuffix(filepath.Base(req.Pcap), filepath.Ext(req.Pcap)) + "." + stamp
+	evidenceName := base + ".actual.pcap"
+	stream := evidence.New(filepath.Join(s.dir, evidenceName))
+	defer stream.Close()
+	execution := replay.Execution(j.ctx)
+	execution.Evidence = stream.Record
+	runContext := replay.WithExecution(j.ctx, execution)
 	attempt := func(i int) iterate.Tally {
 		// Vary what TCP uses to tell connections apart, so the device does not
 		// see attempt two as a stale duplicate of attempt one and reset it.
@@ -262,7 +274,7 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		if runs.Repeats() {
 			j.progress("attempt", "", fmt.Sprintf("attempt %d of %d", i+1, runs.Times))
 		}
-		round := orchestration.ExecutePlan(j.ctx, trace, plan, func(runCtx context.Context, k int, entry replay.PlanEntry, session *replay.Session, started time.Time) webSessionResult {
+		round := orchestration.ExecutePlan(runContext, trace, plan, func(runCtx context.Context, k int, entry replay.PlanEntry, session *replay.Session, started time.Time) webSessionResult {
 			result := runWebEntry(runCtx, j, entry, session, sessions, trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
 			if runs.Repeats() {
 				result.Attempt = i + 1
@@ -271,7 +283,13 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		})
 		var tally iterate.Tally
 		for _, r := range round {
-			evidence = append(evidence, r.Evidence...)
+			for _, record := range r.Evidence {
+				if err := stream.Record(record); err != nil {
+					j.log(err.Error())
+					ok = false
+					break
+				}
+			}
 			if r.Error != "" || !r.Completed {
 				ok = false
 			}
@@ -286,19 +304,14 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 
 	per := runs.Run(j.ctx, attempt)
 	summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
-	stamp := time.Now().UTC().Format("20060102T150405.000Z")
-	base := strings.TrimSuffix(filepath.Base(req.Pcap), filepath.Ext(req.Pcap)) + "." + stamp
 	reportName := base + ".run.json"
-	evidenceName := base + ".actual.pcapng"
 	evidenceArtifact := ""
-	if len(evidence) > 0 {
-		if err := writeWebEvidence(filepath.Join(s.dir, evidenceName), req.Iface, evidence); err != nil {
-			j.log("evidence: " + err.Error())
-			ok = false
-		} else {
-			j.artifact(evidenceName)
-			evidenceArtifact = evidenceName
-		}
+	if count, err := stream.Commit(); err != nil {
+		j.log("evidence: " + err.Error())
+		ok = false
+	} else if count > 0 {
+		j.artifact(evidenceName)
+		evidenceArtifact = evidenceName
 	}
 
 	doc := map[string]any{
@@ -379,6 +392,8 @@ func webResult(executed planexec.Result) webSessionResult {
 	}
 	out.Completed, out.Verified, out.Matched = executed.Transport.Completed, executed.Transport.Verified, executed.Transport.Matched
 	out.Sent, out.Received, out.Differences, out.Evidence = executed.Transport.Sent, executed.Transport.Received, executed.Transport.Differences, executed.Transport.Evidence
+	out.VerificationEvidence = executed.Transport.VerificationEvidence
+	out.Timing = executed.Transport.Timing
 	return out
 }
 

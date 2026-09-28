@@ -75,8 +75,11 @@ func runSSHReplayArgs(args []string) error {
 		return fmt.Errorf("when -expect is used, provide exactly one for each -cmd")
 	}
 	expects = multiFlag(normalizeSSHExpects(expects))
+	if *pass == "" && *keyPath == "" {
+		*pass = os.Getenv(sshPasswordEnv)
+	}
 	if (*pass == "") == (*keyPath == "") {
-		return fmt.Errorf("provide exactly one of -pass or -key")
+		return fmt.Errorf("provide exactly one of -pass, -key, or the %s environment variable", sshPasswordEnv)
 	}
 
 	capture, digest, err := loadCaptureSnapshot(inPath)

@@ -6,7 +6,6 @@ package orchestration
 import (
 	"context"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/pcapio"
@@ -37,6 +36,16 @@ func ExecutePlan[T any](ctx context.Context, trace *replay.Trace, plan replay.Re
 		}
 	}
 	plan.Entries = entries
+	if scenario := replay.Execution(ctx).Scenario; scenario != nil {
+		ordered, err := scenario.Scenario.Order(plan.Entries)
+		if err == nil {
+			plan.Entries = ordered
+		} else {
+			cancelled, cancel := context.WithCancelCause(ctx)
+			cancel(err)
+			ctx = cancelled
+		}
+	}
 	sessions := make(map[string]*replay.Session, len(trace.Sessions))
 	for _, session := range trace.Sessions {
 		sessions[session.ID] = session
@@ -51,15 +60,7 @@ func ExecutePlan[T any](ctx context.Context, trace *replay.Trace, plan replay.Re
 		}
 		return results
 	}
-	var wg sync.WaitGroup
-	for i := range plan.Entries {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			invoke(i)
-		}(i)
-	}
-	wg.Wait()
+	RunBounded(ctx, len(plan.Entries), invoke)
 	return results
 }
 

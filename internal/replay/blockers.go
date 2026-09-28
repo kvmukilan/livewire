@@ -2,6 +2,7 @@ package replay
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/kvmukilan/livewire/internal/dissect"
 )
@@ -40,13 +41,11 @@ func MarkIntrinsicBlockers(t *Trace) {
 			}
 		}
 		for _, stream := range [][]byte{client, server} {
-			if frames, _, err := dissect.ParseDNP3Stream(stream); err == nil {
-				for _, frame := range frames {
-					if frame.UsesSecureAuth() {
-						s.Blockers = appendUnique(s.Blockers, "DNP3 Secure Authentication contains fresh challenge state and requires a security-aware adapter")
-						break
-					}
-				}
+			recognized, secure, err := dissect.InspectDNP3Stream(stream)
+			if recognized && secure {
+				s.Blockers = appendUnique(s.Blockers, "DNP3 Secure Authentication contains fresh challenge state and requires a security-aware adapter")
+			} else if recognized && err != nil {
+				s.Blockers = appendUnique(s.Blockers, fmt.Sprintf("DNP3 application security cannot be established: %v", err))
 			}
 		}
 	}

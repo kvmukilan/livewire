@@ -28,12 +28,12 @@ exact flag to add.
 
 | Capture contains | Automatic route |
 |---|---|
-| HTTP, DNS, MQTT, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
+| HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | ordinary TCP, UDP, or ICMP without an adapter | stateful transport driver |
 | TLS with `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
 | explicit or implicit FTPS with `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
-| DNP3 Secure Authentication or unsupported security | blocked with the reason; no false success |
+| DNP3 Secure Authentication, MQTT enhanced authentication, or unsupported security | blocked with the reason; no false success |
 | unknown opaque/encrypted traffic | blocked; never silently replayed as ordinary TCP or wire traffic |
 
 An adjacent key log or `SSLKEYLOGFILE` value is only suggested. Livewire never
@@ -58,6 +58,13 @@ accepted so existing scripts do not change meaning.
 | `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default |
 | `-user`, `-pass`/`-key`, `-host-key`, `-cmd` | SSH requirements; repeat `-cmd` and optionally pair each with `-expect` |
 | `-details` | also print the capture assessment, the replay plan, and every session's verdict |
+| `-strict-exit` | exit nonzero unless every selected exchange completes with positive matching response evidence |
+| `-run-timeout <duration>` | bound the whole run, including repeated attempts and waits |
+| `-response-timeout <duration>` | bound one framed TCP/TLS application or UDP/ICMP response; 0 preserves protocol defaults; at most 10m; not available for the raw TCP engine, FTP/FTPS, SSH, or wire mode |
+| `-expect-fault reset\|timeout` | require that fault during an expected TCP/TLS application response read after a request was sent; recorded separately from response equivalence; conflicts with `-strict-exit` and `-stop-when-different` |
+| `-concurrency <count>` | maximum workers for concurrent profiles (default 32); functional replay stays sequential |
+| `-state-dir <new-dir>` / `-resume <dir>` | save durable progress or resume with the same capture and replay options |
+| `-scenario <json>` | declare HTTP setup, response bindings, dependencies, and comparison policies |
 
 Packet-level routes need Administrator (Windows) or `sudo` (Linux). Generic
 replay writes `<capture>.report.json` and, when evidence is available,
@@ -66,14 +73,42 @@ replay writes `<capture>.report.json` and, when evidence is available,
 Default output names never replace a previous run; Livewire selects a numbered
 name. Explicit output paths must not already exist.
 
-Every run ends in one of four verdicts:
+Response verification distinguishes these outcomes:
 
-- **SAME AS THE RECORDING** — the device behaved as it did when the capture was
-  taken. If the recording shows the problem, the problem reproduces.
+- **MATCHED THE CHECKED RESPONSES** — the compared responses matched under the
+  selected policy. Device logs and fault-specific evidence are still needed to
+  establish whether a crash, timeout, or other original issue recurred.
 - **DIFFERENT FROM THE RECORDING** — the exchange completed but the device
   answered differently; the differences are listed.
 - **THE EXCHANGE DID NOT COMPLETE** — it stopped early, with the reason.
-- **EXCHANGE COMPLETED; EQUIVALENCE NOT CHECKED** — only when verification is off.
+- **EXCHANGE COMPLETED; EQUIVALENCE NOT CHECKED** — verification was off or no
+  positive response comparison was available. Explicit wire replay has its own
+  wire-only outcome and never claims response equivalence.
+
+Run `livewire help reliability` for TCP mode selection and repeatable workflows.
+Durable resume cannot restore a socket or the target's application state. See
+[RELIABILITY_IMPLEMENTATION.md](RELIABILITY_IMPLEMENTATION.md) for recovery limits.
+
+To reproduce an expected timeout rather than require matching responses:
+
+```sh
+livewire reproduce issue.pcap -mode application -t 192.168.1.50 \
+  -response-timeout 5s -expect-fault timeout
+```
+
+Every selected exchange must positively observe the requested fault. A refused
+connection, handshake failure, ordinary EOF, maintenance failure, cancellation,
+or failed cleanup does not satisfy it. A matching fault remains an incomplete
+exchange in the response-comparison report. `-run-timeout` bounds the whole run;
+`-timeout` is the separate secure-session budget where that route supports it.
+
+Application replay opens fresh connections and adapts supported protocol state.
+MQTT 3.1.1/5 supports bidirectional QoS handshakes and keepalive servicing during
+captured timing gaps; MQTT 5 applies negotiated limits and rebuilds topic aliases.
+DNP3 reassembles supported transport/application fragments, accepts changed live
+fragmentation, and generates required confirmations. Unknown DNP3 object layouts,
+unsupported link control, and secure authentication remain explicit limits. See
+the [protocol details](RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 `-strict`, `-profile`, `-set`, `-rules`, `-report`, `-actual-out`, and
 `-no-rst-guard` are available behind `-all-flags`.
@@ -334,7 +369,12 @@ livewire ftp-replay -in secure.pcap -t ftp.example:990 \
 byte count, and SHA-256. Explicit FTPS upgrades the existing control connection
 after `AUTH TLS`; implicit FTPS starts TLS immediately. Protected data channels
 use fresh certificate-verified TLS and captured ciphertext is never transmitted.
-Ambiguous or unmatched data sessions are blockers.
+Accepted `PROT C` and `PROT P` replies set protection separately for each following
+transfer; a rejected request does not change it. A live rejection of required
+`PROT P` stops the replay rather than downgrading that transfer. Active data
+connections reverse the TCP initiator, but the FTP client remains the TLS client.
+Protected capture data needs its matching key log. Ambiguous or unmatched data
+sessions are blockers.
 
 ### `tls-replay`
 
@@ -448,6 +488,11 @@ Prints the version. No options.
 `check` merged these two. Both keep their exact previous behaviour and output, so
 existing scripts and older instructions keep working.
 
+Compatibility commands and flags remain available throughout 1.x, including
+`live -in`, `ftp-replay`, `tls-replay`, and `ssh-replay`. Deprecated `-on`, `-to`,
+and `-iterations` still work with a warning; prefer `-i`, `-t`, and `-n`.
+The announced removal boundary is 2.0.
+
 | Command | What it does now |
 |---|---|
 | `livewire info <file>` | the capture summary half of `check` |
@@ -486,14 +531,13 @@ finding. Send us the report file.
 Details worth knowing:
 
 - Attempts run one after another, `-gap` apart (default 1s).
-- Each attempt opens a fresh connection with a new client port and ISN. Re-sending
-  an identical TCP four-tuple immediately would be treated as a stale duplicate
-  and reset — which would look like a failure to reproduce rather than the
-  artefact it is. The substitution is recorded in the report's `transformations`.
-- One report and one evidence capture cover the whole run. Each result carries an
-  `attempt` number, and the report gains `attempts` plus an `outcome` object with
-  the counts, whether the device was `consistent`, and an `intermittent` flag.
-- A single run's report is byte-for-byte what it was before this feature existed.
+- TCP application and secure attempts open fresh connections with OS-managed
+  sequence state. The stateful packet engine also resets its live flow state;
+  explicit wire injection keeps its raw-frame semantics.
+- Generic replay records attempts in one report, with aggregate counts and an
+  `intermittent` outcome. Packet routes can also publish an evidence capture.
+  Secure routes write one redacted report per attempt, named
+  `<report-base>.attempt-N.json`; they do not fabricate a wire capture.
 - `-stop-when-different` ends the run at the first attempt that diverges, when one
   failing sample is all you need. Ctrl-C stops cleanly and still writes a report
   for the attempts that ran.

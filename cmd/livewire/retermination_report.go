@@ -17,6 +17,7 @@ import (
 // reproduce and lab without ever serializing key logs, private keys, passwords,
 // plaintext commands, or response bodies.
 type reterminationReport struct {
+	Fault           *faultObservation    `json:"faultObservation,omitempty"`
 	Tool            string               `json:"tool"`
 	Version         string               `json:"version"`
 	When            time.Time            `json:"when"`

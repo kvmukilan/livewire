@@ -40,7 +40,7 @@ var deprecatedAliases = map[string]string{"on": flagIface, "to": flagTarget, "it
 
 // deprecationRemoval names the release that drops deprecated spellings and
 // compatibility entry points.
-const deprecationRemoval = "1.0"
+const deprecationRemoval = "2.0"
 
 // warnDeprecatedFlags tells a script author which spelling to move to. It is
 // called once after parsing and never changes behavior.

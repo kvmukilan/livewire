@@ -13,6 +13,8 @@ type DNS struct {
 	Transport replay.Transport
 }
 
+func (DNS) ResponseKey(m replay.Message) string { return fmt.Sprint(m.Fields["id"]) }
+
 func (d DNS) Name() string {
 	switch d.Transport {
 	case replay.TransportTCP:
@@ -37,7 +39,9 @@ func (d DNS) Detect(s replay.Session) replay.Confidence {
 		}
 	}
 	if s.Transport == replay.TransportUDP && len(p) >= 12 {
-		return 25
+		if _, err := parseDNS(p); err == nil {
+			return 25
+		}
 	}
 	return 0
 }
@@ -234,11 +238,13 @@ func (DNS) Correlate(expected, actual replay.Message, _ *replay.RuntimeState) re
 	wq, gq := stringField(expected, "qname"), stringField(actual, "qname")
 	wt, _ := expected.Fields["qtype"].(uint16)
 	gt, _ := actual.Fields["qtype"].(uint16)
+	wc, _ := expected.Fields["qclass"].(uint16)
+	gc, _ := actual.Fields["qclass"].(uint16)
 	key := fmt.Sprintf("id=%d question=%s/%d", wid, wq, wt)
 	if !wok || !gok || wid != gid {
 		return replay.Match{Key: key, Reason: fmt.Sprintf("transaction ID differs: got %d", gid)}
 	}
-	if !strings.EqualFold(wq, gq) || wt != gt {
+	if !strings.EqualFold(wq, gq) || wt != gt || wc != gc || expected.Fields["qr"] != actual.Fields["qr"] {
 		return replay.Match{Key: key, Reason: fmt.Sprintf("question differs: got %s/%d", gq, gt)}
 	}
 	return replay.Match{Matched: true, Key: key}

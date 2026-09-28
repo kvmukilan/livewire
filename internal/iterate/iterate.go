@@ -378,8 +378,8 @@ func (s Summary) Plain() string {
 		b.WriteString("Only one attempt ran, so this is what happened that time, not how often\n")
 		b.WriteString("it happens. Send us the report file.\n")
 	case s.Verdict == Same:
-		fmt.Fprintf(&b, "The device behaved as it did in the recording on all %d attempts.\n", s.Attempts)
-		b.WriteString("If the recording shows the problem, the problem reproduces on this device.\n")
+		fmt.Fprintf(&b, "The checked responses matched the recording on all %d attempts.\n", s.Attempts)
+		b.WriteString("This establishes response equivalence within the selected verification scope. Use an explicit fault expectation to test a reset or response timeout.\n")
 	case s.Verdict == Different:
 		fmt.Fprintf(&b, "The device answered differently on all %d attempts — consistently, not by\n", s.Attempts)
 		b.WriteString("chance. Send us the report file.\n")

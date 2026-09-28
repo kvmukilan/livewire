@@ -109,6 +109,10 @@ func runFTPReplayArgs(args []string) error {
 	if err := validateReterminationExecution(plan, *requireComplete); err != nil {
 		return fmt.Errorf("FTP replay plan: %w", err)
 	}
+	data, err = ftpreplay.PrepareDataSessions(control, script, data, keylog)
+	if err != nil {
+		return err
+	}
 	printCoverage(plan)
 
 	var tlsConfig *tls.Config

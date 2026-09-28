@@ -208,7 +208,15 @@ func cover(ctx context.Context, _ []string) error {
 	var failures []string
 	for _, c := range coverageFloors {
 		profile := filepath.Join("coverage", c.name+".out")
-		if err := sh(ctx, "go", "test", "-coverprofile="+profile, c.pkg); err != nil {
+		args := []string{"test", "-coverprofile=" + profile}
+		// Integration tests exercise replay through adapters, TLS, and the CLI.
+		// Instrument dependencies for the aggregate so these executions count;
+		// retain isolated package coverage and every existing minimum unchanged.
+		if c.name == "aggregate" {
+			args = append(args, "-coverpkg=./...")
+		}
+		args = append(args, c.pkg)
+		if err := sh(ctx, "go", args...); err != nil {
 			return err
 		}
 		actual, err := totalCoverage(ctx, profile)

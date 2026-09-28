@@ -22,6 +22,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/evidence"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
@@ -36,7 +37,7 @@ import (
 // With -n it replays more than once and reports how often the issue appears,
 // because a fault that shows up one time in five is the common field case and a
 // single replay cannot tell the difference between "fixed" and "intermittent".
-func cmdReproduce(args []string) error {
+func cmdReproduce(args []string) (retErr error) {
 	o, err := parseReproduceFlags(args)
 	if err != nil {
 		return err
@@ -54,6 +55,44 @@ func cmdReproduce(args []string) error {
 	if err != nil {
 		return err
 	}
+	if o.scenarioPath != "" {
+		file, err := os.Open(o.scenarioPath)
+		if err != nil {
+			return err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+		if err := errors.Join(readErr, file.Close()); err != nil {
+			return err
+		}
+		o.scenario, err = replay.ParseScenario(data, captureDigest)
+		if err != nil {
+			return err
+		}
+		if inspection.Mode == "wire" || inspection.Mode == "transport" {
+			return fmt.Errorf("-scenario requires application replay")
+		}
+		if err = o.scenario.ValidateTrace(inspection.Trace, registry); err != nil {
+			return err
+		}
+		if _, err = o.scenario.Order(inspection.Plan.Entries); err != nil {
+			return err
+		}
+	}
+	if o.stateDir != "" || o.resumeDir != "" {
+		if o.target == "" && inspection.Mode != "wire" {
+			return fmt.Errorf("durable replay requires an explicit -t so resume can verify the target")
+		}
+		identity, err := reproduceIdentity(o, inspection, registry)
+		if err != nil {
+			return err
+		}
+		if err = o.openState(captureDigest, identity, o.dryRun); err != nil {
+			return err
+		}
+		if o.journal != nil {
+			defer func() { retErr = errors.Join(retErr, o.journal.Close()) }()
+		}
+	}
 	if o.dryRun {
 		return reproduceDryRun(o, inspection, secureRoute)
 	}
@@ -61,10 +100,11 @@ func cmdReproduce(args []string) error {
 		return blockedReplayError(o.capture, inspection.Readiness.Blocker)
 	}
 	handled, err := orchestrateProtocolCapture(recs, orchestratorOptions{
-		captureDigest: captureDigest,
-		capture:       o.capture, iface: o.iface, target: o.target, keylog: o.keylog, serverName: o.serverName, ca: o.ca,
+		executionFlags: o.executionFlags,
+		captureDigest:  captureDigest,
+		capture:        o.capture, iface: o.iface, target: o.target, keylog: o.keylog, serverName: o.serverName, ca: o.ca,
 		insecure: o.insecure, strict: o.strict, wire: inspection.Mode == "wire", user: o.sshUser, password: o.sshPass, privateKey: o.sshKey, hostKey: o.sshHostKey,
-		commands: o.sshCommands, expects: o.sshExpects, timeout: o.timeout, report: o.report, times: o.times, gap: o.gap, stopWhenDifferent: o.stopWhenDifferent,
+		commands: o.sshCommands, expects: o.sshExpects, timeout: o.timeout, responseTimeout: o.responseTimeout, expectFault: o.expectFault, report: o.report, times: o.times, gap: o.gap, stopWhenDifferent: o.stopWhenDifferent,
 		variables: o.variables, rulePacks: o.rulePacks, sessions: o.sessions, inspection: inspection,
 	})
 	if handled {
@@ -76,6 +116,7 @@ func cmdReproduce(args []string) error {
 // reproduceOptions is everything the command learned from its flags and
 // arguments, so each phase below takes one value instead of thirty locals.
 type reproduceOptions struct {
+	executionFlags
 	capture           string
 	iface             string
 	target            string
@@ -92,24 +133,26 @@ type reproduceOptions struct {
 	insecure          bool
 	// mode and profile hold the raw request until resolveReproduceIntent
 	// replaces them with the resolved intent and fidelity profile.
-	mode        string
-	profile     string
-	sessions    []string
-	rulePacks   []string
-	report      string
-	actual      string
-	udpIdle     time.Duration
-	timeout     time.Duration
-	variables   map[string]string
-	keylog      string
-	serverName  string
-	ca          string
-	sshUser     string
-	sshPass     string
-	sshKey      string
-	sshHostKey  string
-	sshCommands []string
-	sshExpects  []string
+	mode            string
+	profile         string
+	sessions        []string
+	rulePacks       []string
+	report          string
+	actual          string
+	udpIdle         time.Duration
+	timeout         time.Duration
+	responseTimeout time.Duration
+	expectFault     string
+	variables       map[string]string
+	keylog          string
+	serverName      string
+	ca              string
+	sshUser         string
+	sshPass         string
+	sshKey          string
+	sshHostKey      string
+	sshCommands     []string
+	sshExpects      []string
 	// specified records which flags were given explicitly, so a flag the
 	// selected route cannot honor is refused instead of silently ignored.
 	specified map[string]bool
@@ -120,6 +163,7 @@ type reproduceOptions struct {
 func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	var o reproduceOptions
 	fs := flag.NewFlagSet("reproduce", flag.ContinueOnError)
+	o.executionFlags.register(fs)
 	var pcapFlag string
 	fs.StringVar(&pcapFlag, flagIn, "", "the capture file we sent you")
 	fs.StringVar(&o.iface, flagIface, "", "network connection for packet-based replay (asks when required)")
@@ -156,6 +200,8 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	fs.StringVar(&o.ca, "ca", "", "optional PEM CA bundle for TLS/FTPS verification")
 	fs.BoolVar(&o.insecure, "insecure-skip-verify", false, "explicitly disable TLS certificate verification (lab only)")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "fresh TLS, FTPS, or SSH connection timeout")
+	fs.DurationVar(&o.responseTimeout, "response-timeout", 0, "application or datagram response deadline (0 uses the protocol default; at most 10m)")
+	fs.StringVar(&o.expectFault, "expect-fault", "", "require a reset or timeout while reading an application response; separate from a response match")
 	fs.StringVar(&o.sshUser, "user", "", "SSH username")
 	fs.StringVar(&o.sshPass, "pass", "", "SSH password (prefer the prompt or LIVEWIRE_SSH_PASSWORD; never written to reports)")
 	fs.StringVar(&o.sshKey, "key", "", "SSH private-key file (alternative to -pass)")
@@ -210,7 +256,7 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	o.sshExpects = []string(sshExpects)
 	o.specified = map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { o.specified[f.Name] = true })
-	return o, nil
+	return o, o.executionFlags.validate()
 }
 
 // resolveReproduceIntent turns the requested mode, profile, and shortcuts into
@@ -254,6 +300,17 @@ func resolveReproduceIntent(o *reproduceOptions) (fidelityProfile, *replay.Regis
 	if o.timeout <= 0 || o.timeout > 10*time.Minute {
 		return fidelityProfile{}, nil, fmt.Errorf("-timeout must be greater than zero and at most 10m")
 	}
+	if o.responseTimeout < 0 || o.responseTimeout > 10*time.Minute {
+		return fidelityProfile{}, nil, fmt.Errorf("-response-timeout must be between 0 and 10m")
+	}
+	if o.expectFault != "" {
+		if o.expectFault != "reset" && o.expectFault != "timeout" {
+			return fidelityProfile{}, nil, fmt.Errorf("-expect-fault must be reset or timeout")
+		}
+		if o.strictExit || o.stopWhenDifferent {
+			return fidelityProfile{}, nil, fmt.Errorf("-expect-fault cannot be combined with -strict-exit or -stop-when-different")
+		}
+	}
 	return profile, registry, nil
 }
 
@@ -264,6 +321,7 @@ func inspectReproduce(o *reproduceOptions, recs []*pcapio.Record, registry *repl
 	var selectedKeyLog []byte
 	if o.keylog != "" && o.mode != "wire" && detectProtocolRoute(recs).kind != protocolTLS {
 		var err error
+		// #nosec G703 -- the local CLI explicitly selects a keylog path; it is not a remotely supplied or rooted-server path.
 		selectedKeyLog, err = os.ReadFile(o.keylog)
 		if err != nil {
 			return nil, false, err
@@ -276,7 +334,7 @@ func inspectReproduce(o *reproduceOptions, recs []*pcapio.Record, registry *repl
 	fmt.Printf("Replay intent: %s; %d selected packet(s), %d explicitly excluded.\n", inspection.Mode, inspection.SelectedPackets, inspection.ExcludedPackets)
 	secureRoute := inspection.Route.Kind == replayintent.TLS || inspection.Route.Kind == replayintent.SSH || inspection.Route.Kind == replayintent.FTP
 	if inspection.Mode != "wire" && secureRoute && inspection.Mode != "transport" {
-		if o.underLoad || o.exactTCP || o.profile != "functional" {
+		if o.exactTCP || (o.profile != "functional" && inspection.Route.Kind != replayintent.TLS) {
 			return nil, false, fmt.Errorf("this fresh-session driver does not support timing or exact transport options; choose a supported intent explicitly")
 		}
 		if o.actual != "" {
@@ -296,6 +354,28 @@ func inspectReproduce(o *reproduceOptions, recs []*pcapio.Record, registry *repl
 // route would silently ignore, so a peer never believes a control took effect.
 func refuseUnsupportedFlags(o *reproduceOptions, inspection *replayintent.Inspection, secureRoute bool) error {
 	unsupported := []string{}
+	if o.expectFault != "" {
+		if inspection.Mode == "wire" || inspection.Mode == "transport" || (secureRoute && inspection.Route.Kind != replayintent.TLS) {
+			return fmt.Errorf("-expect-fault requires TCP application or TLS application replay")
+		}
+		for _, entry := range inspection.Plan.Entries {
+			if !entry.Excluded && (entry.Transport != replay.TransportTCP || entry.Mode != replay.ModeSemantic) {
+				return fmt.Errorf("-expect-fault requires a framed application adapter for every selected TCP session")
+			}
+		}
+	}
+	if inspection.Mode == "wire" || inspection.Mode == "transport" || (secureRoute && inspection.Route.Kind != replayintent.TLS) {
+		if o.specified["response-timeout"] {
+			return fmt.Errorf("-response-timeout requires TCP application, TLS application, UDP, or ICMP replay")
+		}
+	}
+	if o.specified["response-timeout"] && !secureRoute {
+		for _, entry := range inspection.Plan.Entries {
+			if entry.Mode == replay.ModeStateful || entry.Mode == replay.ModeCoordinated {
+				return fmt.Errorf("-response-timeout requires a framed application adapter for TCP; the stateful packet engine uses bounded retransmission timers")
+			}
+		}
+	}
 	if inspection.Mode == "wire" {
 		unsupported = []string{"t", "to", "target", "strict", "actual-out", "set", "gap", "stop-when-different", "keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "exact-tcp"}
 	}
@@ -408,13 +488,20 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	}
 
 	// 1) Which device? (its IP; the port comes from the capture)
-	deviceIP, err := chooseDeviceIP(o.target)
-	if err != nil {
-		return err
+	var deviceIP netip.Addr
+	if inspection.Mode != "wire" {
+		deviceIP, err = chooseDeviceIP(o.target)
+		if err != nil {
+			return err
+		}
 	}
 	// 2) Which network connection reaches it?
 	iface := o.iface
-	if inspection.Readiness.NeedsInterface {
+	if inspection.Mode == "wire" {
+		if iface == "" {
+			return fmt.Errorf("explicit wire replay needs -i <connection>; no packets were sent")
+		}
+	} else if inspection.Readiness.NeedsInterface {
 		iface, err = chooseInterface(o.iface, deviceIP)
 		if err != nil {
 			return err
@@ -429,15 +516,27 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := o.executionFlags.context(ctx)
+	defer cancel()
+	evidenceStream := evidence.New(actual)
+	evidenceStream.SetJournal(o.journal)
+	defer evidenceStream.Close()
+	exec := replay.Execution(ctx)
+	exec.Evidence = evidenceStream.Record
+	ctx = replay.WithExecution(ctx, exec)
 	live := liveOpts{
 		ctx:    ctx,
 		target: deviceIP.String(), iface: iface, seed: 1, noGuard: o.noGuard,
 		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: profile.Pace, rawL4: profile.RawL4,
-		variables: o.variables,
+		variables: o.variables, responseTimeout: o.responseTimeout,
 	}
 
 	fmt.Printf("\nProfile: %s — %s\n", profile.Name, profile.Description)
-	fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
+	if inspection.Mode == "wire" {
+		fmt.Printf("Injecting captured frames on %q ...\n", iface)
+	} else {
+		fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
+	}
 
 	runs := iterate.Plan{Times: o.times, Gap: o.gap, StopWhenDifferent: o.stopWhenDifferent}.Normalize()
 	if runs.Repeats() {
@@ -452,10 +551,14 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	rep.Preflight = &preflight
 	rep.Plan = &plan
 	rep.Limitations = plan.Limitations()
+	if o.resumeDir != "" {
+		rep.Limitations = append(rep.Limitations, "Resumed execution starts a new timing segment; completed session results may come from prior checkpoint evidence.")
+	}
 	rep.CaptureDigest = captureDigest
 
 	run := &genericReproduceRun{
-		options: o, ctx: ctx, trace: trace, plan: plan, registry: registry, flows: flows,
+		evidence: evidenceStream,
+		options:  o, ctx: ctx, trace: trace, plan: plan, registry: registry, flows: flows,
 		iface: iface, deviceIP: deviceIP, live: live, runs: runs, report: rep,
 		// Quiet mode is the default for a repeated run: N copies of the progress
 		// log and N verdict blocks bury the one number the reader wants, which
@@ -468,12 +571,19 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 		rep.recordIterations(summary)
 	}
 	artifactErrs := run.publish(out, actual)
+	artifactErrs = append(artifactErrs, strictExitError(o.strictExit, ctx, summary))
+	var faults []*faultObservation
+	for _, session := range rep.Sessions {
+		faults = append(faults, session.Fault)
+	}
+	artifactErrs = append(artifactErrs, faultExpectationError(ctx, o.expectFault, faults))
 	printReproduceSummary(summary, runs, profile, o.strict)
 	return errors.Join(artifactErrs...)
 }
 
 // genericReproduceRun is the state one replay run accumulates across attempts.
 type genericReproduceRun struct {
+	evidence *evidence.Stream
 	options  reproduceOptions
 	ctx      context.Context
 	trace    *replay.Trace
@@ -493,6 +603,10 @@ type genericReproduceRun struct {
 
 // attempt replays every selected session once and tallies the session verdicts.
 func (r *genericReproduceRun) attempt(i int) iterate.Tally {
+	exec := replay.Execution(r.ctx)
+	exec.Attempt = i
+	exec.Scenario = replay.NewScenarioRuntime(r.options.scenario)
+	attemptCtx := replay.WithExecution(r.ctx, exec)
 	// Every attempt must look like a new connection to the device: the same
 	// four-tuple and ISN sent twice in a row is an old duplicate segment as
 	// far as TCP is concerned, and the device resets it. That would read as
@@ -524,18 +638,25 @@ func (r *genericReproduceRun) attempt(i int) iterate.Tally {
 	}
 
 	results := executeReplayPlan(executePlanConfig{
-		Context: r.ctx, Trace: r.trace, Plan: r.plan, Registry: r.registry,
+		Context: attemptCtx, Trace: r.trace, Plan: r.plan, Registry: r.registry,
 		Flows: r.flows, Iface: r.iface, TargetIP: r.deviceIP, Variables: r.options.variables, Live: att, Log: logf,
 	})
+	r.report.secretValues = append(r.report.secretValues, exec.Scenario.SecretValues()...)
 
 	var tally iterate.Tally
 	note := ""
 	for _, result := range results {
 		target := r.deviceIP.String()
-		if result.Session != nil && result.Session.Server.Port != 0 {
+		if result.Entry.Mode == replay.ModeWire {
+			target = "captured destinations"
+		} else if result.Session != nil && result.Session.Server.Port != 0 {
 			target = netip.AddrPortFrom(r.deviceIP, result.Session.Server.Port).String()
 		}
 		r.report.addPlanned(result, target)
+		if r.options.expectFault != "" {
+			sr := &r.report.Sessions[len(r.report.Sessions)-1]
+			sr.Fault = observeExpectedFault(attemptCtx, r.options.expectFault, sr.Sent, sr.Cleanup, result.Err)
+		}
 		r.actualFrames = append(r.actualFrames, result.TCP.Evidence...)
 		r.actualFrames = append(r.actualFrames, result.Transport.Evidence...)
 
@@ -546,6 +667,7 @@ func (r *genericReproduceRun) attempt(i int) iterate.Tally {
 		}
 		if !r.quiet {
 			printSessionResult(result, r.options.variables)
+			fmt.Print(timingLine(result.Transport.Timing))
 		}
 	}
 	if r.runs.Repeats() {
@@ -562,6 +684,15 @@ func (r *genericReproduceRun) attempt(i int) iterate.Tally {
 // each landed. A failure to save is reported, not hidden.
 func (r *genericReproduceRun) publish(reportPath, actualPath string) []error {
 	var errs []error
+	if r.evidence != nil {
+		count, err := r.evidence.Commit()
+		if err != nil {
+			errs = append(errs, fmt.Errorf("publish actual packet evidence: %w", err))
+		} else if count > 0 {
+			r.report.ActualCapture = actualPath
+			fmt.Printf("\nActual replay traffic was saved to %s.\n", actualPath)
+		}
+	}
 	if len(r.actualFrames) > 0 {
 		if err := writeFrames(actualPath, r.actualFrames, true); err != nil {
 			errs = append(errs, fmt.Errorf("save actual replay capture: %w", err))

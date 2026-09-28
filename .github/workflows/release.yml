@@ -17,7 +17,7 @@ permissions:
 # then publishes the rebuilt files.
 jobs:
   qualification:
-    name: Stable release field qualification
+    name: Release qualification evidence
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,7 +35,7 @@ jobs:
           if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
             echo "Release candidate: field qualification remains pending."
           elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            go run ./scripts/qualify validate qualification/stable.json -version "$version" -artifacts "dist/v$version"
+            go run ./scripts/qualify validate -version "$version" -artifacts "dist/v$version" qualification/stable.json
           else
             echo "Unsupported release tag" >&2
             exit 1
@@ -68,6 +68,7 @@ jobs:
           go-version: "1.26.7"
           cache: true
       - run: go run ./scripts/task lint race shuffle fuzz cover
+      - run: python3 -m unittest discover -s scripts -p test_replaylab_raw.py
 
   release:
     name: Verify and publish release

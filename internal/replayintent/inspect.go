@@ -77,15 +77,21 @@ func Select(t *replay.Trace, ids []string, registry *replay.Registry) (*replay.T
 	}
 	known := map[string]bool{}
 	selected := map[string]bool{}
+	byFingerprint := map[string]string{}
 	for _, s := range t.Sessions {
 		known[s.ID] = true
+		byFingerprint[s.Fingerprint()] = s.ID
 	}
 	if len(t.Raw) > 0 {
 		known["raw-0"] = true
 	}
 	for _, id := range ids {
 		if !known[id] {
-			return nil, fmt.Errorf("unknown session %q; use check -details to list session IDs", id)
+			resolved, err := resolveFingerprint(id, byFingerprint)
+			if err != nil {
+				return nil, err
+			}
+			id = resolved
 		}
 		selected[id] = true
 	}
@@ -102,8 +108,8 @@ func Select(t *replay.Trace, ids []string, registry *replay.Registry) (*replay.T
 		}
 	}
 	out := &replay.Trace{Started: t.Started, Packets: t.Packets}
-	exclude := func(id string, transport replay.Transport, events []replay.Event) {
-		e := replay.PlanEntry{SessionID: id, Transport: transport, Excluded: true, Driver: "none", Mode: replay.ModeBlocked, Fidelity: replay.FidelityBlocked, Warnings: []string{"excluded by explicit session selection; equivalence covers selected sessions only"}}
+	exclude := func(id, fingerprint string, transport replay.Transport, events []replay.Event) {
+		e := replay.PlanEntry{SessionID: id, Fingerprint: fingerprint, Transport: transport, Excluded: true, Driver: "none", Mode: replay.ModeBlocked, Fidelity: replay.FidelityBlocked, Warnings: []string{"excluded by explicit session selection; equivalence covers selected sessions only"}}
 		for _, event := range events {
 			e.PacketIndexes = append(e.PacketIndexes, event.PacketIndex)
 		}
@@ -113,15 +119,37 @@ func Select(t *replay.Trace, ids []string, registry *replay.Registry) (*replay.T
 		if selected[s.ID] {
 			out.Sessions = append(out.Sessions, s)
 		} else {
-			exclude(s.ID, s.Transport, s.Events)
+			exclude(s.ID, s.Fingerprint(), s.Transport, s.Events)
 		}
 	}
 	if selected["raw-0"] {
 		out.Raw = t.Raw
 	} else if len(t.Raw) > 0 {
-		exclude("raw-0", replay.TransportRaw, t.Raw)
+		exclude("raw-0", "", replay.TransportRaw, t.Raw)
 	}
 	return out, nil
+}
+
+// resolveFingerprint maps a session fingerprint, or a unique prefix of one,
+// to the session ID it names in this capture.
+func resolveFingerprint(selector string, byFingerprint map[string]string) (string, error) {
+	if !replay.LooksLikeFingerprint(selector) {
+		return "", fmt.Errorf("unknown session %q; use check -details to list session IDs and fingerprints", selector)
+	}
+	var matches []string
+	for fingerprint, id := range byFingerprint {
+		if strings.HasPrefix(fingerprint, selector) {
+			matches = append(matches, id)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no session in this capture has fingerprint %q; use check -details to list them", selector)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("fingerprint prefix %q matches %d sessions; give more characters", selector, len(matches))
+	}
 }
 
 func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) (*Inspection, error) {
@@ -164,8 +192,8 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 		}
 	}
 	secure := route.Kind == TLS || route.Kind == SSH || route.Kind == FTP
-	if secure && mode != "wire" && mode != "transport" && profile != replay.ProfileFunctional {
-		block("fresh secure sessions require functional profile; timing is not supported")
+	if secure && mode != "wire" && mode != "transport" && profile != replay.ProfileFunctional && !(route.Kind == TLS && profile == replay.ProfileTiming) {
+		block("this fresh-session driver requires the functional profile; timing is supported for TLS application replay only")
 	}
 	// Coordinated plans include data lanes as well as their control session.
 	// A fresh driver must never erase a truncation blocker on a related lane.

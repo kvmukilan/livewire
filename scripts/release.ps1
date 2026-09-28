@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.9.0-dev",
+    [string]$Version = "1.0.0",
     [string]$OutputRoot = "dist"
 )
 
@@ -44,7 +44,9 @@ $documents = @(
     @{ Source = "docs/DOCUMENTATION.md"; Name = "DOCUMENTATION.md" },
     @{ Source = "docs/RELEASE_AUDIT.md"; Name = "RELEASE_AUDIT.md" },
     @{ Source = "docs/WORKFLOW.md"; Name = "WORKFLOW.md" },
-    @{ Source = "docs/PRODUCTION.md"; Name = "PRODUCTION.md" }
+    @{ Source = "docs/PRODUCTION.md"; Name = "PRODUCTION.md" },
+    @{ Source = "docs/RELIABILITY_IMPLEMENTATION.md"; Name = "RELIABILITY_IMPLEMENTATION.md" },
+    @{ Source = "docs/V1_QUALIFICATION.md"; Name = "V1_QUALIFICATION.md" }
 )
 
 function Copy-ReleaseText([string]$Source, [string]$Destination) {
@@ -114,7 +116,7 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
         "SETUP.md", "COMMANDS.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
-        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
+        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "RELIABILITY_IMPLEMENTATION.md", "V1_QUALIFICATION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
     }
@@ -123,7 +125,12 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     $zipPath = Join-Path $output "livewire-$Version-windows-amd64.zip"
     & go run ./scripts/releasegen.go zip -source $windowsStage -output $zipPath
     if ($LASTEXITCODE -ne 0) { throw "Deterministic Windows ZIP generation failed" }
-    Remove-Item -LiteralPath $windowsStage -Recurse -Force
+    $resolvedStage = (Resolve-Path -LiteralPath $windowsStage).Path
+    if ($resolvedStage -ne [IO.Path]::GetFullPath((Join-Path $output "windows-amd64")) -or
+        -not $resolvedStage.StartsWith($output + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove a staging directory outside the release output"
+    }
+    Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 
     $checksumPath = Join-Path $output "SHA256SUMS"
     & go run ./scripts/releasegen.go checksums -directory $output -output $checksumPath

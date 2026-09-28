@@ -50,7 +50,8 @@ type DNP3 struct {
 	TransportFIR bool
 	TransportSeq uint8 // 6-bit
 
-	// Application layer (present when there is a byte after the transport octet).
+	// Application header (present only in the first transport segment, with
+	// both the application control octet and function code available).
 	HasApp     bool
 	AppControl uint8
 	AppFIR     bool
@@ -161,7 +162,7 @@ func ParseDNP3(buf []byte) (d DNP3, consumed int, err error) {
 		d.TransportFIR = t&0x40 != 0
 		d.TransportSeq = t & 0x3F
 	}
-	if len(app) >= 3 {
+	if d.TransportFIR && len(app) >= 3 {
 		c := app[1]
 		d.HasApp = true
 		d.AppControl = c

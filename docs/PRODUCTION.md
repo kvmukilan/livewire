@@ -1,9 +1,12 @@
 # Production qualification and operator workflow
 
 Livewire's supported use case is repeatable testing on an explicitly selected
-device and isolated network. The CLI is the primary interface. This working
-tree adds hardening after 0.9.0-rc.2; it has not completed field qualification.
-See RELEASE_AUDIT.md for historical RC results, not proof for a changed build.
+device and isolated network. The CLI is the primary interface. Version 1 has a
+separate [software-lab release profile](V1_QUALIFICATION.md), using controlled
+Windows/Linux protocol peers and Linux virtual packet networks. Physical
+NIC/device qualification and the human pilot remain pending. See the release's
+manifest for its completed evidence; historical RC results do not qualify a
+changed build.
 
 ## Inspect, select, preview, replay, retain evidence
 
@@ -96,16 +99,17 @@ redacted metadata and digests, not captures, plaintext payloads, or private keys
 | Capability | Automated evidence | Field status |
 |---|---|---|
 | Windows amd64 CLI/application replay | Native tests and loopback peers | Physical NIC/DUT qualification pending |
-| Linux amd64 | Existing CI; rerun for each changed source | Physical NIC/DUT qualification pending |
+| Linux amd64 | Native tests, loopback peers and isolated virtual Ethernet labs | Physical NIC/DUT qualification pending |
 | Linux arm64 | Cross-build only | Provisional until native execution |
-| HTTP, TLS, FTP/FTPS, SSH | Synthetic capture and local peer regressions | Qualify the actual DUT workflow |
-| UDP/ICMP, stateful TCP, wire, two-interface lab | Parser/model/backend tests | Physical packet and cleanup checks required |
+| HTTP/1, DNS/TCP, Modbus/TCP, MQTT 3.1.1/5, DNP3, plaintext/TLS, FTP/FTPS, SSH | Independent local peers and both-command application matrix | Qualify the actual DUT workflow |
+| DNS/UDP, UDP, ICMPv4/v6, stateful TCP, captured TCP, wire | Independent captures across virtual interfaces; adaptive TCP loss/reordering checks | Physical packet and cleanup checks required |
+| Two-interface field lab | Parser/model/backend tests | Physical DUT topology qualification required |
 | Dashboard | API and JavaScript state tests | Visual/keyboard checks pending |
 | HTTP/2, HTTP/3 semantics; arbitrary mixed secure exchanges | Outside current scope | Unsupported |
 
 Windows artifacts remain unsigned; verify official download checksums and
 provenance. Authenticode publisher trust is a separate distribution limitation.
-Security fixes target the 0.9 development/candidate line; older lines receive no
+Security fixes target the 1.x line; older lines receive no
 routine backports. A current support claim requires the recorded qualification
 matrix, not merely a cross-build or unit test pass.
 
@@ -116,14 +120,21 @@ one million minimum-size records used about 0.9 GB. Other protocols, session
 counts, reassembly, adapters, and concurrent work can use more. Split large
 captures and leave memory headroom. Reproduce measurements for the target host.
 
-## Maintainer qualification and stable promotion
+## Maintainer qualification and release promotion
+
+The release workflow validates the profile declared by the manifest. Version 1
+uses `software-lab`, whose required protocol matrices and two-hour command soaks
+are described in [V1_QUALIFICATION.md](V1_QUALIFICATION.md). A lab manifest must
+explicitly keep physical and human-pilot qualification false. It cannot satisfy
+the field profile. The following procedure retains the full `physical` profile
+for later device qualification; an omitted profile also means `physical`.
 
 ```sh
 go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/stable.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate qualification/stable.json -version 0.9.0 -artifacts dist/v0.9.0
+go run ./scripts/qualify validate -version 1.0.0 -artifacts dist/v1.0.0 qualification/stable.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -175,13 +186,13 @@ RC tags remain explicitly prereleases. This gate verifies records; it cannot
 replace an operator's honest observations. Review/redact evidence before committing
 it under qualification/. Do not commit credentials or customer captures.
 
-Build the final 0.9.0 packages before field testing, then record results against
+Build the final versioned packages before qualification, then record results against
 those exact bytes. The builder refuses an existing version directory; use a
 fresh `-OutputRoot` for reproducibility checks. It validates the source version
 before creating an output directory and never deletes a previous release.
 Run `GOTOOLCHAIN=go1.26.7` with the existing release builder (on PowerShell, set
 `$env:GOTOOLCHAIN='go1.26.7'` first).
-After all gates pass, tag/publish stable 0.9.0 using the existing
+After the declared profile's gates pass, tag/publish the tested version using the existing
 release workflow. Do not rename an RC and assume different binaries were tested.
 
 For downgrade/recovery, stop active runs, check host cleanup, retain evidence,

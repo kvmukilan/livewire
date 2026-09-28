@@ -1,8 +1,17 @@
 package adapters
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
+	"compress/zlib"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -13,6 +22,9 @@ type HTTP struct{}
 
 func (HTTP) Name() string { return "http/1" }
 func (HTTP) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
 	p := firstPayload(s)
 	line := string(p)
 	if bytes.HasPrefix(p, []byte("HTTP/1.")) || strings.Contains(line, " HTTP/1.0\r\n") || strings.Contains(line, " HTTP/1.1\r\n") {
@@ -109,6 +121,9 @@ func httpMessageLen(data []byte, dir replay.Direction, responseTo string) (int, 
 		last := strings.TrimSpace(codings[len(codings)-1])
 		if last == "chunked" {
 			n, ok := chunkedEnd(data[headEnd:])
+			if n < 0 {
+				return 0, nil, fmt.Errorf("http/1: malformed or oversized chunk")
+			}
 			if !ok {
 				return 0, nil, nil
 			}
@@ -125,7 +140,9 @@ func httpMessageLen(data []byte, dir replay.Direction, responseTo string) (int, 
 		if err != nil || n < 0 {
 			return 0, nil, fmt.Errorf("http/1: invalid Content-Length %q", value)
 		}
-		if n < 0 || headEnd+n > len(data) {
+		// Subtract the already validated header size before comparing so a
+		// hostile or corrupt Content-Length cannot overflow the slice boundary.
+		if n > len(data)-headEnd {
 			return 0, nil, nil
 		}
 		return headEnd + n, f, nil
@@ -180,8 +197,8 @@ func chunkedEnd(body []byte) (int, bool) {
 			line = line[:semi]
 		}
 		n, err := strconv.ParseUint(strings.TrimSpace(line), 16, 64)
-		if err != nil {
-			return 0, false
+		if err != nil || n > maxRuleFrame {
+			return -1, false
 		}
 		off += i + 2
 		if n == 0 {
@@ -201,7 +218,7 @@ func chunkedEnd(body []byte) (int, bool) {
 		}
 		off += int(n)
 		if !bytes.HasPrefix(body[off:], []byte("\r\n")) {
-			return 0, false
+			return -1, false
 		}
 		off += 2
 	}
@@ -215,8 +232,22 @@ func (HTTP) Prepare(dir replay.Direction, msg replay.Message, state *replay.Runt
 	if host := state.Variables["http.host"]; host != "" {
 		out = replaceHeader(out, "Host", host)
 	}
+	if dir == replay.ClientToServer {
+		if jar, ok := state.Protocol["http.cookies"].(http.CookieJar); ok {
+			if u, err := requestURL(out, state); err == nil {
+				var values []string
+				for _, c := range jar.Cookies(u) {
+					values = append(values, c.Name+"="+c.Value)
+				}
+				out = replaceHeader(out, "Cookie", strings.Join(values, "; "))
+			}
+		}
+	}
 	for key, value := range state.Variables {
 		if strings.HasPrefix(strings.ToLower(key), "http.header.") {
+			if strings.ContainsAny(value, "\r\n") {
+				return nil, fmt.Errorf("http: substituted header contains line breaks")
+			}
 			out = replaceHeader(out, key[len("http.header."):], value)
 		}
 	}
@@ -249,6 +280,9 @@ func replaceHTTPBody(raw []byte, dir replay.Direction, body []byte) ([]byte, err
 	headers := httpHeaders(raw)
 	head := append([]byte(nil), raw[:i+len(sep)]...)
 	if strings.Contains(strings.ToLower(headers["transfer-encoding"]), "chunked") {
+		if len(body) == 0 {
+			return append(head, []byte("0\r\n\r\n")...), nil
+		}
 		framed := []byte(fmt.Sprintf("%x\r\n", len(body)))
 		framed = append(framed, body...)
 		framed = append(framed, []byte("\r\n0\r\n\r\n")...)
@@ -286,7 +320,10 @@ func httpHeaders(raw []byte) map[string]string {
 }
 
 func (HTTP) Correlate(expected, actual replay.Message, _ *replay.RuntimeState) replay.Match {
-	for _, key := range []string{"method", "path", "status"} {
+	if stringField(expected, "status") != "" && responseConsumesRequest(expected.Fields) != responseConsumesRequest(actual.Fields) {
+		return replay.Match{Reason: "informational/final response phase differs"}
+	}
+	for _, key := range []string{"method", "path"} {
 		if want := stringField(expected, key); want != "" && want != stringField(actual, key) {
 			return replay.Match{Reason: key + " differs"}
 		}
@@ -295,6 +332,9 @@ func (HTTP) Correlate(expected, actual replay.Message, _ *replay.RuntimeState) r
 }
 
 func (HTTP) Compare(expected, actual replay.Message, mode replay.VerifyMode) []replay.Difference {
+	if mode == replay.VerifyOff {
+		return nil
+	}
 	var out []replay.Difference
 	for _, key := range []string{"method", "path", "status"} {
 		want, got := stringField(expected, key), stringField(actual, key)
@@ -305,5 +345,179 @@ func (HTTP) Compare(expected, actual replay.Message, mode replay.VerifyMode) []r
 	if mode == replay.VerifyStrict && !bytes.Equal(expected.Raw, actual.Raw) {
 		out = append(out, replay.Difference{Field: "message", Expected: "byte-identical", Actual: "different bytes", Structural: true})
 	}
+	if mode == replay.VerifyLenient {
+		want, we := decodedHTTPBody(expected)
+		got, ge := decodedHTTPBody(actual)
+		if we != nil || ge != nil {
+			out = append(out, replay.Difference{Field: "body", Expected: "decodable body", Actual: "body decoding failed", Structural: true})
+		} else if !bytes.Equal(want, got) {
+			out = append(out, replay.Difference{Field: "body", Expected: bodyDigest(want), Actual: bodyDigest(got), Structural: true})
+		}
+	}
 	return out
+}
+
+func bodyDigest(data []byte) string {
+	return fmt.Sprintf("%d bytes, sha256:%x", len(data), sha256.Sum256(data))
+}
+
+func decodedHTTPBody(msg replay.Message) ([]byte, error) {
+	if noBody, _ := msg.Fields["noBody"].(bool); noBody {
+		return nil, nil
+	}
+	var body io.ReadCloser
+	var header http.Header
+	if strings.HasPrefix(string(msg.Raw), "HTTP/") {
+		r, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(msg.Raw)), nil)
+		if err != nil {
+			return nil, err
+		}
+		body, header = r.Body, r.Header
+	} else {
+		r, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(msg.Raw)))
+		if err != nil {
+			return nil, err
+		}
+		body, header = r.Body, r.Header
+	}
+	defer body.Close()
+	var reader io.Reader = body
+	switch strings.ToLower(header.Get("Content-Encoding")) {
+	case "", "identity":
+	case "gzip":
+		r, err := gzip.NewReader(body)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		reader = r
+	case "deflate":
+		r, err := zlib.NewReader(body)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+		reader = r
+	default:
+		return nil, fmt.Errorf("unsupported Content-Encoding")
+	}
+	b, err := io.ReadAll(io.LimitReader(reader, maxRuleFrame+1))
+	if len(b) > maxRuleFrame {
+		return nil, fmt.Errorf("decoded body too large")
+	}
+	return b, err
+}
+
+func requestURL(raw []byte, state *replay.RuntimeState) (*url.URL, error) {
+	r, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(raw)))
+	if err != nil {
+		return nil, err
+	}
+	r.Body.Close()
+	u := *r.URL
+	if u.Scheme == "" {
+		u.Scheme = "http"
+		if s, ok := state.Protocol["http.scheme"].(string); ok {
+			u.Scheme = s
+		}
+	}
+	if u.Host == "" {
+		u.Host = r.Host
+	}
+	return &u, nil
+}
+
+func (HTTP) Observe(dir replay.Direction, _, actual replay.Message, state *replay.RuntimeState) error {
+	queue, _ := state.Protocol["http.requests"].([]*url.URL)
+	if dir == replay.ClientToServer {
+		u, err := requestURL(actual.Raw, state)
+		if err != nil {
+			return err
+		}
+		state.Protocol["http.requests"] = append(queue, u)
+		return nil
+	}
+	if !responseConsumesRequest(actual.Fields) || len(queue) == 0 {
+		return nil
+	}
+	state.Protocol["http.requests"] = queue[1:]
+	r, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(actual.Raw)), nil)
+	if err != nil {
+		return err
+	}
+	r.Body.Close()
+	if len(r.Cookies()) == 0 {
+		return nil
+	}
+	jar, ok := state.Protocol["http.cookies"].(http.CookieJar)
+	if !ok {
+		jar, _ = cookiejar.New(nil)
+		state.Protocol["http.cookies"] = jar
+	}
+	jar.SetCookies(queue[0], r.Cookies())
+	state.Transformations = append(state.Transformations, "http: cookies learned from live response")
+	return nil
+}
+
+func (HTTP) ExtractField(m replay.Message, e replay.Extraction) (string, error) {
+	if e.Header != "" {
+		headers, _ := m.Fields["headers"].(map[string]string)
+		v, ok := headers[strings.ToLower(e.Header)]
+		if !ok {
+			return "", fmt.Errorf("header is absent")
+		}
+		return v, nil
+	}
+	b, err := decodedHTTPBody(m)
+	if err != nil {
+		return "", err
+	}
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.UseNumber()
+	var v any
+	if err = d.Decode(&v); err != nil {
+		return "", fmt.Errorf("invalid JSON body")
+	}
+	var trailing any
+	if d.Decode(&trailing) != io.EOF {
+		return "", fmt.Errorf("trailing JSON body content")
+	}
+	if e.JSONPointer == nil {
+		return "", fmt.Errorf("missing extraction selector")
+	}
+	path := *e.JSONPointer
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			return "", fmt.Errorf("JSON pointer must begin with /")
+		}
+		for _, key := range strings.Split(path[1:], "/") {
+			key = strings.ReplaceAll(strings.ReplaceAll(key, "~1", "/"), "~0", "~")
+			switch node := v.(type) {
+			case map[string]any:
+				var ok bool
+				v, ok = node[key]
+				if !ok {
+					return "", fmt.Errorf("JSON pointer not found")
+				}
+			case []any:
+				i, e := strconv.Atoi(key)
+				if e != nil || i < 0 || i >= len(node) {
+					return "", fmt.Errorf("invalid JSON array index")
+				}
+				v = node[i]
+			default:
+				return "", fmt.Errorf("JSON pointer not found")
+			}
+		}
+	}
+	switch value := v.(type) {
+	case string:
+		return value, nil
+	case json.Number:
+		return value.String(), nil
+	case bool:
+		return strconv.FormatBool(value), nil
+	default:
+		return "", fmt.Errorf("extraction requires a scalar value")
+	}
 }

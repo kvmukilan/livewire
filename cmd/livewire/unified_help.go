@@ -35,6 +35,9 @@ func help(args []string) error {
 	case "diagnose", "diagnostics", "support":
 		printDiagnostics(os.Stdout)
 		return nil
+	case "reliability":
+		printReplayReliability(os.Stdout)
+		return nil
 	}
 
 	for _, c := range commands {
@@ -64,7 +67,7 @@ func printHelpHub(w io.Writer) {
 	fmt.Fprintln(w, "  livewire reproduce issue.pcap -t 192.168.1.50")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "It asks for anything else it needs, with the likely answer pre-selected, and")
-	fmt.Fprintln(w, "ends with one verdict: same as the recording, different, or did not complete.")
+	fmt.Fprintln(w, "reports matching checked responses, differences, or an incomplete/unverified exchange.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "To be precise about what is replayed, inspect, select, preview, then run:")
 	fmt.Fprintln(w, "  livewire check issue.pcap -details")
@@ -90,6 +93,7 @@ func printHelpHub(w io.Writer) {
 	fmt.Fprintln(w, "  livewire help troubleshoot   recover from common problems")
 	fmt.Fprintln(w, "  livewire help protocols      see automatic drivers and safe fallbacks")
 	fmt.Fprintln(w, "  livewire help diagnose       collect reproducible support evidence")
+	fmt.Fprintln(w, "  livewire help reliability    choose TCP fidelity and repeatable replay controls")
 	fmt.Fprintln(w, "  livewire help commands       list every command")
 	fmt.Fprintln(w, "  livewire help <command>      explain one command and its options")
 }
@@ -177,12 +181,44 @@ func printDiagnostics(w io.Writer) {
 	fmt.Fprintln(w, "   livewire check issue.pcap -details -json assessment.json")
 	fmt.Fprintln(w, "2. Reproduce more than once when the fault is intermittent:")
 	fmt.Fprintln(w, "   livewire reproduce issue.pcap -mode application -t 192.168.1.50 -n 5")
-	fmt.Fprintln(w, "3. Keep the printed report and actual-traffic capture paths. Defaults never")
-	fmt.Fprintln(w, "   overwrite a prior run; numbered filenames are chosen automatically.")
+	fmt.Fprintln(w, "3. Keep the printed report and any actual-traffic capture paths. Socket replay")
+	fmt.Fprintln(w, "   needs an independent packet capture for wire evidence. Default output names")
+	fmt.Fprintln(w, "   never overwrite a prior run; numbered filenames are chosen automatically.")
 	fmt.Fprintln(w, "4. Create a redacted metadata-only support archive:")
 	fmt.Fprintln(w, "   livewire bundle -report issue.report.json -evidence issue.actual.pcap -o support.zip")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Packet bytes are referenced by digest, not embedded in support.zip.")
+}
+
+func printReplayReliability(w io.Writer) {
+	fmt.Fprintln(w, "Reliable PCAP reproduction")
+	fmt.Fprintln(w, "\nInspect and preview the exchange before choosing its replay mode:")
+	fmt.Fprintln(w, "  livewire check issue.pcap -details")
+	fmt.Fprintln(w, "  livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run")
+	fmt.Fprintln(w, "\nApplication faults: fresh OS TCP connections, stateful adapters, checked replies:")
+	fmt.Fprintln(w, "  livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m")
+	fmt.Fprintln(w, "  TCP sequence numbers, retransmissions, and segmentation belong to the new connection.")
+	fmt.Fprintln(w, "  Use -scenario scenario.json for declared HTTP setup, dependencies, and fresh tokens.")
+	fmt.Fprintln(w, "\nTiming faults: add -under-load to preserve supported captured pacing and overlap.")
+	fmt.Fprintln(w, "  -concurrency bounds workers; target delays and worker limits can shift actual sends.")
+	fmt.Fprintln(w, "  TLS application replay also supports captured timing; FTP and SSH use functional replay.")
+	fmt.Fprintln(w, "\nResponse deadlines: -response-timeout 5s bounds one application/datagram response.")
+	fmt.Fprintln(w, "  -timeout remains the secure-driver budget; -run-timeout bounds the entire run.")
+	fmt.Fprintln(w, "\nExplicit fault check (TCP/TLS applications):")
+	fmt.Fprintln(w, "  livewire reproduce issue.pcap -t 192.168.1.50 -expect-fault timeout -response-timeout 5s")
+	fmt.Fprintln(w, "  reset or timeout must occur during an expected response read after a request was sent.")
+	fmt.Fprintln(w, "  The report records the observed fault separately; the exchange stays incomplete.")
+	fmt.Fprintln(w, "\nTCP packet faults: preserve captured client flags, segmentation, and retransmissions:")
+	fmt.Fprintln(w, "  livewire reproduce issue.pcap -mode transport -session tcp-0 -t 192.168.1.50 -i <connection> -details -run-timeout 2m")
+	fmt.Fprintln(w, "  Requires the captured handshake; aligns sequence/ACK state to a fresh live peer.")
+	fmt.Fprintln(w, "  This driver does not implement full TCP congestion control or live window adaptation.")
+	fmt.Fprintln(w, "  -exact-tcp is a transport shortcut, not a promise of identical network behavior.")
+	fmt.Fprintln(w, "\nDurable progress: add -state-dir run-001; later use -resume run-001 with the same options.")
+	fmt.Fprintln(w, "  Resume opens fresh sessions; it cannot restore old sockets, TCP state, or device state.")
+	fmt.Fprintln(w, "  Uncertain writes require a recovery contract. See docs/RELIABILITY_IMPLEMENTATION.md.")
+	fmt.Fprintln(w, "\nA match covers checked responses, not proof that a crash, timeout, or field fault recurred.")
+	fmt.Fprintln(w, "Keep device logs and independent packet evidence, and restore required device setup.")
+	fmt.Fprintln(w, "Capture gaps cannot be reconstructed; -wire injects frames without live state or verification.")
 }
 
 func printCommandCatalog(w io.Writer) {
@@ -217,7 +253,7 @@ func closestCommand(input string) string {
 }
 
 func closestHelpTarget(input string) string {
-	names := []string{"examples", "troubleshoot", "protocols", "diagnose", "commands"}
+	names := []string{"examples", "troubleshoot", "protocols", "diagnose", "reliability", "commands"}
 	for _, c := range commands {
 		names = append(names, c.name)
 	}
