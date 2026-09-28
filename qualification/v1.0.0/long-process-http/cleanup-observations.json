@@ -1,0 +1,36 @@
+[
+  {
+    "platform": "windows-amd64",
+    "observedAt": "2026-09-28T22:34:56.297118+00:00",
+    "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+    "checkedCLIPIDs": [
+      37072,
+      27812
+    ],
+    "checkedPeerPorts": [
+      55962,
+      55963
+    ],
+    "passed": true,
+    "method": "Windows Get-Process and Get-NetTCPConnection",
+    "remainingProcesses": [],
+    "remainingListeners": []
+  },
+  {
+    "platform": "linux-amd64",
+    "observedAt": "2026-09-28T22:34:54.813257+00:00",
+    "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+    "checkedCLIPIDs": [
+      17184,
+      17197
+    ],
+    "checkedPeerPorts": [
+      47533,
+      47973
+    ],
+    "passed": true,
+    "method": "Linux /proc PID existence and /proc/net/tcp,tcp6 LISTEN entries",
+    "remainingProcesses": [],
+    "remainingListeners": []
+  }
+]

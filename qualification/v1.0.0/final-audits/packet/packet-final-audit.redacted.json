@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "kind": "independent-packet-soak-audit",
+  "checkedAt": "2026-09-28T23:27:05.5254533+00:00",
+  "passed": true,
+  "scope": "Linux owned network namespace/veth software peers; no physical NIC or DUT qualification",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+  "reports": [
+    {
+      "path": "C:\\Users\\kvmuk\\livewire\\coverage\\v1-soak\\linux-packet-pacing\\live.run.json",
+      "sha256": "e686802ba5ad8fe82a2f5afe88f878b4a0a61a6f7dd64107a059c3f1e0ee323c",
+      "command": "live",
+      "started": "2026-09-28T21:22:39.707527Z",
+      "finished": "2026-09-28T23:26:35.325127Z",
+      "interrupted": false,
+      "cleanupVerified": true,
+      "evidenceCount": 17818,
+      "cases": [
+        {
+          "name": "dns-udp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7228.547122999999,
+          "firstAt": "2026-09-28T21:22:39.990226Z",
+          "lastAt": "2026-09-28T23:23:08.537349Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "udp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7228.020175,
+          "firstAt": "2026-09-28T21:22:40.969419Z",
+          "lastAt": "2026-09-28T23:23:08.989594Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "icmp4",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7227.423906,
+          "firstAt": "2026-09-28T21:22:42.063301Z",
+          "lastAt": "2026-09-28T23:23:09.487207Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "icmp6",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7227.252531,
+          "firstAt": "2026-09-28T21:22:42.797171Z",
+          "lastAt": "2026-09-28T23:23:10.049702Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "stateful-tcp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7225.724795,
+          "firstAt": "2026-09-28T21:22:44.953881Z",
+          "lastAt": "2026-09-28T23:23:10.678676Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "transport-tcp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7225.548956,
+          "firstAt": "2026-09-28T21:22:46.126725Z",
+          "lastAt": "2026-09-28T23:23:11.675681Z",
+          "requestsObserved": 636,
+          "responsesVerified": 0,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "wire",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7226.520919,
+          "firstAt": "2026-09-28T21:22:47.701413Z",
+          "lastAt": "2026-09-28T23:23:14.222332Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        }
+      ]
+    },
+    {
+      "path": "C:\\Users\\kvmuk\\livewire\\coverage\\v1-soak\\linux-packet-pacing\\reproduce.run.json",
+      "sha256": "2fcbc0bb3098c25a351de95a231e77ce13b29a8083812c74b815edcbea25afd7",
+      "command": "reproduce",
+      "started": "2026-09-28T21:22:39.707527Z",
+      "finished": "2026-09-28T23:26:35.349354Z",
+      "interrupted": false,
+      "cleanupVerified": true,
+      "evidenceCount": 17818,
+      "cases": [
+        {
+          "name": "dns-udp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7224.441436,
+          "firstAt": "2026-09-28T21:22:50.298200Z",
+          "lastAt": "2026-09-28T23:23:14.739636Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "udp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7224.052248999999,
+          "firstAt": "2026-09-28T21:22:51.196159Z",
+          "lastAt": "2026-09-28T23:23:15.248408Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "icmp4",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7223.800694,
+          "firstAt": "2026-09-28T21:22:51.947904Z",
+          "lastAt": "2026-09-28T23:23:15.748598Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "icmp6",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7223.673546999999,
+          "firstAt": "2026-09-28T21:22:52.684692Z",
+          "lastAt": "2026-09-28T23:23:16.358239Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "stateful-tcp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7223.394593999999,
+          "firstAt": "2026-09-28T21:22:53.626451Z",
+          "lastAt": "2026-09-28T23:23:17.021045Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "transport-tcp",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7223.44597,
+          "firstAt": "2026-09-28T21:22:54.748683Z",
+          "lastAt": "2026-09-28T23:23:18.194653Z",
+          "requestsObserved": 636,
+          "responsesVerified": 0,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        },
+        {
+          "name": "wire",
+          "passes": 212,
+          "failures": 0,
+          "spanSeconds": 7224.649761,
+          "firstAt": "2026-09-28T21:22:56.122734Z",
+          "lastAt": "2026-09-28T23:23:20.772495Z",
+          "requestsObserved": 636,
+          "responsesVerified": 636,
+          "repeatedProcessPasses": 212,
+          "cleanupVerified": true
+        }
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "command": "Get-FileHash -Algorithm SHA256 release Linux executable",
+      "exitCode": 0,
+      "result": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3"
+    },
+    {
+      "command": "go run ./scripts/qualify init <audit-prefix>.source.json (source snapshot only)",
+      "exitCode": 0,
+      "result": ""
+    },
+    {
+      "command": "Get-FileHash SHA256 for every unique LabRun.Evidence path; inspect every per-process firewall snapshot",
+      "exitCode": 0,
+      "result": {
+        "references": 35636,
+        "uniqueFiles": 17818,
+        "allHashesMatched": true,
+        "firewallSnapshots": 2968,
+        "allFirewallSnapshotsClean": true
+      }
+    },
+    {
+      "command": "wsl -d kali-linux -u root -- ip netns list",
+      "exitCode": 0,
+      "result": ""
+    },
+    {
+      "command": "wsl -d kali-linux -u root -- ip -j link show (retain interface names only)",
+      "exitCode": 0
+    },
+    {
+      "command": "wsl -d kali-linux -u root -- ps -eo pid=,args= (retain owned-process matches only)",
+      "exitCode": 0,
+      "result": []
+    },
+    {
+      "command": "LIVEWIRE_PACKET_LAB_SMOKE=<run-dir> go test ./internal/qualification -run TestRecordedPacketLabTranscript -count=1 -v",
+      "exitCode": 0,
+      "result": "=== RUN   TestRecordedPacketLabTranscript\r\n=== RUN   TestRecordedPacketLabTranscript/live\r\n    lab_packet_test.go:139: validated live: 7 cases, 17818 hashed artifacts\r\n=== RUN   TestRecordedPacketLabTranscript/reproduce\r\n    lab_packet_test.go:139: validated reproduce: 7 cases, 17818 hashed artifacts\r\n--- PASS: TestRecordedPacketLabTranscript (69.19s)\r\n    --- PASS: TestRecordedPacketLabTranscript/live (45.09s)\r\n    --- PASS: TestRecordedPacketLabTranscript/reproduce (24.10s)\r\nPASS\r\nok  \tgithub.com/kvmukilan/livewire/internal/qualification\t69.482s\r\n"
+    }
+  ],
+  "errors": [],
+  "producerStdout": {
+    "path": "C:\\Users\\kvmuk\\livewire\\coverage\\v1-soak\\linux-packet-pacing.stdout.log",
+    "sha256": "f7b24673625604fdd48d5e1f34986b447fc099704ccc88934055d5c76937bffb"
+  },
+  "currentSourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "artifacts": {
+    "references": 35636,
+    "uniqueFiles": 17818,
+    "allHashesMatched": true,
+    "firewallSnapshots": 2968,
+    "allFirewallSnapshotsClean": true
+  },
+  "cleanup": {
+    "ownedNamespaces": [
+      "lwc-582687e082",
+      "lws-582687e082"
+    ],
+    "ownedInterfaces": [
+      "vc582687e082",
+      "vs582687e082"
+    ],
+    "namespacesAbsent": true,
+    "interfacesAbsent": true,
+    "ownedProcessesAbsent": true,
+    "firewallSnapshotsClean": true
+  },
+  "validatorLog": {
+    "path": "C:\\Users\\kvmuk\\livewire\\coverage\\v1-soak\\linux-packet-pacing.audit.validator.log",
+    "sha256": "79d3d8a46205116fbaeac7f03aeed8e024a781a11b1dc750c503d117a9dd10ec"
+  },
+  "finishedAt": "2026-09-28T23:28:47.1787220+00:00"
+}

@@ -1,0 +1,641 @@
+==> lint
+$ go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+$ go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 ./...
+$ go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 -severity high -confidence high -exclude-generated ./...
+[gosec] 2026/09/29 02:54:02 Including rules: default
+[gosec] 2026/09/29 02:54:02 Excluding rules: default
+[gosec] 2026/09/29 02:54:02 Including analyzers: default
+[gosec] 2026/09/29 02:54:02 Excluding analyzers: default
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\test\echoserver
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\engine
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\edit
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\orchestration
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\adapters
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\engine
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\replay
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\adapters
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\buildinfo
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\test\echoserver
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\pcapio
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\backend
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\units
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\flow
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\adapters
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\units
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\iterate
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\ftpreplay
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\scripts\replaylab
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\scripts\task
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\planexec
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\planexec
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\replaylab
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\replaylab
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\tui
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\qualification
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\internal\wire
+[gosec] 2026/09/29 02:54:05 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\replayintent
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\lab
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\cmd\livewire
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\compare
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\supportbundle
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\scripts
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\internal\tui
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\cmd\livewire
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\cmd\livewire
+[gosec] 2026/09/29 02:54:06 Checking package: main
+[gosec] 2026/09/29 02:54:06 Checking file: C:\Users\kvmuk\livewire\test\echoserver\main.go
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\pcapio
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\qualification
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\internal\hoststack
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\internal\iterate
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\edit
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\internal\sshreplay
+[gosec] 2026/09/29 02:54:06 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\dissect
+[gosec] 2026/09/29 02:54:07 Checking package: engine
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\conversation.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\driver.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\dryrun.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\flow.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\peer.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\receive.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\respverify.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\sender.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\session.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\synth.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\engine\verify.go
+[gosec] 2026/09/29 02:54:07 Checking package: wire
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\checksum.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\edit.go
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\engine
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\frag.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\fragment_edit.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\optedit.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\options.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\reseg.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\vlan.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\wire\wire.go
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\ftpreplay
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\dissect
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\hoststack
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\ipreasm
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\livereplay
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-soak
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\tlsreplay
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\orchestration
+[gosec] 2026/09/29 02:54:07 Checking package: adapters
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\crypto.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\dnp3_messages.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\dnp3_state.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\dns.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\ftp.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\helpers.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\http.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\http_policy.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\incremental.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\industrial.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\live_events.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\mqtt.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\mqtt5.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\mqtt_maintenance.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\mqtt_state.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\recovery.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\registry.go
+[gosec] 2026/09/29 02:54:07 Checking file: C:\Users\kvmuk\livewire\internal\adapters\rules.go
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\sshreplay
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\wire
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\evidence
+[gosec] 2026/09/29 02:54:07 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\webui
+[gosec] 2026/09/29 02:54:08 Checking package: main
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\scripts\task\compare.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\scripts\qualify
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\scripts\task\main.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\orchestration
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\qualification
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\hoststack
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\secureexec
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\internal\lab
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\internal\replaylab
+[gosec] 2026/09/29 02:54:08 Checking package: tui
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\tui\dashboard.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\livereplay
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\securefile
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\flow
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\iterate
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\internal\orchestration
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\scripts
+[gosec] 2026/09/29 02:54:08 Checking package: qualification
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\qualification\lab.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\securefile
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\qualification\lab_transcript.go
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\qualification\qualification.go
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\qualification\rss_windows.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\scripts\qualify
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\scripts\task
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\tui
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\scripts\qualify
+[gosec] 2026/09/29 02:54:08 Checking package: iterate
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\iterate\iterate.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\internal\supportbundle
+[gosec] 2026/09/29 02:54:08 Checking package: hoststack
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\hoststack\reconcile_other.go
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\hoststack\rst_windows.go
+[gosec] 2026/09/29 02:54:08 Checking file: C:\Users\kvmuk\livewire\internal\hoststack\suppressor.go
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\replay
+[gosec] 2026/09/29 02:54:08 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\webui
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\securefile
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\wire
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\ftpreplay
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\livereplay
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\dissect
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\test\echoserver
+[gosec] 2026/09/29 02:54:09 Checking package: planexec
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\planexec\planexec.go
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\runstate
+[gosec] 2026/09/29 02:54:09 Checking package: main
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\scripts\replaylab\main.go
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\ipreasm
+[gosec] 2026/09/29 02:54:09 Checking package: ftpreplay
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\ftpreplay\cancel.go
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\ftpreplay\group.go
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\ftpreplay\plaintext.go
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\ftpreplay\runner.go
+[gosec] 2026/09/29 02:54:09 Checking package: sshreplay
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\sshreplay\reterminate.go
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\runstate
+[gosec] 2026/09/29 02:54:09 Checking file: C:\Users\kvmuk\livewire\internal\ftpreplay\script.go
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\cmd\livewire
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\runstate
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\units
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\internal\edit
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\scripts\replaylab
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\qualification
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\runvars
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\stateless
+[gosec] 2026/09/29 02:54:09 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\ipreasm
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\backend
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\backend
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\runvars
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\stateless
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\internal\compare
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\internal\units
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\replaylab
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\tlsreplay
+[gosec] 2026/09/29 02:54:10 Checking package: main
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\scripts\qualify\main.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\internal\flow
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\stateless
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\hoststack
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\secureexec
+[gosec] 2026/09/29 02:54:10 Checking package: supportbundle
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\supportbundle\bundle.go
+[gosec] 2026/09/29 02:54:10 Checking package: lab
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\plan.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\runner.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\buildinfo
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\internal\backend
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\scenario.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\schedule.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\simulator.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\lab\topology.go
+[gosec] 2026/09/29 02:54:10 Checking package: main
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\analyze.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\artifacts.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\bundle.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\capio.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\capture.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\check.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\compare.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\convert.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\coverage.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\devs_windows.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\evidence
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\planexec
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\doctor.go
+[gosec] 2026/09/29 02:54:10 Checking package: orchestration
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\orchestration\orchestration.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\internal\replay
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\orchestration\workers.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\doctor_windows.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\engine
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\execution_flags.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\fault_expectation.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\fidelity.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\flags.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\ftp_cmd.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\help.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\ifaces.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\info.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\lab.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\live.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\live_real.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\main.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\evidence
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\plan_run.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\preflight.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\protocol_orchestrator.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\recovery.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\replay.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\report.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\reproduce.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\resume_identity.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\retermination_report.go
+[gosec] 2026/09/29 02:54:10 Checking package: units
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\units\seq.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\rewrite.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\tlsreplay
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\rstdrop.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\ssh_cmd.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\tls_cmd.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\unified_help.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\validation.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\variables.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\verdict.go
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\cmd\livewire\web.go
+[gosec] 2026/09/29 02:54:10 Checking package: edit
+[gosec] 2026/09/29 02:54:10 Checking file: C:\Users\kvmuk\livewire\internal\edit\pipeline.go
+[gosec] 2026/09/29 02:54:10 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\buildinfo
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\compare
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\dissect
+[gosec] 2026/09/29 02:54:11 Checking package: replaylab
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\capture.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\case.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\cases_dnp3.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\cases_ftp.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\cases_mqtt.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\cases_ssh.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\cases_stream.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\run.go
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\replaylab\stream.go
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\flow
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\lab
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\replayintent
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\tui
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\replayintent
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\scripts\task
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\stateless
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\scripts
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\replay
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\secureexec
+[gosec] 2026/09/29 02:54:11 Checking package: flow
+[gosec] 2026/09/29 02:54:11 Checking file: C:\Users\kvmuk\livewire\internal\flow\key.go
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\test\echoserver
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\lab
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\planexec
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\scripts\replaylab
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\scripts\task
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\edit
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\scripts\replaylab
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\sshreplay
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\evidence
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\replayintent
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\runstate
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\runvars
+[gosec] 2026/09/29 02:54:11 Import directory: C:\Users\kvmuk\livewire\internal\secureexec
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\wire
+[gosec] 2026/09/29 02:54:12 Checking package: backend
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\arp_windows.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\backend.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\mac_rewrite.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\mock.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\ndp.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\npcap_windows.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\open.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\open_windows.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\backend\tuple_rewrite.go
+[gosec] 2026/09/29 02:54:12 Checking package: compare
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\compare\compare.go
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\livereplay
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\tlsreplay
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\supportbundle
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\compare
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\pcapio
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\pcapio
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\securefile
+[gosec] 2026/09/29 02:54:12 Checking package: dissect
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\crypto_guard.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\dnp3.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\dnp3_assembly.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\dnp3_objects.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\modbus.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\dissect\tls.go
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\iterate
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\runvars
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\sshreplay
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\adapters
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\internal\ftpreplay
+[gosec] 2026/09/29 02:54:12 Checking package: stateless
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\stateless\rate.go
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\scripts
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\buildinfo
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\internal\ipreasm
+[gosec] 2026/09/29 02:54:12 Checking package: replay
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\adapter.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\blockers.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\correlation.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\datagram.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\evidence.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\execution.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\fingerprint.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\maintenance.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\model.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\plan.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\reader.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\recovery_probe.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\response_error.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\runtime.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\scenario.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\status.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\tcp_semantic.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\tcp_stream.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\timing.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\trace.go
+[gosec] 2026/09/29 02:54:12 Checking file: C:\Users\kvmuk\livewire\internal\replay\transport.go
+[gosec] 2026/09/29 02:54:12 Import directory: C:\Users\kvmuk\livewire\coverage\v1-clean-build\internal\supportbundle
+[gosec] 2026/09/29 02:54:13 Import directory: C:\Users\kvmuk\livewire\coverage\v1-linux-pacing-worktree\internal\webui
+[gosec] 2026/09/29 02:54:13 Import directory: C:\Users\kvmuk\livewire\coverage\v1-pacing-build\scripts\qualify
+[gosec] 2026/09/29 02:54:13 Import directory: C:\Users\kvmuk\livewire\internal\webui
+[gosec] 2026/09/29 02:54:13 Checking package: buildinfo
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\buildinfo\buildinfo.go
+[gosec] 2026/09/29 02:54:13 Checking package: runvars
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\runvars\redactor.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\runvars\runvars.go
+[gosec] 2026/09/29 02:54:13 Checking package: evidence
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\evidence\stream.go
+[gosec] 2026/09/29 02:54:13 Checking package: runstate
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\runstate\lock_windows.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\runstate\store.go
+[gosec] 2026/09/29 02:54:13 Checking package: securefile
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\securefile\atomic.go
+[gosec] 2026/09/29 02:54:13 Checking package: pcapio
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\pcapio\limits.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\pcapio\pcap.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\pcapio\pcapio.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\pcapio\pcapng.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\pcapio\pcapng_writer.go
+[gosec] 2026/09/29 02:54:13 Checking package: ipreasm
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\ipreasm\ipreasm.go
+[gosec] 2026/09/29 02:54:13 Checking package: livereplay
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\livereplay\livereplay.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\livereplay\trace.go
+[gosec] 2026/09/29 02:54:13 Checking package: replayintent
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\replayintent\ftp.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\replayintent\inspect.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\replayintent\lab.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\replayintent\route.go
+[gosec] 2026/09/29 02:54:13 Checking package: secureexec
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\secureexec\execute.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\secureexec\outcome.go
+[gosec] 2026/09/29 02:54:13 Checking file: C:\Users\kvmuk\livewire\internal\secureexec\tls_script.go
+[gosec] 2026/09/29 02:54:14 Checking package: tlsreplay
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\decrypt.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\kdf.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\keylog.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\records.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\reterminate.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\tlsreplay\script.go
+[gosec] 2026/09/29 02:54:14 Checking package: webui
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\embed.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\flows.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\ftp.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\ifaces_windows.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\jobs.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\platform.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\rstrule.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\runs.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\secure_run.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\ssh_on.go
+[gosec] 2026/09/29 02:54:14 Checking file: C:\Users\kvmuk\livewire\internal\webui\webui.go
+Results:
+
+
+Summary:
+  Gosec  : dev
+  Files  : 199
+  Lines  : 37566
+  Nosec  : 14
+  Issues : 0
+
+==> lint ok (38.888s)
+==> race
+$ go test -race -count=1 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	8.646s
+ok  	github.com/kvmukilan/livewire/internal/adapters	1.793s
+ok  	github.com/kvmukilan/livewire/internal/backend	1.374s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	1.498s
+ok  	github.com/kvmukilan/livewire/internal/dissect	1.559s
+ok  	github.com/kvmukilan/livewire/internal/edit	1.391s
+ok  	github.com/kvmukilan/livewire/internal/engine	1.500s
+ok  	github.com/kvmukilan/livewire/internal/evidence	1.403s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.930s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	1.403s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	1.466s
+ok  	github.com/kvmukilan/livewire/internal/iterate	1.444s
+ok  	github.com/kvmukilan/livewire/internal/lab	2.560s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	1.333s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	1.314s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	1.305s
+ok  	github.com/kvmukilan/livewire/internal/planexec	1.595s
+ok  	github.com/kvmukilan/livewire/internal/qualification	33.315s
+ok  	github.com/kvmukilan/livewire/internal/replay	5.030s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	1.412s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	10.676s
+ok  	github.com/kvmukilan/livewire/internal/runstate	1.862s
+ok  	github.com/kvmukilan/livewire/internal/runvars	1.300s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	1.672s
+ok  	github.com/kvmukilan/livewire/internal/securefile	1.362s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	2.616s
+ok  	github.com/kvmukilan/livewire/internal/stateless	1.314s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	1.414s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	4.302s
+ok  	github.com/kvmukilan/livewire/internal/tui	1.300s
+ok  	github.com/kvmukilan/livewire/internal/units	1.318s
+ok  	github.com/kvmukilan/livewire/internal/webui	2.541s
+ok  	github.com/kvmukilan/livewire/internal/wire	1.283s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+==> race ok (1m2.929s)
+==> shuffle
+$ go test -shuffle=on -count=3 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	13.992s
+ok  	github.com/kvmukilan/livewire/internal/adapters	1.853s
+ok  	github.com/kvmukilan/livewire/internal/backend	0.732s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.902s
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.943s
+ok  	github.com/kvmukilan/livewire/internal/edit	0.541s
+ok  	github.com/kvmukilan/livewire/internal/engine	0.807s
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.728s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	2.190s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.667s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.775s
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.860s
+ok  	github.com/kvmukilan/livewire/internal/lab	4.073s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.684s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.904s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.723s
+ok  	github.com/kvmukilan/livewire/internal/planexec	1.307s
+ok  	github.com/kvmukilan/livewire/internal/qualification	79.370s
+ok  	github.com/kvmukilan/livewire/internal/replay	11.058s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.808s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	23.839s
+ok  	github.com/kvmukilan/livewire/internal/runstate	2.537s
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.660s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	1.248s
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.973s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	4.102s
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.558s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.771s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	8.783s
+ok  	github.com/kvmukilan/livewire/internal/tui	0.479s
+ok  	github.com/kvmukilan/livewire/internal/units	0.487s
+ok  	github.com/kvmukilan/livewire/internal/webui	2.240s
+ok  	github.com/kvmukilan/livewire/internal/wire	0.469s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+$ go test -shuffle=on -count=20 ./internal/webui
+ok  	github.com/kvmukilan/livewire/internal/webui	11.614s
+==> shuffle ok (1m44.462s)
+==> fuzz
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 1s, gathering baseline coverage: 0/109 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 109/109 completed, now fuzzing with 1 workers
+fuzz: elapsed: 4s, execs: 5557 (1852/sec), new interesting: 0 (total: 109)
+fuzz: elapsed: 7s, execs: 5557 (0/sec), new interesting: 0 (total: 109)
+fuzz: elapsed: 9s, execs: 200000 (93643/sec), new interesting: 1 (total: 110)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	9.252s
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 2s, gathering baseline coverage: 0/330 completed
+fuzz: elapsed: 3s, gathering baseline coverage: 330/330 completed, now fuzzing with 1 workers
+fuzz: elapsed: 5s, execs: 6076 (2025/sec), new interesting: 0 (total: 330)
+fuzz: elapsed: 8s, execs: 25698 (6541/sec), new interesting: 1 (total: 331)
+fuzz: elapsed: 11s, execs: 25698 (0/sec), new interesting: 1 (total: 331)
+fuzz: elapsed: 14s, execs: 25698 (0/sec), new interesting: 1 (total: 331)
+fuzz: elapsed: 15s, execs: 200000 (125079/sec), new interesting: 1 (total: 331)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	15.832s
+$ go test ./internal/lab -run=^$ -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 2s, gathering baseline coverage: 0/418 completed
+fuzz: elapsed: 3s, gathering baseline coverage: 418/418 completed, now fuzzing with 1 workers
+fuzz: elapsed: 5s, execs: 73888 (24627/sec), new interesting: 0 (total: 418)
+fuzz: elapsed: 8s, execs: 178556 (34888/sec), new interesting: 1 (total: 419)
+fuzz: elapsed: 9s, execs: 200000 (35809/sec), new interesting: 3 (total: 421)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/lab	9.006s
+$ go test ./internal/tlsreplay -run=^$ -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/26 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 26/26 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 37561 (12518/sec), new interesting: 0 (total: 26)
+fuzz: elapsed: 6s, execs: 84203 (15550/sec), new interesting: 0 (total: 26)
+fuzz: elapsed: 9s, execs: 133186 (16328/sec), new interesting: 0 (total: 26)
+fuzz: elapsed: 12s, execs: 178253 (15023/sec), new interesting: 0 (total: 26)
+fuzz: elapsed: 14s, execs: 200000 (15439/sec), new interesting: 0 (total: 26)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	14.168s
+$ go test ./internal/replay -run=^$ -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/59 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 59/59 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 48078 (16024/sec), new interesting: 0 (total: 59)
+fuzz: elapsed: 6s, execs: 106415 (19447/sec), new interesting: 0 (total: 59)
+fuzz: elapsed: 9s, execs: 169564 (21048/sec), new interesting: 0 (total: 59)
+fuzz: elapsed: 11s, execs: 200000 (21577/sec), new interesting: 0 (total: 59)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/replay	11.299s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/11 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 11/11 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 75860 (25281/sec), new interesting: 0 (total: 11)
+fuzz: elapsed: 5s, execs: 200000 (63571/sec), new interesting: 0 (total: 11)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	5.342s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 1s, gathering baseline coverage: 0/98 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 98/98 completed, now fuzzing with 1 workers
+fuzz: elapsed: 4s, execs: 116696 (38892/sec), new interesting: 0 (total: 98)
+fuzz: elapsed: 5s, execs: 200000 (55987/sec), new interesting: 1 (total: 99)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	5.353s
+==> fuzz ok (1m22.568s)
+==> cover
+$ go test -coverprofile=coverage\aggregate.out -coverpkg=./... ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	5.336s	coverage: 26.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/adapters	1.443s	coverage: 15.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/backend	0.509s	coverage: 1.3% of statements in ./...
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	1.080s	coverage: 2.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.788s	coverage: 1.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/edit	0.484s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/engine	0.997s	coverage: 7.5% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.907s	coverage: 0.8% of statements in ./...
+	github.com/kvmukilan/livewire/internal/flow		coverage: 0.0% of statements
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.643s	coverage: 6.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.445s	coverage: 0.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.571s	coverage: 1.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.558s	coverage: 0.7% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/lab	2.027s	coverage: 6.8% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.878s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.849s	coverage: 0.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.726s	coverage: 1.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/planexec	1.090s	coverage: 0.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/qualification	25.239s	coverage: 2.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replay	3.962s	coverage: 10.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.576s	coverage: 5.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replaylab	8.201s	coverage: 7.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/runstate	1.167s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.427s	coverage: 0.3% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/secureexec	0.693s	coverage: 2.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.506s	coverage: 0.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	1.666s	coverage: 0.4% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.422s	coverage: 0.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.539s	coverage: 0.8% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	3.276s	coverage: 5.7% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/tui	0.410s	coverage: 0.3% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/units	0.416s	coverage: 0.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/webui	1.782s	coverage: 16.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/wire	0.418s	coverage: 1.7% of statements in ./...
+	github.com/kvmukilan/livewire/scripts/qualify		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/scripts/replaylab		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/scripts/task		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/test/echoserver		coverage: 0.0% of statements
+aggregate coverage: 67.1% (required 60%)
+$ go test -coverprofile=coverage\pcapio.out ./internal/pcapio
+ok  	github.com/kvmukilan/livewire/internal/pcapio	(cached)	coverage: 85.3% of statements
+pcapio coverage: 85.3% (required 85%)
+$ go test -coverprofile=coverage\webui.out ./internal/webui
+ok  	github.com/kvmukilan/livewire/internal/webui	1.054s	coverage: 62.6% of statements
+webui coverage: 62.6% (required 60%)
+$ go test -coverprofile=coverage\cmd.out ./cmd/livewire
+ok  	github.com/kvmukilan/livewire/cmd/livewire	4.407s	coverage: 46.7% of statements
+cmd coverage: 46.7% (required 30%)
+$ go test -coverprofile=coverage\backend.out ./internal/backend
+ok  	github.com/kvmukilan/livewire/internal/backend	(cached)	coverage: 30.0% of statements
+backend coverage: 30.0% (required 20%)
+==> cover ok (5m53.74s)
+==> corpus
+./cmd/livewire: passed
+./internal/replayintent: passed
+./internal/ftpreplay: passed
+./internal/secureexec: passed
+./internal/sshreplay: passed
+./internal/replay: passed
+./internal/livereplay: passed
+./internal/securefile: passed
+./internal/iterate: passed
+corpus evidence: C:\Users\kvmuk\AppData\Local\Temp\livewire-corpus-20260928T213418
+==> corpus ok (13.191s)

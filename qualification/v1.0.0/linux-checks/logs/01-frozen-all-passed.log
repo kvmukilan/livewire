@@ -1,0 +1,603 @@
+==> all
+==> build
+$ go build ./...
+==> build ok (7.563s)
+==> vet
+$ go vet ./...
+==> vet ok (5.587s)
+==> test
+$ go test -count=1 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	4.884s
+ok  	github.com/kvmukilan/livewire/internal/adapters	0.252s
+ok  	github.com/kvmukilan/livewire/internal/backend	0.036s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.036s
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.196s
+ok  	github.com/kvmukilan/livewire/internal/edit	0.035s
+ok  	github.com/kvmukilan/livewire/internal/engine	0.047s
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.021s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.503s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.005s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.037s
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.115s
+ok  	github.com/kvmukilan/livewire/internal/lab	1.098s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.036s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.075s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.038s
+ok  	github.com/kvmukilan/livewire/internal/planexec	0.004s
+ok  	github.com/kvmukilan/livewire/internal/qualification	1.207s
+ok  	github.com/kvmukilan/livewire/internal/replay	3.669s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.009s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	8.934s
+ok  	github.com/kvmukilan/livewire/internal/runstate	0.323s
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.006s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	0.702s
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.029s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	1.982s
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.005s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.023s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	3.782s
+ok  	github.com/kvmukilan/livewire/internal/tui	0.004s
+ok  	github.com/kvmukilan/livewire/internal/units	0.004s
+ok  	github.com/kvmukilan/livewire/internal/webui	1.507s
+ok  	github.com/kvmukilan/livewire/internal/wire	0.004s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+==> test ok (15.07s)
+==> dashboard
+$ node --test scripts/dashboard.test.cjs
+✔ changing capture invalidates an old preview and disables Start (2.63916ms)
+✔ a late inspection response cannot restore stale state (1.670178ms)
+✔ failed reinspection clears the previous successful preview (1.063736ms)
+✔ two rapid Start actions submit only one run (2.10554ms)
+✔ zero gap is sent as zero; session selection cannot silently become all (0.674616ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 129.863205
+==> dashboard ok (259ms)
+==> lint
+$ go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+$ go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 ./...
+$ go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 -severity high -confidence high -exclude-generated ./...
+[gosec] 2026/09/29 02:53:05 Including rules: default
+[gosec] 2026/09/29 02:53:05 Excluding rules: default
+[gosec] 2026/09/29 02:53:05 Including analyzers: default
+[gosec] 2026/09/29 02:53:05 Excluding analyzers: default
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/test/echoserver
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replayintent
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runstate
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/secureexec
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/qualify
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/planexec
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/hoststack
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/stateless
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/task
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/supportbundle
+[gosec] 2026/09/29 02:53:06 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tui
+[gosec] 2026/09/29 02:53:07 Checking package: tui
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tui/dashboard.go
+[gosec] 2026/09/29 02:53:07 Checking package: main
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/test/echoserver/main.go
+[gosec] 2026/09/29 02:53:07 Checking package: hoststack
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/hoststack/reconcile_linux.go
+[gosec] 2026/09/29 02:53:07 Checking package: supportbundle
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/supportbundle/bundle.go
+[gosec] 2026/09/29 02:53:07 Checking package: stateless
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/stateless/rate.go
+[gosec] 2026/09/29 02:53:07 Checking package: main
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/qualify/main.go
+[gosec] 2026/09/29 02:53:07 Checking package: runstate
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runstate/lock_other.go
+[gosec] 2026/09/29 02:53:07 Checking package: pcapio
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio/limits.go
+[gosec] 2026/09/29 02:53:07 Checking package: main
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/task/compare.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/hoststack/rst_linux.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runstate/store.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/units
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/replaylab
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio/pcap.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/sshreplay
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/hoststack/suppressor.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio/pcapio.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/buildinfo
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio/pcapng.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/compare
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/evidence
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/pcapio/pcapng_writer.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/orchestration
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/task/main.go
+[gosec] 2026/09/29 02:53:07 Checking package: planexec
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/planexec/planexec.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/securefile
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/edit
+[gosec] 2026/09/29 02:53:07 Checking package: replayintent
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replayintent/ftp.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replayintent/inspect.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replayintent/lab.go
+[gosec] 2026/09/29 02:53:07 Checking package: secureexec
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/secureexec/execute.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replayintent/route.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/secureexec/outcome.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/secureexec/tls_script.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ipreasm
+[gosec] 2026/09/29 02:53:07 Checking package: tlsreplay
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/decrypt.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/kdf.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/keylog.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/records.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/reterminate.go
+[gosec] 2026/09/29 02:53:07 Checking package: replaylab
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/tlsreplay/script.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/capture.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/case.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/cases_dnp3.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/cases_ftp.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/cases_mqtt.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/cases_ssh.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/cases_stream.go
+[gosec] 2026/09/29 02:53:07 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runvars
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/run.go
+[gosec] 2026/09/29 02:53:07 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replaylab/stream.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire
+[gosec] 2026/09/29 02:53:08 Checking package: adapters
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/crypto.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/dnp3_messages.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/dnp3_state.go
+[gosec] 2026/09/29 02:53:08 Checking package: webui
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/embed.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/dns.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/flows.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/ftp.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/ftp.go
+[gosec] 2026/09/29 02:53:08 Checking package: buildinfo
+[gosec] 2026/09/29 02:53:08 Checking package: units
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/buildinfo/buildinfo.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/units/seq.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/helpers.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/ifaces_other.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/http.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/iterate
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/jobs.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/livereplay
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/platform.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/rstrule.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/http_policy.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/runs.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/incremental.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/industrial.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/secure_run.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/live_events.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/ssh_on.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/mqtt.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/webui/webui.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/mqtt5.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/mqtt_maintenance.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/mqtt_state.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/recovery.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/registry.go
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/adapters/rules.go
+[gosec] 2026/09/29 02:53:08 Checking package: sshreplay
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/sshreplay/reterminate.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect
+[gosec] 2026/09/29 02:53:08 Checking package: evidence
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/evidence/stream.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/qualification
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire
+[gosec] 2026/09/29 02:53:08 Checking package: securefile
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/securefile/atomic.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/flow
+[gosec] 2026/09/29 02:53:08 Checking package: main
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/scripts/replaylab/main.go
+[gosec] 2026/09/29 02:53:08 Checking package: edit
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/edit/pipeline.go
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab
+[gosec] 2026/09/29 02:53:08 Import directory: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay
+[gosec] 2026/09/29 02:53:08 Checking package: ipreasm
+[gosec] 2026/09/29 02:53:08 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ipreasm/ipreasm.go
+[gosec] 2026/09/29 02:53:09 Checking package: runvars
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runvars/redactor.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/runvars/runvars.go
+[gosec] 2026/09/29 02:53:09 Checking package: orchestration
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/orchestration/orchestration.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/orchestration/workers.go
+[gosec] 2026/09/29 02:53:09 Checking package: compare
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/compare/compare.go
+[gosec] 2026/09/29 02:53:09 Checking package: iterate
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/iterate/iterate.go
+[gosec] 2026/09/29 02:53:09 Checking package: wire
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/checksum.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/edit.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/frag.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/fragment_edit.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/optedit.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/options.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/reseg.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/vlan.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/wire/wire.go
+[gosec] 2026/09/29 02:53:09 Checking package: ftpreplay
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay/cancel.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay/group.go
+[gosec] 2026/09/29 02:53:09 Checking package: engine
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/conversation.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay/plaintext.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay/runner.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/driver.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/dryrun.go
+[gosec] 2026/09/29 02:53:09 Checking package: dissect
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/ftpreplay/script.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/crypto_guard.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/dnp3.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/flow.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/dnp3_assembly.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/peer.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/dnp3_objects.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/receive.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/modbus.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/respverify.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/dissect/tls.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/sender.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/session.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/synth.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/engine/verify.go
+[gosec] 2026/09/29 02:53:09 Checking package: flow
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/flow/key.go
+[gosec] 2026/09/29 02:53:09 Checking package: livereplay
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/livereplay/livereplay.go
+[gosec] 2026/09/29 02:53:09 Checking package: backend
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/afpacket_linux.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/livereplay/trace.go
+[gosec] 2026/09/29 02:53:09 Checking package: qualification
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/qualification/lab.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/arp_linux.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/qualification/lab_transcript.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/backend.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/qualification/qualification.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/mac_rewrite.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/mock.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/ndp.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/ndp_linux.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/neighbor_linux.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/open.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/open_linux.go
+[gosec] 2026/09/29 02:53:09 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/backend/tuple_rewrite.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/qualification/rss_linux.go
+[gosec] 2026/09/29 02:53:10 Checking package: lab
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/plan.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/runner.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/scenario.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/schedule.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/simulator.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/lab/topology.go
+[gosec] 2026/09/29 02:53:10 Checking package: replay
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/adapter.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/blockers.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/correlation.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/datagram.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/evidence.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/execution.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/fingerprint.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/maintenance.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/model.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/plan.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/reader.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/recovery_probe.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/response_error.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/runtime.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/scenario.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/status.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/tcp_semantic.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/tcp_stream.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/timing.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/trace.go
+[gosec] 2026/09/29 02:53:10 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/internal/replay/transport.go
+[gosec] 2026/09/29 02:53:11 Checking package: main
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/analyze.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/artifacts.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/bundle.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/capio.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/capture.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/check.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/compare.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/convert.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/coverage.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/devs_other.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/doctor.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/doctor_linux.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/execution_flags.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/fault_expectation.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/fidelity.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/flags.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/ftp_cmd.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/help.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/ifaces.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/info.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/lab.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/live.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/live_real.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/main.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/plan_run.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/preflight.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/protocol_orchestrator.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/recovery.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/replay.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/report.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/reproduce.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/resume_identity.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/retermination_report.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/rewrite.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/rstdrop.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/ssh_cmd.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/tls_cmd.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/unified_help.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/validation.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/variables.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/verdict.go
+[gosec] 2026/09/29 02:53:11 Checking file: /mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree/cmd/livewire/web.go
+Results:
+
+
+[1;36mSummary:[0m
+  Gosec  : dev
+  Files  : 201
+  Lines  : 37627
+  Nosec  : 14
+  Issues : [1;32m0[0m
+
+==> lint ok (19.484s)
+==> race
+$ go test -race -count=1 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	8.531s
+ok  	github.com/kvmukilan/livewire/internal/adapters	1.239s
+ok  	github.com/kvmukilan/livewire/internal/backend	1.057s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	1.020s
+ok  	github.com/kvmukilan/livewire/internal/dissect	1.228s
+ok  	github.com/kvmukilan/livewire/internal/edit	1.017s
+ok  	github.com/kvmukilan/livewire/internal/engine	1.123s
+ok  	github.com/kvmukilan/livewire/internal/evidence	1.060s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.814s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	1.046s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	1.017s
+ok  	github.com/kvmukilan/livewire/internal/iterate	1.135s
+ok  	github.com/kvmukilan/livewire/internal/lab	2.129s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	1.051s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	1.087s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	1.054s
+ok  	github.com/kvmukilan/livewire/internal/planexec	1.023s
+ok  	github.com/kvmukilan/livewire/internal/qualification	5.277s
+ok  	github.com/kvmukilan/livewire/internal/replay	4.545s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	1.038s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	14.606s
+ok  	github.com/kvmukilan/livewire/internal/runstate	1.369s
+ok  	github.com/kvmukilan/livewire/internal/runvars	1.024s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	1.371s
+ok  	github.com/kvmukilan/livewire/internal/securefile	1.041s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	2.561s
+ok  	github.com/kvmukilan/livewire/internal/stateless	1.016s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	1.032s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	4.106s
+ok  	github.com/kvmukilan/livewire/internal/tui	1.015s
+ok  	github.com/kvmukilan/livewire/internal/units	1.017s
+ok  	github.com/kvmukilan/livewire/internal/webui	1.500s
+ok  	github.com/kvmukilan/livewire/internal/wire	1.016s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+==> race ok (26.56s)
+==> shuffle
+$ go test -shuffle=on -count=3 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	7.220s
+ok  	github.com/kvmukilan/livewire/internal/adapters	0.753s
+ok  	github.com/kvmukilan/livewire/internal/backend	0.028s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.028s
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.271s
+ok  	github.com/kvmukilan/livewire/internal/edit	0.025s
+ok  	github.com/kvmukilan/livewire/internal/engine	0.060s
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.063s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	2.015s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.027s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.029s
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.274s
+ok  	github.com/kvmukilan/livewire/internal/lab	3.223s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.028s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.151s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.025s
+ok  	github.com/kvmukilan/livewire/internal/planexec	0.010s
+ok  	github.com/kvmukilan/livewire/internal/qualification	3.855s
+ok  	github.com/kvmukilan/livewire/internal/replay	10.264s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.025s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	32.030s
+ok  	github.com/kvmukilan/livewire/internal/runstate	1.006s
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.007s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	0.959s
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.047s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	4.111s
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.004s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.040s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	9.052s
+ok  	github.com/kvmukilan/livewire/internal/tui	0.004s
+ok  	github.com/kvmukilan/livewire/internal/units	0.006s
+ok  	github.com/kvmukilan/livewire/internal/webui	2.058s
+ok  	github.com/kvmukilan/livewire/internal/wire	0.005s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+$ go test -shuffle=on -count=20 ./internal/webui
+ok  	github.com/kvmukilan/livewire/internal/webui	5.314s
+==> shuffle ok (42.593s)
+==> fuzz
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/92 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 92/92 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 11383 (3794/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 6s, execs: 11383 (0/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 9s, execs: 11383 (0/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 12s, execs: 11383 (0/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 15s, execs: 11383 (0/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 18s, execs: 11383 (0/sec), new interesting: 1 (total: 93)
+fuzz: elapsed: 21s, execs: 115691 (34775/sec), new interesting: 2 (total: 94)
+fuzz: elapsed: 24s, execs: 115691 (0/sec), new interesting: 2 (total: 94)
+fuzz: elapsed: 25s, execs: 200000 (140302/sec), new interesting: 2 (total: 94)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	24.661s
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/197 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 197/197 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 31766 (10586/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 6s, execs: 31904 (46/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 9s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 12s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 15s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 18s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 21s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 24s, execs: 31904 (0/sec), new interesting: 0 (total: 197)
+fuzz: elapsed: 26s, execs: 200000 (86680/sec), new interesting: 0 (total: 197)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	26.007s
+$ go test ./internal/lab -run=^$ -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/251 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 251/251 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 54295 (18098/sec), new interesting: 0 (total: 251)
+fuzz: elapsed: 6s, execs: 126054 (23911/sec), new interesting: 1 (total: 252)
+fuzz: elapsed: 9s, execs: 200000 (25318/sec), new interesting: 3 (total: 254)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/lab	9.000s
+$ go test ./internal/tlsreplay -run=^$ -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/27 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 27/27 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 13890 (4629/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 6s, execs: 41257 (9122/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 9s, execs: 72407 (10383/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 12s, execs: 98876 (8825/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 15s, execs: 133447 (11521/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 18s, execs: 167270 (11276/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 21s, execs: 200000 (11603/sec), new interesting: 0 (total: 27)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	20.871s
+$ go test ./internal/replay -run=^$ -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/48 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 48/48 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 39623 (13204/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 6s, execs: 84078 (14819/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 9s, execs: 127635 (14522/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 12s, execs: 171434 (14596/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 14s, execs: 200000 (15171/sec), new interesting: 0 (total: 48)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/replay	13.903s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/8 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 8/8 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 18926 (6305/sec), new interesting: 0 (total: 8)
+fuzz: elapsed: 6s, execs: 18926 (0/sec), new interesting: 0 (total: 8)
+fuzz: elapsed: 7s, execs: 200000 (222803/sec), new interesting: 0 (total: 8)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	6.823s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/95 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 95/95 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 92936 (30972/sec), new interesting: 0 (total: 95)
+fuzz: elapsed: 6s, execs: 192373 (33146/sec), new interesting: 0 (total: 95)
+fuzz: elapsed: 6s, execs: 200000 (38652/sec), new interesting: 0 (total: 95)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	6.230s
+==> fuzz ok (2m0.894s)
+==> cover
+$ go test -coverprofile=coverage/aggregate.out -coverpkg=./... ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	5.633s	coverage: 26.8% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/adapters	0.248s	coverage: 14.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/backend	0.076s	coverage: 1.4% of statements in ./...
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.080s	coverage: 2.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.112s	coverage: 1.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/edit	0.048s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/engine	0.091s	coverage: 7.5% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.087s	coverage: 0.8% of statements in ./...
+	github.com/kvmukilan/livewire/internal/flow		coverage: 0.0% of statements
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.210s	coverage: 6.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.079s	coverage: 0.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.083s	coverage: 1.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.151s	coverage: 0.7% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/lab	1.145s	coverage: 6.7% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.079s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.101s	coverage: 0.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.043s	coverage: 1.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/planexec	0.042s	coverage: 0.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/qualification	1.612s	coverage: 2.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replay	3.640s	coverage: 10.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.053s	coverage: 5.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/replaylab	10.160s	coverage: 7.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/runstate	0.334s	coverage: 1.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.038s	coverage: 0.3% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/secureexec	0.498s	coverage: 2.9% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.053s	coverage: 0.2% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	1.794s	coverage: 0.4% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.038s	coverage: 0.1% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.052s	coverage: 0.8% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	3.475s	coverage: 5.7% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/tui	0.040s	coverage: 0.3% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/units	0.042s	coverage: 0.0% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/webui	1.066s	coverage: 15.6% of statements in ./...
+ok  	github.com/kvmukilan/livewire/internal/wire	0.050s	coverage: 1.7% of statements in ./...
+	github.com/kvmukilan/livewire/scripts/qualify		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/scripts/replaylab		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/scripts/task		coverage: 0.0% of statements
+	github.com/kvmukilan/livewire/test/echoserver		coverage: 0.0% of statements
+aggregate coverage: 66.8% (required 60%)
+$ go test -coverprofile=coverage/pcapio.out ./internal/pcapio
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.007s	coverage: 85.3% of statements
+pcapio coverage: 85.3% (required 85%)
+$ go test -coverprofile=coverage/webui.out ./internal/webui
+ok  	github.com/kvmukilan/livewire/internal/webui	0.372s	coverage: 62.6% of statements
+webui coverage: 62.6% (required 60%)
+$ go test -coverprofile=coverage/cmd.out ./cmd/livewire
+ok  	github.com/kvmukilan/livewire/cmd/livewire	3.667s	coverage: 46.8% of statements
+cmd coverage: 46.8% (required 30%)
+$ go test -coverprofile=coverage/backend.out ./internal/backend
+ok  	github.com/kvmukilan/livewire/internal/backend	0.006s	coverage: 31.0% of statements
+backend coverage: 31.0% (required 20%)
+==> cover ok (2m57.466s)
+==> corpus
+./cmd/livewire: passed
+./internal/replayintent: passed
+./internal/ftpreplay: passed
+./internal/secureexec: passed
+./internal/sshreplay: passed
+./internal/replay: passed
+./internal/livereplay: passed
+./internal/securefile: passed
+./internal/iterate: passed
+corpus evidence: /tmp/livewire-corpus-20260928T212919
+==> corpus ok (8.768s)
+==> all ok (7m4.254s)

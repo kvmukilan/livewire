@@ -1,0 +1,14 @@
+{
+  "started": "2026-09-28T21:34:31.369667+00:00",
+  "finished": "2026-09-28T21:34:37.568850+00:00",
+  "exitCode": 0,
+  "toolchain": "go1.26.7",
+  "command": [
+    "go",
+    "run",
+    "./scripts/qualify",
+    "benchmark",
+    "-output",
+    "coverage/v1-windows-pacing-benchmark"
+  ]
+}

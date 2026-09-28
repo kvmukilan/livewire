@@ -1,0 +1,85 @@
+{
+  "platform": "linux",
+  "command": "live",
+  "pid": 17184,
+  "peerPort": 47533,
+  "started": "2026-09-28T21:24:03.749259Z",
+  "argv": [
+    "/mnt/c/Users/kvmuk/livewire/coverage/v1-pacing-build/dist-check/v1.0.0/livewire-1.0.0-linux-amd64",
+    "live",
+    "/mnt/c/Users/kvmuk/livewire/coverage/v1-long-process-pacing/linux-live/input.pcap",
+    "-mode",
+    "application",
+    "-t",
+    "127.0.0.1",
+    "-n",
+    "840",
+    "-gap",
+    "5s",
+    "-strict-exit",
+    "-report",
+    "/mnt/c/Users/kvmuk/livewire/coverage/v1-long-process-pacing/linux-live/report.json",
+    "-run-timeout",
+    "95m"
+  ],
+  "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "requestedAttempts": 840,
+  "sessionsPerAttempt": 5,
+  "finished": "2026-09-28T22:34:12.920942Z",
+  "elapsedSeconds": 4209.1716840379995,
+  "exitCode": 0,
+  "passed": true,
+  "errors": [],
+  "peer": {
+    "connections": 4200,
+    "closed": 4200,
+    "active": 0,
+    "peakActive": 1,
+    "requests": 8400,
+    "responses": 8400,
+    "rejections": 0
+  },
+  "comparedResponses": 8400,
+  "reportAttempts": 840,
+  "expectedSessionResults": 4200,
+  "expectedHTTPRequests": 8400,
+  "sampleCount": 281,
+  "samplingErrors": 0,
+  "resources": {
+    "rssBytes": {
+      "first": 7303168,
+      "last": 17760256,
+      "minimum": 7303168,
+      "maximum": 17903616,
+      "firstThirdMedian": 15351808,
+      "lastThirdMedian": 17276928
+    },
+    "peakRssBytes": {
+      "first": 7303168,
+      "last": 17760256,
+      "minimum": 7303168,
+      "maximum": 17903616,
+      "firstThirdMedian": 15351808,
+      "lastThirdMedian": 17702912
+    },
+    "fileDescriptors": {
+      "first": 4,
+      "last": 6,
+      "minimum": 4,
+      "maximum": 7,
+      "firstThirdMedian": 6,
+      "lastThirdMedian": 6
+    },
+    "threads": {
+      "first": 5,
+      "last": 13,
+      "minimum": 5,
+      "maximum": 13,
+      "firstThirdMedian": 13,
+      "lastThirdMedian": 13
+    }
+  },
+  "scope": "Additional one-process loopback repetition check; not a substitute for required two-hour matrix or physical qualification",
+  "memoryInterpretation": "Observed working-set/private-memory and handle/fd samples only; no invented pass threshold or leak-free bound"
+}

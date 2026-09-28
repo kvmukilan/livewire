@@ -1,0 +1,19 @@
+{
+  "started": "2026-09-28T21:22:22.294884Z",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "commit": "26a90c8f419046cda70da850ab5f5481aa1bd5c1",
+  "worktree": "/mnt/c/Users/kvmuk/livewire/coverage/v1-linux-pacing-worktree",
+  "platform": "linux-amd64",
+  "goVersion": "go version go1.26.7 linux/amd64",
+  "nodeVersion": "v24.15.0",
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "all"
+  ],
+  "finished": "2026-09-28T21:29:30.897477Z",
+  "exitCode": 0,
+  "sourceDigestAfter": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "passed": true
+}

@@ -1,0 +1,73 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "captureDigest": "sha256:10a502c2ae5b604e921e797c4056137e99a3c545b288faf5dacbdbb0ba1bd005",
+  "kind": "tls",
+  "limitations": [],
+  "outcome": {
+    "adapter": "modbus-tcp",
+    "cipherSuite": "TLS_AES_128_GCM_SHA256",
+    "cleanup": "complete",
+    "comparedResponses": 2,
+    "completed": true,
+    "expectedResponses": 2,
+    "matched": true,
+    "mismatches": 0,
+    "observedResponses": 2,
+    "peerIdentityChecked": true,
+    "protocolVersion": "TLS 1.3",
+    "requests": 2,
+    "responses": 1,
+    "status": "matched",
+    "verificationScope": "application messages",
+    "verified": true
+  },
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "tls-reterminate",
+        "driver": "tls-reterminate",
+        "fidelity": "semantic",
+        "fingerprint": "225984e1c2e3",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "sessionId": "tcp-0",
+        "transport": "tcp"
+      }
+    ],
+    "packets": 14,
+    "profile": "functional"
+  },
+  "target": "127.0.0.1:45865",
+  "tool": "livewire",
+  "transformations": [
+    "fresh session executed using explicit replay intent and selected capture sessions"
+  ],
+  "variables": {},
+  "version": "1.0.0",
+  "when": "2026-09-28T22:35:43.121589113Z"
+}

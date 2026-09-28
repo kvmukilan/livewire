@@ -1,0 +1,87 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "captureDigest": "sha256:b6a3b12123a6ad38b416a9de8c83aab5a41458cc9799e540273f8a3679f97c46",
+  "kind": "tls",
+  "limitations": [],
+  "outcome": {
+    "adapter": "mqtt",
+    "cipherSuite": "TLS_AES_128_GCM_SHA256",
+    "cleanup": "complete",
+    "comparedResponses": 6,
+    "completed": true,
+    "expectedResponses": 6,
+    "matched": true,
+    "mismatches": 0,
+    "observedResponses": 6,
+    "peerIdentityChecked": true,
+    "protocolVersion": "TLS 1.3",
+    "requests": 7,
+    "responses": 5,
+    "status": "matched",
+    "transformations": [
+      "mqtt: live MQTT 5 topic alias expanded",
+      "mqtt: live broker packet identifier mapped"
+    ],
+    "verificationScope": "application messages",
+    "verified": true
+  },
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "tls-reterminate",
+        "driver": "tls-reterminate",
+        "fidelity": "semantic",
+        "fingerprint": "0dbb10208140",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23
+        ],
+        "sessionId": "tcp-0",
+        "transport": "tcp"
+      }
+    ],
+    "packets": 24,
+    "profile": "timing"
+  },
+  "target": "127.0.0.1:55612",
+  "tool": "livewire",
+  "transformations": [
+    "fresh session executed using explicit replay intent and selected capture sessions"
+  ],
+  "variables": {},
+  "version": "1.0.0",
+  "when": "2026-09-28T22:48:19.6719755Z"
+}

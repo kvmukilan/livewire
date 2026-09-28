@@ -1,0 +1,91 @@
+{
+  "description": "Short reproduction from a fresh detached checkout of the frozen commit, using only copies of the two published harness/dependency source files. No private packaging helper or prior outputs were copied.",
+  "sourceCommit": "26a90c8f419046cda70da850ab5f5481aa1bd5c1",
+  "copiedFiles": [
+    {
+      "published": "harness.py.txt",
+      "installed": "coverage/long-http-cookie.py",
+      "sha256": "9a969e0c16be42ecfed9b0bcef2258bb4d6e221035d19da7fc816091c1edf608"
+    },
+    {
+      "published": "source-digest-helper.py.txt",
+      "installed": "coverage/package-v1-qualification.py",
+      "sha256": "5ef5850824bd210d1153498bfeb6ef38e2a74d8e7bcabd015db8867b7d602972"
+    }
+  ],
+  "runs": [
+    {
+      "platform": "windows",
+      "command": "live",
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91",
+      "passed": true,
+      "attempts": 2,
+      "sessions": 10,
+      "validatedRequests": 20,
+      "comparedResponses": 20,
+      "activeConnectionsAtEnd": 0,
+      "peerRejections": 0,
+      "started": "2026-09-28T21:59:04.393399Z",
+      "finished": "2026-09-28T21:59:05.186958Z",
+      "elapsedSeconds": 0.7935660000075586,
+      "privateResult": "coverage/v1-http-public-repro-verification/windows-live/result.json",
+      "privateResultSHA256": "f976ed9019a16cbcb3c8498b556a86b30a5df41b7c93f7171fd26b5fcf5d98f1"
+    },
+    {
+      "platform": "windows",
+      "command": "reproduce",
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91",
+      "passed": true,
+      "attempts": 2,
+      "sessions": 10,
+      "validatedRequests": 20,
+      "comparedResponses": 20,
+      "activeConnectionsAtEnd": 0,
+      "peerRejections": 0,
+      "started": "2026-09-28T21:59:04.393370Z",
+      "finished": "2026-09-28T21:59:05.184314Z",
+      "elapsedSeconds": 0.7909525000141002,
+      "privateResult": "coverage/v1-http-public-repro-verification/windows-reproduce/result.json",
+      "privateResultSHA256": "a15683177e4da65f1e1e6701c6d9fbcb89102494828e1954988b7bd84b321019"
+    },
+    {
+      "platform": "linux",
+      "command": "live",
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+      "passed": true,
+      "attempts": 2,
+      "sessions": 10,
+      "validatedRequests": 20,
+      "comparedResponses": 20,
+      "activeConnectionsAtEnd": 0,
+      "peerRejections": 0,
+      "started": "2026-09-28T21:59:06.639032Z",
+      "finished": "2026-09-28T21:59:09.580629Z",
+      "elapsedSeconds": 2.941594102000181,
+      "privateResult": "coverage/v1-http-public-repro-verification/linux-live/result.json",
+      "privateResultSHA256": "5a7f803f046a556da22aa672d946e9c72e78be4f91047a0e1d2346a8ed9a2a16"
+    },
+    {
+      "platform": "linux",
+      "command": "reproduce",
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+      "passed": true,
+      "attempts": 2,
+      "sessions": 10,
+      "validatedRequests": 20,
+      "comparedResponses": 20,
+      "activeConnectionsAtEnd": 0,
+      "peerRejections": 0,
+      "started": "2026-09-28T21:59:06.670385Z",
+      "finished": "2026-09-28T21:59:09.627282Z",
+      "elapsedSeconds": 2.956895220000206,
+      "privateResult": "coverage/v1-http-public-repro-verification/linux-reproduce/result.json",
+      "privateResultSHA256": "83082a074bbbfb6e7287daa156d929d346385ec373be16268dc69d8727d3f82d"
+    }
+  ],
+  "substitutesForLongRun": false
+}
