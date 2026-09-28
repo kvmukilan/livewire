@@ -4,9 +4,10 @@ For prerequisite diagnostics, failure recovery, supported platforms, and the
 stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes the 0.9 line, currently a release candidate; 0.8.0 remains
-the stable download. Automatic inspection remains useful; replay intent is now
-a separate choice.
+This guide describes version 1. Automatic inspection identifies available
+replay routes; replay intent is a separate choice. The release's
+[qualification scope](V1_QUALIFICATION.md) states which software tests passed
+and which field checks remain outstanding.
 
 ## Inspect, select, preview, run
 
@@ -42,6 +43,56 @@ report. Missing credentials are listed as requirements; preview alone does not
 prove keys/certificates will work against a live peer. A blocked preview exits
 nonzero. `check` remains an inspection command and can successfully describe a
 blocked capture; inspect its structured readiness when automating.
+
+## Reproduce an application fault or a TCP fault
+
+Use `livewire help reliability` for the terminal version of this workflow.
+Choose the observable failure first: a different response, a reset, a stalled
+request, a device crash, or a timing threshold. Retain device logs and a packet
+capture from the test run to check that symptom independently of reply matching.
+
+For supported application protocols over TCP, `-mode application` uses fresh OS TCP
+connections. The OS maintains sequence numbers, acknowledgements, retransmission,
+and flow control; adapters maintain supported application identifiers and state.
+Captured segmentation and packet loss are not reproduced by a socket replay.
+The target also needs the relevant firmware, configuration, authentication,
+and starting data. A PCAP alone does not restore those conditions. HTTP setup
+and response-dependent tokens can be declared with `-scenario`; see
+[RELIABILITY_IMPLEMENTATION.md](RELIABILITY_IMPLEMENTATION.md).
+
+For a packet-level TCP issue, preview and run the transport route:
+
+```sh
+livewire reproduce issue.pcap -mode transport -session tcp-0 -dry-run
+livewire reproduce issue.pcap -mode transport -session tcp-0 -t 192.168.1.50 -i <connection> -details -run-timeout 2m
+```
+
+The transport driver needs a captured handshake and maps captured client
+sequence/ACK numbers to a fresh live peer. It preserves captured client
+segmentation, flags, retransmissions, and pacing. It does not implement a full
+TCP sender with congestion control, live window adaptation, and a SACK recovery
+queue. A changed server response length or network path can prevent the captured
+packet pattern from being valid. The `-exact-tcp` alias selects this behavior;
+it cannot promise identical network or device state.
+
+To investigate intermittent application behavior:
+
+```sh
+livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m
+```
+
+Each attempt opens a fresh connection. Reset required target data between runs
+when testing depends on it. Add `-under-load` for supported captured pacing and
+cross-session overlap; worker bounds and live response delays can shift actual
+sends, so inspect reported timing. Secure drivers currently support functional
+replay only. `-strict-exit` makes incomplete, different, unverified, or wire-only
+results fail automation; it does not turn reply matching into a fault detector.
+
+Use `-state-dir <new-dir>` to record durable progress and `-resume <dir>` with
+the same inputs to recover after interruption. Resume skips confirmed completed
+session boundaries or starts eligible sessions fresh. It never restores an old
+TCP connection, TLS state, or the device's internal state. Uncertain writes
+require an explicit recovery contract.
 
 ## Secure exchanges
 
@@ -115,7 +166,8 @@ Run `go test ./...`, `go test -race ./...`, `go vet ./...`, and
 `node --test scripts/dashboard.test.cjs`. The JavaScript checks exercise the
 shipped state transitions; they do not replace visual browser QA.
 
-Before promoting 0.9 to a stable release, complete the existing CI/reproducibility/security gates,
-Windows/Linux physical NIC and DUT smoke tests, browser keyboard/visual checks,
-and the planned network/QA-engineer pilot. Do not treat a development build as
-evidence that those external acceptance checks passed.
+Version 1 publication requires the CI, reproducibility, security and
+software-lab qualification gates, including two-hour protocol matrices for
+both commands. Windows/Linux physical NIC and DUT checks, browser visual and
+keyboard checks, and the uncoached pilot remain part of the separate physical
+qualification profile. Automated results do not assert that those checks passed.

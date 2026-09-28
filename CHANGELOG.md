@@ -2,7 +2,33 @@
 
 All notable changes to Livewire are documented here.
 
-## Unreleased - 0.9 production hardening
+## [1.0.0] - 2026-09-29
+
+Version 1 qualifies the supported replay routes with controlled software peers
+and virtual networks. Physical NIC/device and uncoached human-pilot qualification
+are not claimed. The release gate requires evidence tied to the exact packaged
+executables; see [the qualification scope](docs/V1_QUALIFICATION.md).
+
+- Track live TCP cumulative acknowledgments, outstanding bytes, negotiated MSS,
+  scaled receive windows, bounded retries/probes and FIN completion. Service
+  replies during captured timing gaps; separate connections reusing a four-tuple.
+- Preserve application message pacing across adjacent requests, including TLS;
+  maintain MQTT keepalive and live QoS/identifier state during idle/response waits.
+- Reassemble DNP3 transport/application fragments, confirm live fragments and
+  unsolicited messages, and block authentication or uninspectable object layouts.
+- Decrypt FTPS data captures before comparing downloads or preparing uploads;
+  honor per-transfer protection and active-mode roles, use fresh verified TLS,
+  and stop before sending credentials/data if the target refuses protection.
+- Add `-response-timeout` and `-expect-fault reset|timeout`. Record observed faults
+  separately from completed response matches, excluding setup/cancellation errors.
+- Add durable checkpoints, explicit recovery contracts, scenario dependencies,
+  offline comparison, bounded concurrency and opt-in strict exit status.
+- Fix protocol detection on generic TCP/UDP traffic, wire replay without a target,
+  and Linux ARP/NDP retry and interface-scoping behavior under packet loss.
+- Retain positional `live <capture>`, legacy `live -in`, and compatibility aliases.
+  Deprecated aliases remain available throughout the 1.x release line.
+
+Production hardening included from the development line:
 
 - Add `doctor` with actionable text/JSON diagnostics and an output-directory probe.
 - Stop blocked FTP control/data I/O on cancellation; bound SSH channel/command
@@ -13,8 +39,8 @@ All notable changes to Livewire are documented here.
 - Add maintained regression corpus, size/memory benchmark, command recorder,
   soak harness, and an evidence-bound stable-release gate.
 - Preserve existing release directories and include PRODUCTION.md in packages.
-- Field NIC/DUT, browser, two-hour platform soaks, and five-engineer pilot remain
-  required. This development build does not promote or replace a public release.
+- Preserve the full physical qualification profile and add a separately named
+  software-lab profile; incomplete or changed evidence blocks publication.
 
 ## [0.9.0-rc.2] - 2026-09-08
 

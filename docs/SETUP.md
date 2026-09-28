@@ -5,8 +5,7 @@ installed. Pick your operating system, run the blocks in order, then confirm wit
 [Check it works](#check-it-works).
 
 Each download block starts with the release it fetches. The value there is the
-current 0.9 release candidate; change it to `0.8.0` for the stable release, or
-to any version listed on the
+version 1 release. You can select another published version from the
 [Releases page](https://github.com/kvmukilan/livewire/releases).
 For replay intent and a preview before sending, start with [WORKFLOW.md](WORKFLOW.md).
 Once it runs, [COMMANDS.md](COMMANDS.md) explains every command.
@@ -30,7 +29,7 @@ Socket-based application replay, including HTTP/TLS/FTP/SSH, needs neither drive
 Open **PowerShell** (a normal one is fine for this step) and paste:
 
 ```powershell
-$Version = "0.9.0-rc.2"
+$Version = "1.0.0"
 $Release = "https://github.com/kvmukilan/livewire/releases/download/v$Version"
 New-Item -ItemType Directory -Force C:\livewire | Out-Null
 Set-Location C:\livewire
@@ -111,7 +110,7 @@ to list them, and paste the whole `\Device\NPF_{...}` value:
 ### 1. Download it
 
 ```bash
-VERSION=0.9.0-rc.2
+VERSION=1.0.0
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/livewire-$VERSION-linux-amd64"
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/SHA256SUMS"
 sha256sum --check --ignore-missing SHA256SUMS

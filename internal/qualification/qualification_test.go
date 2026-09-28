@@ -50,6 +50,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f := &fixture{base: base, evidence: []Evidence{{Path: "proof.txt", SHA256: sum}}}
 	doc := Template("test")
+	doc.Version = "0.9.0" // Preserve the historical physical-profile fixture.
 	doc.BlockingFindings = []string{}
 	cancel := 0.1
 	for name, p := range doc.Platforms {
@@ -63,6 +64,8 @@ func newFixture(t *testing.T) *fixture {
 			p.Scenarios[scenario] = runs
 		}
 		p.Soak = SoakRecord{Seconds: SoakSeconds, Passed: true, CleanupVerified: true, Evidence: f.evidence}
+		p.CommandSoaks = map[string]SoakRecord{"reproduce": p.Soak, "live": p.Soak}
+		p.Combinations = []string{"synthetic HTTP/1.1 fixture"}
 		doc.Platforms[name] = p
 	}
 	doc.Browser = Browser{BrowserVersion: "test", Checks: map[string]bool{}, Evidence: f.evidence}

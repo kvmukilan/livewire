@@ -8,7 +8,7 @@ import (
 func TestParseDNP3Stream(t *testing.T) {
 	// Build a valid response frame via Encode (correct CRCs), then parse it back.
 	d := DNP3{Control: 0x44, Dest: 1, Source: 10,
-		UserData: []byte{0x00, 0x00, 0x81}, HasTransport: true, HasApp: true}
+		UserData: []byte{0x00, 0x00, 0x81}, HasTransport: true, TransportFIR: true, TransportFIN: true, HasApp: true}
 	frame := d.Encode()
 	frames, leftover, err := ParseDNP3Stream(frame)
 	if err != nil || leftover != 0 || len(frames) != 1 {

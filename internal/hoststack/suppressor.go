@@ -14,6 +14,7 @@ import (
 // Rule describes the connection whose host RSTs to drop. TargetIP and TargetPort
 // are required; LocalPort narrows the match to one connection.
 type Rule struct {
+	Owner      string
 	TargetIP   netip.Addr
 	TargetPort uint16
 	LocalPort  uint16 // the captured client's source port; 0 = match any
@@ -92,7 +93,20 @@ func iptablesArgs(r Rule, op string) []string {
 	if r.LocalPort != 0 {
 		args = append(args, "--sport", strconv.Itoa(int(r.LocalPort)))
 	}
+	if r.Owner != "" {
+		args = append(args, "-m", "comment", "--comment", "livewire:"+r.Owner)
+	}
 	return append(args, "-j", "DROP")
+}
+
+func ReconcileOwned(r Rule) error {
+	if err := r.valid(); err != nil {
+		return err
+	}
+	if r.Owner == "" {
+		return fmt.Errorf("cannot reconcile an unowned firewall rule")
+	}
+	return reconcileOwned(r)
 }
 
 // iptablesBin selects the right binary for the rule's address family.

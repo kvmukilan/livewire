@@ -63,18 +63,25 @@ type Flow struct {
 // tags packet directions, and records the handshake ISNs. Non-TCP records are ignored.
 func ExtractFlows(recs []*pcapio.Record) []*Flow {
 	type acc struct {
-		flow *Flow
+		flow      *Flow
+		clientSYN units.Seq
+		haveSYN   bool
+		fin       [2]bool
+		closed    bool
 	}
-	order := []flow.Key{}
+	order := []*Flow{}
 	byKey := map[flow.Key]*acc{}
 
 	// Pass 1: group by key and resolve orientation from the handshake.
 	parsed := make([]*wire.Packet, len(recs))
-	keys := make([]flow.Key, len(recs))
+	owners := make([]*Flow, len(recs))
 	dirs := make([]flow.Dir, len(recs))
 	valid := make([]bool, len(recs))
 
 	for i, rec := range recs {
+		if rec == nil {
+			continue
+		}
 		p, err := wire.Parse(rec.Data, rec.LinkType)
 		if err != nil || !p.IsTCP() {
 			continue
@@ -83,16 +90,25 @@ func ExtractFlows(recs []*pcapio.Record) []*Flow {
 		if !ok {
 			continue
 		}
-		parsed[i], keys[i], dirs[i], valid[i] = p, key, dir, true
-
 		a := byKey[key]
-		if a == nil {
+		syn, ack := p.HasFlags(wire.FlagSYN), p.HasFlags(wire.FlagACK)
+		newIncarnation := syn && !ack && a != nil && a.haveSYN && (p.Seq() != a.clientSYN || a.closed)
+		if a == nil || newIncarnation {
 			a = &acc{flow: &Flow{Key: key, Orient: flow.OrientUnknown}}
 			byKey[key] = a
-			order = append(order, key)
+			order = append(order, a.flow)
+		}
+		parsed[i], owners[i], dirs[i], valid[i] = p, a.flow, dir, true
+		if syn && !ack {
+			a.clientSYN, a.haveSYN = p.Seq(), true
+		}
+		if p.HasFlags(wire.FlagFIN) {
+			a.fin[int(dir)] = true
+		}
+		if p.HasFlags(wire.FlagRST) || (a.fin[0] && a.fin[1]) {
+			a.closed = true
 		}
 		f := a.flow
-		syn, ack := p.HasFlags(wire.FlagSYN), p.HasFlags(wire.FlagACK)
 		if f.Orient == flow.OrientUnknown {
 			switch {
 			case syn && !ack:
@@ -109,7 +125,7 @@ func ExtractFlows(recs []*pcapio.Record) []*Flow {
 		if !valid[i] {
 			continue
 		}
-		f := byKey[keys[i]].flow
+		f := owners[i]
 		if f.Orient == flow.OrientUnknown {
 			f.Orient = orientFromClientDir(dirs[i]) // first packet's sender = client
 		}
@@ -151,8 +167,7 @@ func ExtractFlows(recs []*pcapio.Record) []*Flow {
 	}
 
 	out := make([]*Flow, 0, len(order))
-	for _, k := range order {
-		f := byKey[k].flow
+	for _, f := range order {
 		f.Client, f.Server = endpoints(f.Key, f.Orient)
 		out = append(out, f)
 	}

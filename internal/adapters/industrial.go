@@ -12,6 +12,9 @@ type Modbus struct{}
 
 func (Modbus) Name() string { return "modbus-tcp" }
 func (Modbus) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
 	if c := portConfidence(s, 502); c > 0 {
 		return c
 	}
@@ -41,7 +44,16 @@ func (Modbus) Prepare(_ replay.Direction, msg replay.Message, state *replay.Runt
 }
 func (Modbus) Correlate(expected, actual replay.Message, _ *replay.RuntimeState) replay.Match {
 	id := fmt.Sprint(expected.Fields["transactionId"])
-	return replay.Match{Matched: id == fmt.Sprint(actual.Fields["transactionId"]), Key: id}
+	if id != fmt.Sprint(actual.Fields["transactionId"]) || fmt.Sprint(expected.Fields["unitId"]) != fmt.Sprint(actual.Fields["unitId"]) {
+		return replay.Match{Key: id, Reason: "transaction or unit differs"}
+	}
+	w, _ := expected.Fields["function"].(uint8)
+	g, _ := actual.Fields["function"].(uint8)
+	return replay.Match{Matched: w&0x7f == g&0x7f, Key: id, Reason: "function differs"}
+}
+
+func (Modbus) ResponseKey(m replay.Message) string {
+	return fmt.Sprint(m.Fields["transactionId"]) + ":" + fmt.Sprint(m.Fields["unitId"])
 }
 func (Modbus) Compare(expected, actual replay.Message, mode replay.VerifyMode) []replay.Difference {
 	w, _, ew := dissect.ParseMBAP(expected.Raw)
@@ -70,34 +82,101 @@ func (DNP3) Detect(s replay.Session) replay.Confidence {
 	return 0
 }
 func (DNP3) Decode(_ replay.Direction, data []byte) ([]replay.Message, error) {
-	frames, leftover, err := dissect.ParseDNP3Stream(data)
+	return decodeDNP3Messages(data)
+}
+func (DNP3) Prepare(dir replay.Direction, msg replay.Message, state *replay.RuntimeState) ([]byte, error) {
+	raw := substitute(msg.Raw, state)
+	frames, rest, err := dissect.ParseDNP3Stream(raw)
 	if err != nil {
 		return nil, err
 	}
-	if leftover != 0 {
-		return nil, fmt.Errorf("dnp3: %d trailing bytes", leftover)
+	if rest != 0 {
+		return nil, fmt.Errorf("dnp3: incomplete request frame")
 	}
-	out := make([]replay.Message, 0, len(frames))
+	var out []byte
+	next := map[string]uint8{}
 	for _, d := range frames {
-		raw := d.Encode()
-		out = append(out, replay.Message{Kind: "dnp3", Raw: raw, Fields: map[string]any{
-			"source": d.Source, "destination": d.Dest, "transportSeq": d.TransportSeq, "appSeq": d.AppSeq, "function": d.AppFunc,
-		}})
+		if state != nil && d.HasApp && d.TransportFIR && d.AppFunc == 0 && d.AppUNS {
+			// A confirmation travels in the reverse direction of the unsolicited
+			// response; other outstations may concurrently use the same sequence.
+			if seq := state.Learned[dnpUnsolicitedKey(d.Dest, d.Source, d.AppSeq)]; len(seq) == 1 {
+				d.AppSeq = seq[0]
+			}
+		}
+		if state != nil && dir == replay.ClientToServer && d.HasTransport {
+			key := dnpTxKey(d.Source, d.Dest)
+			seq, exists := next[key]
+			if !exists {
+				seq, exists = state.Protocol[key].(uint8)
+			}
+			if exists {
+				d.TransportSeq = seq
+			}
+			next[key] = (d.TransportSeq + 1) & 63
+		}
+		out = append(out, d.Encode()...)
 	}
 	return out, nil
 }
-func (DNP3) Prepare(_ replay.Direction, msg replay.Message, state *replay.RuntimeState) ([]byte, error) {
-	return substitute(msg.Raw, state), nil
-}
 func (DNP3) Correlate(expected, actual replay.Message, _ *replay.RuntimeState) replay.Match {
+	if w, ok := expected.Fields["application"].(dissect.DNP3Application); ok {
+		g, valid := actual.Fields["application"].(dissect.DNP3Application)
+		if !valid {
+			return replay.Match{Reason: "incomplete application message"}
+		}
+		if w.Source != g.Source || w.Dest != g.Dest {
+			return replay.Match{Reason: "link address differs"}
+		}
+		if w.LinkOnly != g.LinkOnly {
+			return replay.Match{Reason: "link/application phase differs"}
+		}
+		if w.Unsolicited() != g.Unsolicited() {
+			return replay.Match{Reason: "unsolicited response phase differs"}
+		}
+		if !w.Unsolicited() && w.Sequence() != g.Sequence() {
+			return replay.Match{Reason: "application sequence differs"}
+		}
+		return replay.Match{Matched: true, Key: fmt.Sprintf("%d:%d:%d", w.Source, w.Dest, w.Sequence())}
+	}
+	wf, _, we := dissect.ParseDNP3(expected.Raw)
+	gf, _, ge := dissect.ParseDNP3(actual.Raw)
+	if we != nil || ge != nil {
+		return replay.Match{Reason: "invalid DNP3 frame"}
+	}
+	if wf.Source != gf.Source || wf.Dest != gf.Dest {
+		return replay.Match{Reason: "link address differs"}
+	}
+	if wf.HasTransport != gf.HasTransport || wf.TransportFIR != gf.TransportFIR || wf.TransportFIN != gf.TransportFIN || wf.HasApp != gf.HasApp {
+		return replay.Match{Reason: "transport fragment boundary differs"}
+	}
+	if wf.AppUNS != gf.AppUNS {
+		return replay.Match{Reason: "unsolicited response phase differs"}
+	}
+	if wf.AppUNS && gf.AppUNS && wf.AppFunc == gf.AppFunc {
+		return replay.Match{Matched: true, Key: "unsolicited"}
+	}
 	w, g := fmt.Sprint(expected.Fields["appSeq"]), fmt.Sprint(actual.Fields["appSeq"])
 	return replay.Match{Matched: w == g, Key: w}
 }
 func (DNP3) Compare(expected, actual replay.Message, mode replay.VerifyMode) []replay.Difference {
+	if w, ok := expected.Fields["application"].(dissect.DNP3Application); ok {
+		g, valid := actual.Fields["application"].(dissect.DNP3Application)
+		if !valid {
+			return []replay.Difference{{Field: "application", Structural: true, Actual: "incomplete application message"}}
+		}
+		return compareDNP3Applications(w, g, mode)
+	}
 	w, _, ew := dissect.ParseDNP3(expected.Raw)
 	g, _, eg := dissect.ParseDNP3(actual.Raw)
 	if ew != nil || eg != nil {
 		return rawCompare(expected, actual, mode)
+	}
+	if w.AppUNS && g.AppUNS && w.TransportFIR && g.TransportFIR {
+		g.AppSeq = w.AppSeq
+		g.TransportSeq = w.TransportSeq
+		normalized := g.Encode()
+		g, _, _ = dissect.ParseDNP3(normalized)
+		actual.Raw = normalized
 	}
 	var out []replay.Difference
 	for _, d := range dissect.CompareDNP3(w, g) {

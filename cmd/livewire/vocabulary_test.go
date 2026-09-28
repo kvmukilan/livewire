@@ -280,7 +280,7 @@ func TestBinarySurface(t *testing.T) {
 				t.Errorf("front door should not list the advanced command %q:\n%s", name, out)
 			}
 		}
-		for _, topic := range []string{"help examples", "help troubleshoot", "help protocols", "help diagnose", "help commands", "help <command>"} {
+		for _, topic := range []string{"help examples", "help troubleshoot", "help protocols", "help diagnose", "help reliability", "help commands", "help <command>"} {
 			if !strings.Contains(out, topic) {
 				t.Errorf("help hub is missing topic %q:\n%s", topic, out)
 			}
@@ -309,6 +309,7 @@ func TestBinarySurface(t *testing.T) {
 			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
 			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "-wire"}},
 			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
+			{topic: "reliability", want: []string{"-mode application", "-mode transport", "-strict-exit", "-run-timeout", "-resume", "cannot restore", "fault recurred"}},
 			{topic: "commands", want: []string{"Primary commands:", "Advanced commands:", "tls-replay"}},
 		}
 		for _, tc := range cases {

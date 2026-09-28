@@ -48,3 +48,20 @@ func TestDNP3SecureAuthDetection(t *testing.T) {
 		t.Fatal("DNP3-SA flow should be non-recoverable with a reason")
 	}
 }
+
+func TestDNP3ContinuationPreservesConservativeSecureAuthGuard(t *testing.T) {
+	// A transport continuation has no application header. Retain the
+	// preexisting conservative g120 pattern guard without claiming that this
+	// arbitrary continuation offset identifies a fully decoded SA object.
+	raw := (DNP3{Control: 0x44, Dest: 4, Source: 1, UserData: []byte{0x81, 0x11, 0x22, 120, 1, 0}}).Encode()
+	d, _, err := ParseDNP3(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.HasApp {
+		t.Fatal("continuation bytes were interpreted as an application header")
+	}
+	if !d.UsesSecureAuth() {
+		t.Fatal("FIR parsing change removed the conservative g120 blocker")
+	}
+}

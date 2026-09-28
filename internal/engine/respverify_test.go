@@ -61,8 +61,8 @@ func TestVerifyValueDriftLenient(t *testing.T) {
 	if !out.Succeeded() {
 		t.Fatalf("value drift should not stop a same-length replay: phase=%s reason=%q", out.Phase, out.Reason)
 	}
-	if !out.RepliesMatched() {
-		t.Fatalf("value drift must not count as a structural divergence (got %d)", out.ReplyMismatches)
+	if out.RepliesMatched() || out.ReplyMismatches != 0 {
+		t.Fatalf("value drift must be reported as different without aborting (structural=%d)", out.ReplyMismatches)
 	}
 	if len(out.Mismatches) == 0 {
 		t.Fatal("lenient mode should still report the value drift")

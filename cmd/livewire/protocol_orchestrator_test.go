@@ -242,25 +242,35 @@ func TestUnknownOpaqueSessionDoesNotFallbackToTCPOrWire(t *testing.T) {
 }
 
 func TestDNP3SecureAuthenticationBlocksBeforeInterfaceSelection(t *testing.T) {
-	frame := dissect.DNP3{
-		Control: 0x44, Dest: 4, Source: 1,
-		HasTransport: true, TransportFIN: true, TransportFIR: true, TransportSeq: 1,
-		HasApp: true, AppControl: 0xc1, AppFIN: true, AppFIR: true, AppSeq: 1, AppFunc: 0x83,
-		UserData: []byte{0xc1, 0xc1, 0x83, 120, 1, 0},
-	}.Encode()
-	path := writeProtocolStub(t, t.TempDir(), "dnp3-sa", 20000, frame)
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1")
-	if err == nil {
-		t.Fatalf("DNP3 Secure Authentication unexpectedly ran:\n%s", out)
-	}
-	for _, want := range []string{"DNP3 Secure Authentication", "no safely executable session", "no packets were sent"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("DNP3 blocker missing %q:\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "Which network connection") {
-		t.Errorf("blocked security should stop before interface selection:\n%s", out)
+	for _, tc := range []struct {
+		name  string
+		first bool
+	}{
+		{"first segment", true},
+		{"conservative continuation pattern", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := dissect.DNP3{
+				Control: 0x44, Dest: 4, Source: 1,
+				HasTransport: true, TransportFIN: true, TransportFIR: tc.first, TransportSeq: 1,
+				HasApp: tc.first, AppControl: 0xc1, AppFIN: true, AppFIR: true, AppSeq: 1, AppFunc: 0x83,
+				UserData: []byte{0xc1, 0xc1, 0x83, 120, 1, 0},
+			}.Encode()
+			path := writeProtocolStub(t, t.TempDir(), "dnp3-sa", 20000, frame)
+			out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1")
+			if err == nil {
+				t.Fatalf("DNP3 Secure Authentication unexpectedly ran:\n%s", out)
+			}
+			for _, want := range []string{"DNP3 Secure Authentication", "no safely executable session", "no packets were sent"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("DNP3 blocker missing %q:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "Which network connection") {
+				t.Errorf("blocked security should stop before interface selection:\n%s", out)
+			}
+		})
 	}
 }
 

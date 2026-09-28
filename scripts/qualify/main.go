@@ -6,7 +6,7 @@
 //	go run ./scripts/qualify benchmark -output coverage/benchmark-new
 //	go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
 //	go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -t 192.168.1.50
-//	go run ./scripts/qualify validate qualification/stable.json -version 0.9.0 -artifacts dist/v0.9.0
+//	go run ./scripts/qualify validate -version 1.0.0 -artifacts dist/v1.0.0 qualification/stable.json
 //
 // No subcommand sends traffic by itself. record and soak execute only the argv
 // after --, on the lab host and target the operator selected.
@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/qualification"
@@ -70,7 +71,13 @@ func run(args []string) (int, error) {
 		fs := flag.NewFlagSet("validate", flag.ContinueOnError)
 		version := fs.String("version", "", "release version being qualified (required)")
 		artifacts := fs.String("artifacts", "", "release directory holding the binaries or their SHA256SUMS")
-		if err := fs.Parse(args[1:]); err != nil {
+		parseArgs := args[1:]
+		// Preserve the documented positional-first form as well as normal Go
+		// flag order. Only the manifest is positional for this subcommand.
+		if len(parseArgs) > 1 && !strings.HasPrefix(parseArgs[0], "-") {
+			parseArgs = append(append([]string(nil), parseArgs[1:]...), parseArgs[0])
+		}
+		if err := fs.Parse(parseArgs); err != nil {
 			return 2, err
 		}
 		if fs.NArg() != 1 || *version == "" {

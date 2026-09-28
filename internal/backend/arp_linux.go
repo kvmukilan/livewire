@@ -49,7 +49,7 @@ func NextHop(ifname string, target netip.Addr) (netip.Addr, error) {
 // table first and issuing an ARP request if the entry is missing (IPv4 only;
 // IPv6 uses an active Neighbor Solicitation/Advertisement exchange.
 func ResolveMAC(ifname string, ip netip.Addr) (net.HardwareAddr, error) {
-	if mac, ok := neighLookup(ip); ok {
+	if mac, ok := neighLookupOnInterface(ifname, ip); ok {
 		return mac, nil
 	}
 	if ip.Is6() {
@@ -78,18 +78,23 @@ func netipPrefix(ipn *net.IPNet) (netip.Prefix, bool) {
 
 // neighLookup reads /proc/net/arp for a cached MAC. Returns ok=false if the
 // address is absent or the entry is incomplete (00:00:00:00:00:00).
-func neighLookup(ip netip.Addr) (net.HardwareAddr, bool) {
+func neighLookupOnInterface(ifname string, ip netip.Addr) (net.HardwareAddr, bool) {
 	data, err := os.ReadFile("/proc/net/arp")
 	if err != nil {
 		return nil, false
 	}
+	return parseNeighborTable(data, ifname, ip)
+}
+
+func parseNeighborTable(data []byte, ifname string, ip netip.Addr) (net.HardwareAddr, bool) {
 	lines := strings.Split(string(data), "\n")
 	for _, ln := range lines[1:] { // skip header
 		f := strings.Fields(ln)
-		if len(f) < 4 {
+		if len(f) < 6 || f[5] != ifname {
 			continue
 		}
-		if f[0] == ip.String() && f[3] != "00:00:00:00:00:00" {
+		flags, flagsErr := strconv.ParseUint(f[2], 0, 32)
+		if flagsErr == nil && flags&2 != 0 && f[0] == ip.String() && f[3] != "00:00:00:00:00:00" {
 			mac, err := net.ParseMAC(f[3])
 			if err == nil {
 				return mac, true
@@ -149,24 +154,11 @@ func arpRequest(ifname string, target netip.Addr, timeout time.Duration) (net.Ha
 	copy(sll.Addr[:6], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
 
 	frame := buildARPRequest(ifi.HardwareAddr, srcIP, target.As4())
-	if err := syscall.Sendto(fd, frame, 0, &sll); err != nil {
-		return nil, fmt.Errorf("backend: arp sendto: %w", err)
+	mac, err := resolveNeighborSocket(fd, &sll, frame, timeout, func(frame []byte) (net.HardwareAddr, bool) { return parseARPReply(frame, target.As4()) })
+	if err != nil {
+		return nil, fmt.Errorf("backend: ARP resolving %s on %s: %w", target, ifname, err)
 	}
-
-	tv := syscall.NsecToTimeval(timeout.Nanoseconds())
-	_ = syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv)
-	buf := make([]byte, 128)
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		n, _, err := syscall.Recvfrom(fd, buf, 0)
-		if err != nil {
-			return nil, fmt.Errorf("backend: arp recv: %w", err)
-		}
-		if mac, ok := parseARPReply(buf[:n], target.As4()); ok {
-			return mac, nil
-		}
-	}
-	return nil, fmt.Errorf("backend: ARP timed out resolving %s on %s", target, ifname)
+	return mac, nil
 }
 
 // etherARP is the ARP ethertype; declared here to avoid depending on wire's

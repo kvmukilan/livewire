@@ -124,7 +124,7 @@ func TestRunContextVerificationOffNeverClaimsMatch(t *testing.T) {
 		wantMatch  bool
 	}{
 		{name: "off", verify: engine.VerifyOff},
-		{name: "strict-clean", verify: engine.VerifyStrict, wantVerify: true, wantMatch: true},
+		{name: "strict-without-response-evidence", verify: engine.VerifyStrict},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := lifecycleConfig()

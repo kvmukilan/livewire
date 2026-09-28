@@ -2,11 +2,11 @@
 
 ## Supported version
 
-Security fixes target the current development/release-candidate line (0.9).
-0.8 remains the latest stable release until 0.9 passes field qualification;
-it is not a substitute for the fixes in the candidate. Older release lines,
-including 0.7, do not receive routine backports. Upgrade to the qualified stable
-0.9 release when available. See docs/PRODUCTION.md for support and qualification limits.
+Security fixes target the 1.x release line. Older release lines do not receive
+routine backports. Version 1 qualification uses controlled software peers and
+virtual networks; it does not assert physical NIC/device qualification.
+See [the qualification scope](docs/V1_QUALIFICATION.md) and
+[operator guidance](docs/PRODUCTION.md) for the supported boundaries.
 
 ## Reporting a vulnerability
 
@@ -78,24 +78,26 @@ protected channel.
 
 ## Release verification
 
-A release candidate is not cleared for production-adjacent use until it passes:
+Release publication requires:
 
 - module verification, unit tests, vet, and the race detector;
 - Go 1.26.7 (the release builder) and Go 1.27.x;
 - Linux amd64/arm64 and Windows amd64 builds;
 - `govulncheck`, `staticcheck`, high-confidence `gosec`, race, shuffled/repeated,
   fuzz-smoke, package coverage, Windows-runtime, and cross-build gates;
+- the qualification profile's source-bound and binary-bound execution evidence;
 - byte-identical artifact regeneration, CycloneDX validation, ZIP smoke,
   SHA-256 verification, and GitHub provenance.
 
-Physical NIC/device replay, a two-interface physical DUT run, native Linux
-arm64 execution, and Authenticode publisher trust are disclosed verification
-boundaries for this release candidate. Browser visual/keyboard QA and physical
-NIC/DUT qualification remain required before promoting 0.9 to a stable release.
+Version 1 uses the software-lab profile with two-hour protocol matrices through
+both replay commands. Physical NIC/device replay, a physical DUT topology,
+native Linux arm64 execution, browser visual/keyboard QA, the human pilot and
+Authenticode publisher trust remain disclosed boundaries. Field qualification
+uses the separate physical profile; software evidence cannot satisfy it.
 
 ## Windows release trust
 
-The 0.9 Windows executables and ZIPs are not Authenticode-signed. Download only
+The version 1 Windows executables and ZIPs are not Authenticode-signed. Download only
 from the official GitHub release, compare the file against `SHA256SUMS`, and
 verify the GitHub artifact attestation before allowing an unknown publisher.
 The setup helper separately pins the official WinDivert v2.2.2 archive by

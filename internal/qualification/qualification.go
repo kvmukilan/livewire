@@ -23,13 +23,19 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kvmukilan/livewire/internal/buildinfo"
 )
 
 // Scenarios are the field checks every supported platform must pass three
 // times in a row before a stable release.
 var Scenarios = []string{"capture", "application", "stateful-tcp", "udp", "icmp", "wire",
 	"two-interface-dut", "cancellation", "driver-error", "interface-removal",
-	"target-disconnect", "invalid-credentials", "disk-full", "report-collision"}
+	"target-disconnect", "invalid-credentials", "disk-full", "report-collision",
+	"reproduce-live-equivalence", "live-state-verify-off", "tls-live-state", "changed-response-body",
+	"split-coalesced-frames", "out-of-order-duplicates", "unsolicited-traffic", "malformed-frames",
+	"crash-before-send", "crash-after-send", "crash-after-response", "crash-during-checkpoint",
+	"uncertain-write-recovery", "secret-free-journal", "corrupt-journal", "concurrent-resume", "changed-resume-input", "failed-cleanup"}
 
 // BrowserChecks are the dashboard checks a human performs in a real browser.
 var BrowserChecks = []string{"preview", "changed-inputs", "start-stop", "results", "downloads",
@@ -83,6 +89,9 @@ type SoakRecord struct {
 
 // Platform is the qualification record for one release target.
 type Platform struct {
+	// Combinations names exactly the protocol/version/device/firmware exercised.
+	Combinations []string                 `json:"protocolDeviceCombinations"`
+	CommandSoaks map[string]SoakRecord    `json:"commandSoaks"`
 	OS           string                   `json:"os"`
 	Driver       string                   `json:"driver"`
 	NIC          string                   `json:"nic"`
@@ -123,6 +132,8 @@ type Pilot struct {
 
 // Manifest is the stable-release qualification document.
 type Manifest struct {
+	Profile          string              `json:"profile,omitempty"`
+	SoftwareLab      *SoftwareLab        `json:"softwareLab,omitempty"`
 	SchemaVersion    int                 `json:"schemaVersion"`
 	Version          string              `json:"version"`
 	SourceDigest     string              `json:"sourceDigest"`
@@ -165,7 +176,7 @@ func FindRoot(dir string) (string, error) {
 	}
 }
 
-var sourceSuffixes = map[string]bool{".go": true, ".html": true, ".cjs": true, ".ps1": true}
+var sourceSuffixes = map[string]bool{".go": true, ".html": true, ".cjs": true, ".ps1": true, ".py": true, ".sh": true}
 
 // SourceDigest binds evidence to the executable source and the qualification
 // tooling. It scans actual files rather than the Git index so new,
@@ -217,7 +228,7 @@ func SourceDigest(root string) (string, error) {
 // blocking finding, so an untouched template can never validate.
 func Template(sourceDigest string) Manifest {
 	m := Manifest{
-		SchemaVersion: 1, Version: "0.9.0", SourceDigest: sourceDigest,
+		SchemaVersion: 1, Version: buildinfo.Version, SourceDigest: sourceDigest,
 		BlockingFindings: []string{"Qualification has not been completed"},
 		Platforms:        map[string]Platform{},
 		Browser:          Browser{Checks: map[string]bool{}, Evidence: []Evidence{}},
@@ -226,6 +237,8 @@ func Template(sourceDigest string) Manifest {
 	}
 	for _, platform := range Platforms {
 		p := Platform{Scenarios: map[string][]ScenarioRun{}, Soak: SoakRecord{Evidence: []Evidence{}}}
+		p.CommandSoaks = map[string]SoakRecord{"reproduce": {}, "live": {}}
+		p.Combinations = []string{}
 		for _, s := range Scenarios {
 			p.Scenarios[s] = []ScenarioRun{}
 		}
@@ -256,6 +269,12 @@ func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
 // Validate lists every reason the manifest does not qualify the release. An
 // empty result means the stable release may proceed.
 func Validate(doc Manifest, o ValidateOptions) []string {
+	if doc.Profile == SoftwareLabProfile {
+		return validateSoftwareLab(doc, o)
+	}
+	if doc.Profile != "" && doc.Profile != "physical" {
+		return []string{"unsupported qualification profile"}
+	}
 	var errs []string
 	need := func(ok bool, message string) {
 		if !ok {
@@ -297,6 +316,12 @@ func Validate(doc Manifest, o ValidateOptions) []string {
 	need(len(doc.BlockingFindings) == 0, "unresolved blocking findings")
 	for _, platform := range Platforms {
 		p := doc.Platforms[platform]
+		need(len(p.Combinations) > 0, platform+": tested protocol/version/device combinations missing")
+		for _, command := range []string{"reproduce", "live"} {
+			soak := p.CommandSoaks[command]
+			need(finite(soak.Seconds) && soak.Seconds >= SoakSeconds && soak.Passed && soak.CleanupVerified, platform+"/"+command+": two-hour command soak missing or failed")
+			evidence(soak.Evidence, platform+"/"+command+"/soak")
+		}
 		for _, field := range []struct{ name, value string }{
 			{"os", p.OS}, {"driver", p.Driver}, {"nic", p.NIC}, {"dut", p.DUT}, {"firmware", p.Firmware}, {"binarySha256", p.BinarySHA256},
 		} {

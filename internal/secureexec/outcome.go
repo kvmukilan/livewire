@@ -18,9 +18,17 @@ func (o *Outcome) Finalize(ctx context.Context, err error) {
 	o.Verified = o.Verified && o.Responses > 0
 	o.Matched = o.Matched && o.Verified && o.Completed
 	o.Status = replay.ResultStatus(o.Completed, o.Verified, o.Matched, false, err)
+	o.ReasonCode = replay.FailureReason(o.Completed, o.Verified, o.Matched, err)
+	if o.Observed == 0 {
+		o.Observed = o.Responses
+	}
+	if o.Scope == "" {
+		o.Scope = "application responses"
+	}
 }
 
 type Outcome struct {
+	replay.VerificationEvidence
 	Status              string                     `json:"status,omitempty"`
 	Completed           bool                       `json:"completed"`
 	Verified            bool                       `json:"verified"`

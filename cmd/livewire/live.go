@@ -13,9 +13,11 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/evidence"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/tui"
 	"golang.org/x/term"
 )
@@ -47,8 +49,10 @@ func cmdLive(args []string) error {
 	return cmdReproduce(args)
 }
 
-func cmdLiveLegacy(args []string) error {
+func cmdLiveLegacy(args []string) (retErr error) {
 	fs := flag.NewFlagSet("live", flag.ContinueOnError)
+	var execution executionFlags
+	execution.register(fs)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file (required)")
 	dryRun := fs.Bool("dry-run", true, "simulate replay with no NIC")
@@ -81,6 +85,7 @@ func cmdLiveLegacy(args []string) error {
 	rawL4 := fs.Bool("raw-l4", false, "replay the client's frames exactly as captured (retransmits, RSTs, original acks) instead of driving a clean state machine")
 	sequential := fs.Bool("sequential", false, "with -all, replay flows one at a time instead of concurrently")
 	report := fs.String("report", "", "write a JSON replay report (per-flow result, reply divergences, and likely-cause diagnosis) to this file")
+	actualOut := fs.String("actual-out", "", "actual packet evidence output for on-wire replay")
 	allFlagsOn := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage:")
@@ -94,6 +99,12 @@ func cmdLiveLegacy(args []string) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if err := execution.validate(); err != nil {
+		return err
+	}
+	if execution.scenarioPath != "" {
+		return fmt.Errorf("-scenario requires application replay; use live <capture> -mode application")
 	}
 	if handleAllFlags(fs, *allFlagsOn, liveAliases) {
 		return errAllFlags
@@ -124,18 +135,19 @@ func cmdLiveLegacy(args []string) error {
 		return fmt.Errorf("-gap must not exceed 10m")
 	}
 
-	in, err := openInput(inPath)
+	capture, captureDigest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
-	var recs []*pcapio.Record
-	if err := in.eachRecord(func(rec *pcapio.Record) error {
-		// Copy: parsing/rewriting aliases Data and we keep every record.
-		cp := *rec
-		recs = append(recs, &cp)
-		return nil
-	}); err != nil {
+	recs := capture.Records
+	if err := execution.openState(captureDigest, map[string]any{"legacy": true, "target": target, "interface": iface, "flow": *flowSel, "all": *allFlows, "verify": *verify, "adaptive": *adaptive, "pace": *pace, "rawL4": *rawL4, "seed": *seed, "times": times, "gap": *gap, "concurrency": execution.concurrency, "guardDisabled": *noGuard}, !realLive); err != nil {
 		return err
+	}
+	if execution.journal != nil {
+		defer func() { retErr = errors.Join(retErr, execution.journal.Close()) }()
+	}
+	if execution.resumeDir != "" && !realLive {
+		return nil
 	}
 
 	flows := engine.ExtractFlows(recs)
@@ -154,9 +166,26 @@ func cmdLiveLegacy(args []string) error {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		ctx, cancel := execution.context(ctx)
+		defer cancel()
+		actual, err := resolveOutputPath(*actualOut, strings.TrimSuffix(inPath, ".pcap")+".actual.pcap", "-actual-out")
+		if err != nil {
+			return err
+		}
+		if *report != "" && sameOutputPath(actual, *report) {
+			return fmt.Errorf("report and actual packet evidence paths must differ")
+		}
+		stream := evidence.New(actual)
+		stream.SetJournal(execution.journal)
+		defer stream.Close()
+		exec := replay.Execution(ctx)
+		exec.Evidence = stream.Record
+		ctx = replay.WithExecution(ctx, exec)
 		opts := liveOpts{
-			ctx:    ctx,
-			target: target, iface: iface, seed: *seed, noGuard: *noGuard,
+			evidence: stream, actualPath: actual,
+			strictExit: execution.strictExit,
+			ctx:        ctx,
+			target:     target, iface: iface, seed: *seed, noGuard: *noGuard,
 			verbose: *verbose, useTUI: *useTUI, verify: vmode, adaptive: *adaptive,
 			pace: *pace, rawL4: *rawL4, sequential: *sequential, report: *report,
 		}
@@ -247,7 +276,7 @@ func cmdLiveLegacy(args []string) error {
 	}
 
 	if outPath != "" && len(allFrames) > 0 {
-		if err := writeFrames(outPath, allFrames, in.nanos); err != nil {
+		if err := writeFrames(outPath, allFrames, capture.Nanosecond); err != nil {
 			return err
 		}
 		fmt.Printf("wrote %d rewritten frames -> %s (open in Wireshark to verify seq/ack)\n", len(allFrames), outPath)

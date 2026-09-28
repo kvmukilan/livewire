@@ -1,136 +1,76 @@
-# Livewire 0.9.0-rc.2 release audit
+# Livewire 1.0.0 release audit
 
-Date: 2026-09-08. Disposition: **release candidate for validation**, not stable.
+Version 1 addresses stateful PCAP replay and makes observed outcomes explicit.
+Application replay creates fresh TCP/TLS connections, learns supported live
+protocol state, and compares checked responses. Captured transport and wire
+replay retain their distinct fidelity and verification limits.
 
-The 0.8 audit remains available in `dist/v0.8.0/RELEASE_AUDIT.md` and the
-v0.8.0 tag. Its historical test results do not qualify the current source.
+## Qualification scope
 
-## What worked in 0.7, what regressed in 0.8
+The release uses the `software-lab` profile documented in
+[V1_QUALIFICATION.md](V1_QUALIFICATION.md). It requires two-hour runs for every
+supported application case on Windows and Linux, and every packet case on
+Linux, through both `live` and `reproduce`. Independent peers and packet captures
+check actual CLI executions; the release gate reconciles run summaries with
+hashed execution transcripts and retained artifacts. Tested executable hashes
+must match the packaged binaries and all records bind to the release source.
 
-This review compared the published Windows executables, tagged source, current
-CLI/dashboard behavior, and synthetic loopback captures. No individual reviewer
-comments or customer captures were supplied, so the findings establish concrete
-regressions; they do not explain every reported bad review.
+Physical NICs and DUTs were unavailable. The software profile does not assert
+physical, human-pilot, native Linux arm64, or visual-browser qualification.
+The separate physical profile retains those applicable field requirements.
 
-| Area | 0.7 strength / behavior | 0.8 problem | 0.9 response |
-|---|---|---|---|
-| Valid binary HTTP | gzip response replay completes and matches | Entropy heuristic overrides a valid HTTP adapter and blocks before sending | Decode recognized application data before treating entropy as unknown security |
-| Everyday help | Capture, check, reproduce, interfaces, and dashboard are visible | Front door prioritizes two overlapping replay commands; discovery needs more steps | Restore the five everyday commands and keep advanced aliases |
-| Mixed captures | Planner exposes HTTP and raw background lanes | Whole-capture secure routing can reject a useful exchange with no built-in selection | Explicit session selection; excluded packets remain in the accounting and report |
-| Readiness | Adapter plan is visible | The gzip fixture simultaneously says BLOCKED, 100% replay confidence, and semantic HTTP | One shared readiness decision and capture-quality wording |
-| Operator control | Existing fidelity profiles and narrow commands are available | Automatic classification decides execution before the operator can express intent clearly | Application / transport / wire modes, automatic compatibility mode, offline dry-run |
-| Dashboard | Existing local dashboard | Stale build label, limited secure workflow, stale previews and repeated-start risk | Current build version, secure inputs, shared executor, invalidation and duplicate-start tests |
+## Repairs and regression evidence
 
-0.8 also improved successful help exit behavior, secure input guidance, pinned
-SSH identity, artifact collision protection, redaction, and release gates.
-Those protections are retained. Returning wholesale to 0.7 would lose useful work.
+- The packet TCP sender tracks outstanding sequence ranges, cumulative ACKs,
+  live MSS and windows, bounded retries/probes, and FIN completion. The receiver
+  handles out-of-order data, duplicate overlaps, sequence wrap and queued FIN.
+- Application and TLS replay keep reading during captured pauses. MQTT 3.1.1/5
+  maintains keepalives, separate identifier namespaces, aliases and negotiated
+  limits. DNP3 handles changed transport/application fragmentation and live
+  confirmations; unsupported authentication and object layouts stop safely.
+- FTP data protection follows accepted replies per transfer. Active captures
+  preserve TLS roles. Refused control/data protection stops before credentials
+  or uploads; encrypted capture data is decrypted before fresh retermination.
+- Response faults have a separate explicit expectation and outcome. Setup,
+  cancellation, journal, and cleanup failures cannot masquerade as a reproduced
+  reset or timeout. Resume never restores a socket or credentials.
+- Linux neighbor discovery retries within a fixed budget and respects the
+  selected interface. Independent virtual-network tests exercise loss, delay,
+  reordering, UDP, ICMP, stateful/captured TCP, and wire replay.
 
-The design decision is **automatic inspection with explicit execution intent**.
-Application mode requires an application driver. Transport mode accepts unknown
-binary payloads without claiming application equivalence, while recognized TLS
-and SSH require fresh secure sessions or explicit wire mode. Wire mode has no
-response-equivalence claim. Script invocations omitting mode retain compatibility.
+## Automated checks
 
-## Reproduced published-binary comparison
+Native Windows and Linux Go 1.26.7 checks passed build, vet, unit tests,
+JavaScript dashboard-state checks, vulnerability/static analysis, race tests,
+shuffled/repeated tests, seven fuzz targets at 200,000 iterations each, coverage,
+and the maintained corpus. Temporary failures from concurrent development
+edits were retained; affected checks passed after the source was frozen.
 
-`go run ./scripts/task compare-releases` generates checksummed Ethernet/IP/TCP PCAPs, starts
-only localhost HTTP servers, and compares published 0.7/0.8 with the current EXE.
-The mixed-capture case is inspected offline in old releases; no raw interface is
-opened by the comparison. The script is now required in Windows CI and release CI.
+| Statement coverage | Windows | Linux | Required |
+|---|---:|---:|---:|
+| Aggregate | 67.1% | 66.8% | 60% |
+| PCAP I/O | 85.3% | 85.3% | 85% |
+| Dashboard backend | 62.6% | 62.6% | 60% |
+| CLI | 46.7% | 46.8% | 30% |
+| Packet backend | 30.0% | 31.0% | 20% |
 
-| Case | 0.7 | 0.8 | 0.9 candidate |
-|---|---|---|---|
-| Same gzip HTTP exchange | exit 0, one HTTP request | exit 1, zero requests, opaque blocker | exit 0, one request |
-| HTTP plus ARP, select HTTP and preview | no new session-selection workflow | no new session-selection workflow | exit 0, background explicitly excluded, no send |
-| HTTP plus ARP, select HTTP and execute | not exercised on wire | not exercised on wire | exit 0, one HTTP request, excluded packet reported |
-| No-argument help | five everyday commands, exit 2 | two replay entry points, exit 0 | five everyday commands, exit 0 |
+Loader checks at 10, 100 and 512 MiB and 1,000,000 records passed on both hosts;
+513 MiB and 1,000,001-record inputs were rejected at the documented limits.
+Comparison with checksum-verified published 0.7.0 and 0.8.0 executables passed
+its gzip HTTP, selected-exchange and mixed-capture expectations.
 
-Run from the repository after building `livewire.exe`:
+No connected browser was available. Dashboard API and JavaScript state tests
+passed; visual and keyboard QA are not claimed.
 
-```powershell
-go run ./scripts/task compare-releases -output coverage/new-comparison
-```
+## Publication gates
 
-The output directory must be new. It contains captures, command transcripts,
-reports, exit codes, request counts, and transcript digests.
+The source is frozen and two-hour qualification is in progress. Publication
+requires the completed `qualification/stable.json` manifest and its evidence
+to validate, plus successful CI on the final source. The release workflow tests
+Go 1.26.7 and 1.27.x, rebuilds all three targets with Go 1.26.7, proves byte-identical
+checksums and SBOM, validates the Windows ZIP, attests assets, and verifies
+published downloads. Its actual completed status is the publication evidence.
 
-## Additional fixes found by release review
-
-- `golang.org/x/crypto` v0.55.0 had two reachable SSH deadlock vulnerabilities:
-  [GO-2026-6354](https://pkg.go.dev/vuln/GO-2026-6354) and
-  [GO-2026-6355](https://pkg.go.dev/vuln/GO-2026-6355). Upgrade to v0.56.0 removes
-  the reachable findings. Its Go minimum is 1.26; CI tests 1.26.7 and 1.27.x with
-  automatic toolchain switching disabled so the compatibility labels are honest.
-- Secure timing previews now reject unsupported execution before input collection.
-- Truncated FTP data lanes cannot become runnable when grouped with control traffic.
-- Partially specified SSH expectations and TLS with no compared responses cannot
-  report an overall verified match.
-- Dashboard plans and reports hash the same loaded byte stream. An integration
-  test replaces a capture during HTTP replay and verifies the report still names
-  the original input digest.
-- Removed obsolete private planning helpers detected by staticcheck.
-- The Windows package now includes `WORKFLOW.md`; release publication explicitly
-  marks `-rc.N` tags as prereleases and does not promote them to Latest.
-
-## Candidate packaging verification
-
-The rc.1 publication gate stopped on differing executable hashes. Normalizing
-only the embedded dashboard from CRLF to Git's LF bytes reproduced all three
-CI binary hashes exactly. The builder now canonicalizes that embedded input and
-all packaged text. The failed rc.1 tag is preserved; rc.2 supersedes it.
-
-A five-second fuzz run also stopped on the known Go deadline pattern, with no
-failing input or replay assertion. The unchanged trace target passed 200,000
-iterations and a separate ten-second run. A full release-quality rerun passed.
-Both workflows now require 200,000 iterations per target and a two-minute
-watchdog; any target failure still blocks publication. See
-[Go issue 75804](https://github.com/golang/go/issues/75804).
-
-## Local verification
-
-These are automated Windows-host results on the candidate source, not physical
-hardware or visual browser qualification.
-
-| Gate | Result |
-|---|---|
-| Go 1.26.7 and Go 1.27.0 | Complete tests passed; module verification and vet passed |
-| Concurrency | Complete race tests passed on 1.26.7 |
-| Repeatability | All packages shuffled three times; webui shuffled twenty times, passed |
-| Fuzz smoke | All seven original five-second runs passed; trace additionally passed 200,000 iterations and ten seconds. Final CI requires 200,000 per target |
-| Static checks | staticcheck v0.7.0 and actionlint v1.7.12 passed |
-| Security | govulncheck v1.7.0: zero reachable findings; one module-level finding outside called code. gosec v2.28.0 high/high: zero issues |
-| Coverage, Go 1.26.7 | Aggregate 60.8% (floor 60); pcapio 85.3% (85); webui 62.5% (60); CLI 39.6% (30); backend 30.1% (20) |
-| Planner coverage | 87.9%; explicit intent, exclusions, TLS/SSH/FTPS requirements, truncation and lab capabilities |
-| Dashboard state | Five shipped-JavaScript state tests passed; API and loopback integration tests passed |
-| End-to-end regressions | Published-binary gzip comparison, selected exchange, TLS verified peer, FTP coordination, SSH expectation outcomes, capture replacement |
-
-Artifact hashes and final publication evidence are intentionally outside this
-input document: embedding the final hash inside the release would be circular.
-The tag workflow rebuilds Linux amd64/arm64 and Windows amd64, byte-compares the
-committed artifacts, validates the ZIP and SBOM, attests binaries/checksums, and
-re-downloads published assets for verification. Its actual run status is the
-source of truth for those publication gates.
-
-## Stable-promotion criteria
-
-The following remain open and prevent treating this candidate as stable:
-
-1. Browser visual and keyboard checks at desktop and narrow widths: select a
-   capture, inspect, select sessions, change intent, provide TLS/SSH inputs,
-   start, stop, inspect differences, download evidence. No browser was connected
-   in this environment; DOM-state tests are not visual QA.
-2. Controlled Windows and Linux physical NIC tests for capture, stateful TCP,
-   UDP/ICMP, raw wire mode, cancellation, and driver/interface error recovery.
-3. A physical two-interface DUT run using transport/wire intent and topology.
-4. A small network/QA-engineer pilot against the actual workflows that produced
-   the 0.8 complaints. Record task completion, time to first successful replay,
-   unnecessary blockers, mode confusion, and usefulness of the resulting report.
-
-Native Linux arm64 execution and Windows Authenticode signing also remain
-unverified/unavailable. The Windows archive includes the unsigned-build notice.
-HTTP/2 and HTTP/3 semantic adapters and arbitrary mixed secure exchanges remain
-outside this candidate's supported scope. Loopback, simulator, parser, and
-cross-build checks do not prove those capabilities.
-
-Promote only after these acceptance checks pass. Keep new protocol expansion
-behind recovery of predictable replay, clear scope, and useful diagnostic evidence.
+Windows artifacts are not Authenticode-signed. Linux arm64 is cross-built.
+For historical comparisons, see the
+[0.9.0-rc.2 audit](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/history/RELEASE_AUDIT_0.9.0-rc.2.md).

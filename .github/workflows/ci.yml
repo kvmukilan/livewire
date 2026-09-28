@@ -11,8 +11,8 @@ env:
   RELEASE_GO: "1.26.7"
   GOTOOLCHAIN: local
 
-# Every gate below is a target of scripts/task, so `go run ./scripts/task all`
-# reproduces this pipeline locally with the same pinned tool versions.
+# Go gates are targets of scripts/task, with the same pinned tool versions.
+# The optional Linux packet lab also has Python standard-library integrity tests.
 jobs:
   compatibility:
     name: Go ${{ matrix.go }} compatibility
@@ -57,6 +57,7 @@ jobs:
           go-version: ${{ env.RELEASE_GO }}
           cache: true
       - run: go run ./scripts/task lint shuffle fuzz cover
+      - run: python3 -m unittest discover -s scripts -p test_replaylab_raw.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

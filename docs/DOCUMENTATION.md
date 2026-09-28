@@ -1,6 +1,6 @@
 # Livewire Operator Guide
 
-This is the 0.9 release candidate guide. Start with [Replay workflow](WORKFLOW.md)
+This is the version 1 guide. Start with [Replay workflow](WORKFLOW.md)
 for explicit intent, session selection, and offline preview.
 
 This guide starts with commands that work. Use the Windows or Linux walkthrough

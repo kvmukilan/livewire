@@ -29,18 +29,18 @@ func fprintVerdict(w io.Writer, label string, res livereplay.Result) {
 	switch {
 	case out.Succeeded() && !res.Verified:
 		fmt.Fprintln(w, "RESULT: EXCHANGE COMPLETED; RESPONSE EQUIVALENCE WAS NOT CHECKED.")
-		fmt.Fprintln(w, "The transport completed, but verification was disabled, so this run does not claim")
+		fmt.Fprintln(w, "The transport completed without a verified response comparison, so this run does not claim")
 		fmt.Fprintln(w, "that the live device behaved the same as the recording.")
 	case out.Succeeded() && res.Matched:
-		fmt.Fprintln(w, "RESULT: SAME AS THE RECORDING.")
-		fmt.Fprintln(w, "The device behaved exactly as it did when the capture was taken.")
-		fmt.Fprintln(w, "If the recording shows the problem, the problem reproduces on this device.")
+		fmt.Fprintln(w, "RESULT: MATCHED THE CHECKED RESPONSES.")
+		fmt.Fprintln(w, "The checked live responses matched the recording under the selected verification policy.")
+		fmt.Fprintln(w, "See the report for verification scope and any ignored differences.")
 	case out.Succeeded() && !res.Matched:
 		fmt.Fprintln(w, "RESULT: DIFFERENT FROM THE RECORDING.")
 		fmt.Fprintln(w, "The exchange completed, but the device answered differently:")
 		fprintDivergences(w, out)
-		fmt.Fprintln(w, "The recorded behavior did NOT reproduce here — likely a different device")
-		fmt.Fprintln(w, "state, firmware, or register contents (or it has already been fixed).")
+		fmt.Fprintln(w, "Check the reported differences alongside device state, logs, and packet evidence.")
+		fmt.Fprintln(w, "Different replies alone do not establish whether the original fault recurred.")
 	default:
 		fmt.Fprintln(w, "RESULT: THE EXCHANGE DID NOT COMPLETE.")
 		fmt.Fprintf(w, "What happened: %s\n", plainReason(out))
