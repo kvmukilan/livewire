@@ -75,7 +75,7 @@ func (r *MessageReader) ReadExchange(ctx context.Context, conn net.Conn, a Adapt
 			if left <= 0 {
 				return out, &ResponseReadError{Err: context.DeadlineExceeded}
 			}
-			msgs, e := r.read(ctx, conn, a, ServerToClient, remaining[:1], peers, state, left, left)
+			msgs, e := r.readUntil(ctx, conn, a, ServerToClient, remaining[:1], peers, state, deadline, left)
 			if e != nil {
 				var readError *peerReadError
 				if errors.As(e, &readError) {
@@ -125,16 +125,25 @@ func (r *MessageReader) Read(ctx context.Context, conn net.Conn, adapter Adapter
 }
 
 func (r *MessageReader) read(ctx context.Context, conn net.Conn, adapter Adapter, dir Direction, expected, peers []Message, state *RuntimeState, timeout, controlTimeout time.Duration) ([]Message, error) {
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	return r.readUntil(ctx, conn, adapter, dir, expected, peers, state, time.Now().Add(timeout), controlTimeout)
+}
+
+// readUntil preserves one absolute deadline across pacing, decoder work and
+// response correlation. An elapsed pacing deadline must never become a new
+// default timeout or be extended by scheduling between duration calculations.
+func (r *MessageReader) readUntil(ctx context.Context, conn net.Conn, adapter Adapter, dir Direction, expected, peers []Message, state *RuntimeState, deadline time.Time, controlTimeout time.Duration) ([]Message, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(expected) == 0 {
 		return nil, nil
 	}
-	if timeout <= 0 {
-		timeout = 30 * time.Second
+	if !time.Now().Before(deadline) {
+		return nil, &peerReadError{err: fmt.Errorf("%s: response timed out: %w", adapter.Name(), context.DeadlineExceeded)}
 	}
-	deadline := time.Now().Add(timeout)
 	controlBudget := func() time.Duration {
 		remaining := time.Until(deadline)
 		if controlTimeout > 0 && controlTimeout < remaining {

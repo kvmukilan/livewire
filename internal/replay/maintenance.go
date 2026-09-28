@@ -127,12 +127,13 @@ func (r *MessageReader) WaitUntil(ctx context.Context, conn net.Conn, a Adapter,
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		messages, err := r.read(ctx, conn, a, ServerToClient, []Message{{}}, peers, state, time.Until(target), timeout)
+		messages, err := r.readUntil(ctx, conn, a, ServerToClient, []Message{{}}, peers, state, target, timeout)
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if errors.Is(err, context.DeadlineExceeded) && !time.Now().Before(target) {
+			var readError *peerReadError
+			if errors.As(err, &readError) && errors.Is(readError.err, context.DeadlineExceeded) && !time.Now().Before(target) {
 				return nil
 			}
 			if errors.Is(err, io.ErrUnexpectedEOF) && r.eof && len(r.buffer) == 0 && len(r.pending) > 0 {
