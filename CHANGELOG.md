@@ -7,13 +7,15 @@ All notable changes to Livewire are documented here.
 Version 1 qualifies the supported replay routes with controlled software peers
 and virtual networks. Physical NIC/device and uncoached human-pilot qualification
 are not claimed. The release gate requires evidence tied to the exact packaged
-executables; see [the qualification scope](docs/V1_QUALIFICATION.md).
+executables; see [the qualification scope](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/V1_QUALIFICATION.md).
 
 - Track live TCP cumulative acknowledgments, outstanding bytes, negotiated MSS,
   scaled receive windows, bounded retries/probes and FIN completion. Service
   replies during captured timing gaps; separate connections reusing a four-tuple.
 - Preserve application message pacing across adjacent requests, including TLS;
   maintain MQTT keepalive and live QoS/identifier state during idle/response waits.
+- Keep pacing deadlines absolute so an expired pause cannot become a new
+  response timeout; propagate maintenance and generated-control failures.
 - Reassemble DNP3 transport/application fragments, confirm live fragments and
   unsolicited messages, and block authentication or uninspectable object layouts.
 - Decrypt FTPS data captures before comparing downloads or preparing uploads;

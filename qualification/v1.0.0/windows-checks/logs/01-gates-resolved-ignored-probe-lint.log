@@ -1,0 +1,109 @@
+==> all
+==> build
+$ go build ./...
+==> build ok (11.155s)
+==> vet
+$ go vet ./...
+==> vet ok (11.835s)
+==> test
+$ go test -count=1 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	6.223s
+?   	github.com/kvmukilan/livewire/coverage/v1-soak	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/adapters	1.275s
+ok  	github.com/kvmukilan/livewire/internal/backend	0.697s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.956s
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.914s
+ok  	github.com/kvmukilan/livewire/internal/edit	0.610s
+ok  	github.com/kvmukilan/livewire/internal/engine	0.676s
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.676s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	1.539s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.627s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.725s
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.646s
+ok  	github.com/kvmukilan/livewire/internal/lab	1.812s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.586s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.714s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.611s
+ok  	github.com/kvmukilan/livewire/internal/planexec	1.128s
+ok  	github.com/kvmukilan/livewire/internal/qualification	26.749s
+ok  	github.com/kvmukilan/livewire/internal/replay	4.421s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.838s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	11.086s
+ok  	github.com/kvmukilan/livewire/internal/runstate	1.419s
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.614s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	1.095s
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.649s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	1.950s
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.519s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.683s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	3.467s
+ok  	github.com/kvmukilan/livewire/internal/tui	0.425s
+ok  	github.com/kvmukilan/livewire/internal/units	0.422s
+ok  	github.com/kvmukilan/livewire/internal/webui	1.305s
+ok  	github.com/kvmukilan/livewire/internal/wire	0.412s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+==> test ok (40.448s)
+==> dashboard
+$ node --test scripts/dashboard.test.cjs
+TAP version 13
+# Subtest: changing capture invalidates an old preview and disables Start
+ok 1 - changing capture invalidates an old preview and disables Start
+  ---
+  duration_ms: 2.4529
+  type: 'test'
+  ...
+# Subtest: a late inspection response cannot restore stale state
+ok 2 - a late inspection response cannot restore stale state
+  ---
+  duration_ms: 1.4683
+  type: 'test'
+  ...
+# Subtest: failed reinspection clears the previous successful preview
+ok 3 - failed reinspection clears the previous successful preview
+  ---
+  duration_ms: 0.9612
+  type: 'test'
+  ...
+# Subtest: two rapid Start actions submit only one run
+ok 4 - two rapid Start actions submit only one run
+  ---
+  duration_ms: 1.3651
+  type: 'test'
+  ...
+# Subtest: zero gap is sent as zero; session selection cannot silently become all
+ok 5 - zero gap is sent as zero; session selection cannot silently become all
+  ---
+  duration_ms: 0.7172
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 95.8788
+==> dashboard ok (306ms)
+==> lint
+$ go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
+=== Symbol Results ===
+
+No vulnerabilities found.
+
+Your code is affected by 0 vulnerabilities.
+This scan also found 0 vulnerabilities in packages you import and 1
+vulnerability in modules you require, but your code doesn't appear to call these
+vulnerabilities.
+Use '-show verbose' for more details.
+$ go run honnef.co/go/tools/cmd/staticcheck@2026.2.1 ./...
+coverage\v1-soak\diagnose-pacing.go:16:5: error var stop should have name of the form errFoo (ST1012)
+exit status 1
+task: all: lint: exit status 1
+exit status 1

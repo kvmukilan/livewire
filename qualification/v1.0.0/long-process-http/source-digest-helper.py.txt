@@ -1,0 +1,39 @@
+"""Exact source-digest helpers extracted from the ignored packaging helper.
+
+Only these three functions are used by the published HTTP harness. The original
+packaging command and its unrelated operations are intentionally omitted.
+"""
+import hashlib
+from pathlib import Path
+import stat
+
+def need(ok: bool, message: str) -> None:
+    if not ok:
+        raise ValueError(message)
+
+
+def no_links(path: Path) -> None:
+    """Reject symlinks and Windows junctions in every existing component."""
+    for item in (path, *path.parents):
+        try:
+            info = item.lstat()
+        except FileNotFoundError:
+            continue
+        need(not stat.S_ISLNK(info.st_mode), f"symlink refused: {item}")
+        need(not (getattr(info, "st_file_attributes", 0) & 0x400), f"reparse point refused: {item}")
+
+
+def source_digest(root: Path) -> str:
+    suffixes = {".go", ".html", ".cjs", ".ps1", ".py", ".sh"}
+    files = []
+    for folder in ("cmd", "internal", "scripts"):
+        for item in (root / folder).rglob("*"):
+            if item.is_file() and item.suffix in suffixes:
+                no_links(item)
+                files.append(item)
+    files.extend(root / name for name in ("go.mod", "go.sum", "qualification/corpus.json"))
+    digest = hashlib.sha256()
+    for item in sorted(files, key=lambda p: p.relative_to(root).as_posix()):
+        digest.update(item.relative_to(root).as_posix().encode("utf-8") + b"\0")
+        digest.update(item.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return digest.hexdigest()

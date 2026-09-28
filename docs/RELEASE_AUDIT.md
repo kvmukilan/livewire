@@ -28,6 +28,10 @@ The separate physical profile retains those applicable field requirements.
   maintains keepalives, separate identifier namespaces, aliases and negotiated
   limits. DNP3 handles changed transport/application fragmentation and live
   confirmations; unsupported authentication and object layouts stop safely.
+- An initial Linux TLS MQTT soak exposed a pacing deadline race. The reader now
+  preserves absolute deadlines and distinguishes pacing expiry from maintenance
+  failures. The failed run and before/after probes remain diagnostic evidence;
+  successful release qualification requires fresh runs of the corrected binary.
 - FTP data protection follows accepted replies per transfer. Active captures
   preserve TLS roles. Refused control/data protection stops before credentials
   or uploads; encrypted capture data is decrypted before fresh retermination.
@@ -43,8 +47,10 @@ The separate physical profile retains those applicable field requirements.
 Native Windows and Linux Go 1.26.7 checks passed build, vet, unit tests,
 JavaScript dashboard-state checks, vulnerability/static analysis, race tests,
 shuffled/repeated tests, seven fuzz targets at 200,000 iterations each, coverage,
-and the maintained corpus. Temporary failures from concurrent development
-edits were retained; affected checks passed after the source was frozen.
+and the maintained corpus. Source-bound logs, execution records and corpus
+evidence are retained in `qualification/v1.0.0/windows-checks` and
+`qualification/v1.0.0/linux-checks`. Their indexes distinguish completed checks
+from excluded diagnostics and earlier runs.
 
 | Statement coverage | Windows | Linux | Required |
 |---|---:|---:|---:|
@@ -59,14 +65,26 @@ Loader checks at 10, 100 and 512 MiB and 1,000,000 records passed on both hosts;
 Comparison with checksum-verified published 0.7.0 and 0.8.0 executables passed
 its gzip HTTP, selected-exchange and mixed-capture expectations.
 
+Four additional HTTP checks kept one CLI process running for about 70 minutes
+each: both commands on Windows and Linux. Each completed 840 attempts containing
+five fresh sessions, with 8,400 independently validated and compared responses,
+zero rejected exchanges, and verified process/listener cleanup. The retained
+[results and reproduction instructions](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/long-process-http/README.md)
+include exact durations and resource observations; they do not establish a
+general memory-leak bound or replace the required two-hour protocol matrices.
+
 No connected browser was available. Dashboard API and JavaScript state tests
 passed; visual and keyboard QA are not claimed.
 
 ## Publication gates
 
-The source is frozen and two-hour qualification is in progress. Publication
-requires the completed `qualification/stable.json` manifest and its evidence
-to validate, plus successful CI on the final source. The release workflow tests
+All six required two-hour matrices completed with zero failures and verified
+cleanup: 78 case combinations, 16,600 CLI processes, and 49,800 replay iterations.
+The completed `qualification/stable.json` manifest and
+[evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
+retain exact source/binary hashes, case spans, and independent cleanup audits.
+Publication requires manifest validation and successful CI on the final source.
+The release workflow tests
 Go 1.26.7 and 1.27.x, rebuilds all three targets with Go 1.26.7, proves byte-identical
 checksums and SBOM, validates the Windows ZIP, attests assets, and verifies
 published downloads. Its actual completed status is the publication evidence.

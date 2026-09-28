@@ -1,0 +1,248 @@
+"""Read-only independent audit of the four completed application pacing soaks.
+
+This file is ignored qualification tooling; it never modifies a run artifact.
+"""
+import collections
+import datetime as dt
+import hashlib
+import json
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+
+SOURCE = "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122"
+PINS = {"windows": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91", "linux": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3"}
+CASES = set("http1 dns-tcp modbus-tcp mqtt311 mqtt5 dnp3 http1-tls dns-tls modbus-tls mqtt311-tls mqtt5-tls dnp3-tls ftp ftps-explicit ftps-implicit ssh".split())
+FTP_DATA = b"livewire software-lab transfer\x00\x01\xff\n"
+FTP_HASH = "sha256:" + hashlib.sha256(FTP_DATA).hexdigest()
+ROOT = Path(__file__).resolve().parents[2]
+BASE = ROOT / "coverage/v1-soak"
+
+def now():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+def read_json(path):
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+def sha(path):
+    with path.open("rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+def when(s):
+    return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+def need(ok, message):
+    if not ok:
+        raise ValueError(message)
+
+def source_digest():
+    suffixes = {".go", ".html", ".cjs", ".ps1", ".py", ".sh"}
+    paths = [p for top in ("cmd", "internal", "scripts") for p in (ROOT / top).rglob("*") if p.is_file() and p.suffix in suffixes]
+    paths += [ROOT / p for p in ("go.mod", "go.sum", "qualification/corpus.json")]
+    h = hashlib.sha256()
+    for p in sorted(paths, key=lambda p: p.relative_to(ROOT).as_posix()):
+        h.update(p.relative_to(ROOT).as_posix().encode() + b"\0")
+        h.update(p.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return h.hexdigest()
+
+def linux_snapshot():
+    processes = []
+    for p in Path("/proc").iterdir():
+        if not p.name.isdigit():
+            continue
+        try:
+            args = (p / "cmdline").read_bytes().decode(errors="replace").split("\0")
+            name = Path(args[0]).name
+            if name.startswith(("replaylab", "livewire")):
+                processes.append({"pid": int(p.name), "name": name, "commandLine": " ".join(args).strip()})
+        except (OSError, IndexError):
+            pass
+    listeners = []
+    for name in ("tcp", "tcp6"):
+        for line in Path("/proc/net/" + name).read_text().splitlines()[1:]:
+            fields = line.split()
+            if fields[3] == "0A":
+                listeners.append({"table": name, "localEndpointHex": fields[1], "localPort": int(fields[1].split(":")[1], 16), "socketInode": fields[9]})
+    return {"observedAt": now(), "os": platform.platform(), "processes": processes, "listeners": listeners}
+
+def windows_snapshot():
+    command = """$ErrorActionPreference='Stop'
+$snapshot = @{
+ observedAt=[DateTime]::UtcNow.ToString('o')
+ os=[Environment]::OSVersion.VersionString
+ processes=@(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'replaylab*' -or $_.Name -like 'livewire*' } | ForEach-Object { @{pid=$_.ProcessId;name=$_.Name;commandLine=$_.CommandLine;executablePath=$_.ExecutablePath} })
+ listeners=@(Get-NetTCPConnection -State Listen | ForEach-Object { @{localAddress=$_.LocalAddress;localPort=$_.LocalPort;owningProcess=$_.OwningProcess} })
+}
+$snapshot | ConvertTo-Json -Depth 8 -Compress
+"""
+    completed = subprocess.run(["powershell", "-NoProfile", "-Command", command], capture_output=True, text=True, check=True, timeout=30)
+    return json.loads(completed.stdout)
+
+def check_cli(report, case, repeat, targets):
+    need(report.get("tool") == "livewire" and report.get("version") == "1.0.0", "CLI tool/version mismatch")
+    if "sessions" in report:
+        need(report["attempts"] == repeat, "aggregate repetition mismatch")
+        sessions = report["sessions"]
+        need({s["attempt"] for s in sessions} == set(range(1, repeat + 1)), "missing aggregate attempts")
+        total = 0
+        for s in sessions:
+            need(all(s.get(k) is True for k in ("completed", "verified", "matched")), "unverified aggregate session")
+            need(not s.get("error") and s.get("cleanup") == "complete", "aggregate cleanup/error")
+            n = s.get("comparedResponses", 0) or s.get("received", 0)
+            need(n > 0 and s.get("sent", 0) > 0, "aggregate lacks traffic evidence")
+            need(s.get("comparedResponses", 0) == s.get("expectedResponses", 0), "aggregate expected response mismatch")
+            total += n
+            targets.add(s["target"])
+        return total
+    outcome = report["outcome"]
+    need(all(outcome.get(k) is True for k in ("completed", "verified", "matched")), "secure outcome incomplete/unverified")
+    need(not outcome.get("error") and outcome.get("cleanup") != "failed" and outcome.get("mismatches", 0) == 0, "secure error/cleanup")
+    need(outcome.get("requests", 0) > 0, "secure lacks actual request count")
+    if case != "ftp":
+        need(outcome.get("peerIdentityChecked") is True, "secure peer identity unchecked")
+    if case.endswith("-tls"):
+        need(report["kind"] == "tls" and outcome.get("protocolVersion") == "TLS 1.3", "live TLS 1.3 evidence missing")
+        need(outcome.get("comparedResponses", 0) == outcome.get("expectedResponses", 0), "TLS expected response mismatch")
+        need(outcome.get("cleanup") == "complete", "TLS cleanup incomplete")
+    if case.startswith("ftp"):
+        need(report["kind"] == "ftp", "FTP report kind")
+        transfers = outcome.get("transfers", [])
+        need(len(transfers) == 2 and {t["command"] for t in transfers} == {"RETR", "STOR"}, "FTP transfer coverage missing")
+        for t in transfers:
+            need(t.get("matched") is True and t.get("expectedBytes") == t.get("actualBytes") == len(FTP_DATA), "FTP transfer bytes mismatch")
+            need(t.get("expectedSha256") == t.get("actualSha256") == FTP_HASH, "FTP transfer hashes mismatch")
+    if case == "ssh":
+        need(report["kind"] == "ssh" and len(outcome.get("commands", [])) == 2, "SSH commands missing")
+        need(all(c.get("matched") is True and c.get("outputBytes", 0) > 0 for c in outcome["commands"]), "SSH command output mismatch")
+    total = outcome.get("comparedResponses", 0) or outcome.get("responses", 0)
+    need(total > 0, "secure response comparisons missing")
+    targets.add(report["target"])
+    return total
+
+def audit_run(name):
+    directory = (BASE / name).resolve()
+    report_path = directory / "report.json"
+    report = read_json(report_path)
+    osname, command, _ = name.split("-", 2)
+    need(report["schemaVersion"] == 1 and report["version"] == "1.0.0" and report["suite"] == "application", name + ": schema/version/suite")
+    need(report["platform"] == osname + "-amd64" and report["command"] == command, name + ": platform/command")
+    need(report["sourceDigest"] == SOURCE and report["binarySha256"] == PINS[osname], name + ": source/binary pins")
+    need(not report["interrupted"] and report["cleanupVerified"], name + ": interruption/cleanup")
+    need((when(report["finished"]) - when(report["started"])).total_seconds() >= 7200, name + ": short run")
+    cases = {c["name"]: c for c in report["cases"]}
+    need(len(report["cases"]) == len(CASES) and set(cases) == CASES, name + ": case matrix incomplete")
+    captures = {case: sha(directory / "fixtures" / case / "fixture.pcap") for case in CASES}
+    evidence = {}
+    bytes_hashed = 0
+    for e in report["evidence"]:
+        path = (directory / e["path"]).resolve()
+        need(not Path(e["path"]).is_absolute() and path.is_relative_to(directory) and path.is_file(), name + ": unsafe evidence path")
+        need(e["path"] not in evidence, name + ": duplicate evidence")
+        need(sha(path) == e["sha256"], name + ": evidence hash mismatch " + e["path"])
+        evidence[e["path"]] = e["sha256"]
+        bytes_hashed += path.stat().st_size
+    need("transcript.jsonl" in evidence, name + ": transcript missing")
+    events = [json.loads(line) for line in (directory / "transcript.jsonl").read_text(encoding="utf-8").splitlines()]
+    by_case = collections.defaultdict(list)
+    targets, referenced, report_count = set(), {"transcript.jsonl"}, 0
+    for event in events:
+        case = event["case"]
+        need(case in CASES and not event.get("error") and event["repeat"] == 3 and event["command"] == command, name + ": failed/inconsistent event")
+        need(when(report["started"]) <= when(event["started"]) <= when(event["finished"]) <= when(report["finished"]), name + ": event time outside run")
+        before, after = event["before"], event["after"]
+        need(before["errors"] == after["errors"] == before["activeConnections"] == after["activeConnections"] == 0, name + ": peer error/open connection")
+        need(after["requests"] - before["requests"] >= 3 and after["responses"] - before["responses"] >= 3, name + ": peer traffic missing")
+        previous = by_case[case]
+        need(event["round"] == len(previous) + 1, name + ": noncontiguous rounds")
+        need(before == (previous[-1]["after"] if previous else {"requests": 0, "responses": 0, "activeConnections": 0, "errors": 0}), name + ": peer counter continuity mismatch")
+        refs = event["cliReports"]
+        secure = case.endswith("-tls") or case in {"ftp", "ftps-explicit", "ftps-implicit", "ssh"}
+        need(len(refs) == (3 if secure else 1) and event["cliReport"] == refs[0], name + ": missing CLI reports")
+        if secure:
+            need(all(p.endswith(f"report.attempt-{i}.json") for i, p in enumerate(refs, 1)), name + ": incorrect secure attempt sequence")
+        verified = 0
+        for ref in refs:
+            need(ref in evidence, name + ": unhashed CLI report")
+            cli_report = read_json(directory / ref)
+            need(cli_report.get("captureDigest") == "sha256:" + captures[case], name + ": captured PCAP digest mismatch")
+            verified += check_cli(cli_report, case, 3, targets)
+            referenced.add(ref)
+            report_count += 1
+        need(verified == event["verifiedResponses"], name + ": CLI/transcript comparison mismatch")
+        need(event["output"] in evidence, name + ": unhashed CLI output")
+        referenced.add(event["output"])
+        previous.append(event)
+    need(referenced == set(evidence), name + ": unreferenced or omitted evidence")
+    summaries = []
+    for case, c in sorted(cases.items()):
+        seq = by_case[case]
+        span = (when(c["lastAt"]) - when(c["firstAt"])).total_seconds()
+        need(len(seq) == c["passes"] == c["repeatedProcessPasses"] and c["passes"] >= 3, name + ": pass count mismatch")
+        need(c["failures"] == 0 and c["cleanupVerified"] and span >= 7200, name + ": case failed/short/unclean")
+        need(c["firstAt"] == seq[0]["started"] and c["lastAt"] == seq[-1]["finished"], name + ": case timing mismatch")
+        need(c["requestsObserved"] == sum(e["after"]["requests"] - e["before"]["requests"] for e in seq), name + ": request total mismatch")
+        need(c["responsesVerified"] == sum(e["verifiedResponses"] for e in seq), name + ": response total mismatch")
+        summaries.append({**c, "spanSeconds": span, "cliIterations": len(seq) * 3, "peerResponsesObserved": seq[-1]["after"]["responses"]})
+    stderr = Path(str(directory) + ".stderr.log")
+    need(stderr.read_text(encoding="utf-8-sig").strip() == "", name + ": stderr nonempty")
+    exit_path = Path(str(directory) + ".exit.json")
+    exit_record = read_json(exit_path) if exit_path.exists() else None
+    if osname == "linux":
+        need(exit_record and exit_record["exitCode"] == 0, name + ": Linux exit missing/nonzero")
+    return {"name": name, "report": str(report_path.relative_to(ROOT)), "reportSha256": sha(report_path), "platform": report["platform"], "command": command, "started": report["started"], "finished": report["finished"], "durationSeconds": (when(report["finished"]) - when(report["started"])).total_seconds(), "sourceDigest": report["sourceDigest"], "binarySha256": report["binarySha256"], "captureSha256": captures, "processExecutions": len(events), "cliIterations": len(events) * 3, "cliReportsChecked": report_count, "evidenceFilesHashed": len(evidence), "evidenceBytesHashed": bytes_hashed, "targets": sorted(targets), "exitRecord": exit_record, "cases": summaries}
+
+def main():
+    audit = {"schemaVersion": 1, "startedAt": now(), "auditorSha256": sha(Path(__file__)), "sourceDigestExpected": SOURCE, "sourceDigestObserved": source_digest(), "binaries": [], "runs": [], "errors": []}
+    need(audit["sourceDigestObserved"] == SOURCE, "source digest differs")
+    for osname in ("windows", "linux"):
+        binary = ROOT / "coverage/v1-pacing-build/dist-check/v1.0.0" / ("livewire-1.0.0-" + osname + "-amd64" + (".exe" if osname == "windows" else ""))
+        binary_sum = sha(binary)
+        need(binary_sum == PINS[osname], "binary pin differs: " + osname)
+        audit["binaries"].append({"path": str(binary.relative_to(ROOT)), "sha256": binary_sum, "expectedSha256": PINS[osname]})
+        for command in ("live", "reproduce"):
+            name = osname + "-" + command + "-pacing"
+            try:
+                result = audit_run(name)
+                audit["runs"].append(result)
+                print(json.dumps({"audited": name, "processes": result["processExecutions"], "evidenceFiles": result["evidenceFilesHashed"]}), flush=True)
+            except Exception as e:
+                audit["errors"].append(name + ": " + str(e))
+    snapshots = {"windows": windows_snapshot()}
+    linux = subprocess.run(["wsl", "-d", "kali-linux", "--", "python3", "/mnt/c/Users/kvmuk/livewire/coverage/v1-soak/application-final-audit.py", "--linux-snapshot"], capture_output=True, text=True, check=True, timeout=30)
+    snapshots["linux"] = json.loads(linux.stdout)
+    for osname, snap in snapshots.items():
+        ports = {int(t.rsplit(":", 1)[1]) for r in audit["runs"] if r["platform"].startswith(osname) for t in r["targets"]}
+        snap["auditedTargetPorts"] = sorted(ports)
+        snap["remainingTargetListeners"] = [s for s in snap["listeners"] if s["localPort"] in ports]
+        snap["remainingOwnedProcesses"] = [p for p in snap["processes"] if "replaylab-" + osname + "-pacing" in p.get("commandLine", "") or any(osname + "-" + command + "-pacing" in p.get("commandLine", "") for command in ("live", "reproduce"))]
+        if snap["remainingTargetListeners"] or snap["remainingOwnedProcesses"]:
+            audit["errors"].append(osname + ": owned process or target listener remains")
+    audit["osCleanupObservations"] = snapshots
+    audit["sourceDigestAfterAudit"] = source_digest()
+    if audit["sourceDigestAfterAudit"] != SOURCE:
+        audit["errors"].append("source changed during audit")
+    audit["finishedAt"] = now()
+    audit["passed"] = len(audit["runs"]) == 4 and not audit["errors"]
+    audit["scope"] = "Four actual application software-peer soaks; no physical NIC/device or human-pilot claim. Each CLI process ran three repetitions; this does not claim one CLI process remained alive for two hours. OS snapshots independently verify owned process exit and closure of every target listener after the runs."
+    out = BASE / "application-final-audit.json"
+    with out.open("x", encoding="utf-8") as f:
+        json.dump(audit, f, indent=2)
+        f.write("\n")
+    text = ["Application qualification final independent audit", "Observed: " + audit["finishedAt"], "Passed: " + str(audit["passed"]), "Source digest: " + SOURCE]
+    for r in audit["runs"]:
+        text.append(f"{r['name']}: {r['durationSeconds']:.3f}s, min case span {min(c['spanSeconds'] for c in r['cases']):.3f}s, {r['processExecutions']} processes / {r['cliIterations']} CLI iterations, {r['evidenceFilesHashed']} artifact hashes checked, failures 0.")
+    for osname, snap in snapshots.items():
+        text.append(f"{osname} OS cleanup at {snap['observedAt']}: {len(snap['auditedTargetPorts'])} target ports checked, {len(snap['remainingTargetListeners'])} remaining listeners, {len(snap['remainingOwnedProcesses'])} remaining owned processes.")
+    text += audit["errors"] + [audit["scope"]]
+    with (BASE / "application-final-audit.txt").open("x", encoding="utf-8") as f:
+        f.write("\n".join(text) + "\n")
+    print("\n".join(text), flush=True)
+    return 0 if audit["passed"] else 1
+
+if __name__ == "__main__":
+    if "--linux-snapshot" in sys.argv:
+        print(json.dumps(linux_snapshot()))
+    else:
+        sys.exit(main())

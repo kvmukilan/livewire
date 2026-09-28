@@ -1,0 +1,50 @@
+{
+  "kind": "additional-software-check",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "files": [
+    {
+      "path": "harness.py.txt",
+      "sha256": "9a969e0c16be42ecfed9b0bcef2258bb4d6e221035d19da7fc816091c1edf608"
+    },
+    {
+      "path": "source-digest-helper.py.txt",
+      "sha256": "5ef5850824bd210d1153498bfeb6ef38e2a74d8e7bcabd015db8867b7d602972"
+    },
+    {
+      "path": "source-provenance.json",
+      "sha256": "b32abb9b0fa4e7e05b044523496157807a7a18f74c5eb407c9bce060ef23f885"
+    },
+    {
+      "path": "reproduction-smoke.json",
+      "sha256": "6f11280faa33f2da5b91213f381da1d8376f65419d78344b9f32c5192bc9cd80"
+    },
+    {
+      "path": "windows-live.result.json",
+      "sha256": "6184326c0b74e6293e6cfd455080a1642a06219618a27114a3057ae784be2947"
+    },
+    {
+      "path": "windows-reproduce.result.json",
+      "sha256": "01fe30862b876dc14176fded7bbdda6a3966dce41e88bcdc185e6e112c8b6ff3"
+    },
+    {
+      "path": "linux-live.result.json",
+      "sha256": "1c71b90df2f2377d9ce99b55f1e0070bfa23c607ef4b8897c06c75dfe1ed35fc"
+    },
+    {
+      "path": "linux-reproduce.result.json",
+      "sha256": "e5269d742b9f9efb230ee84a941831c9a3fd0ec4fce83a6149d38b85a0882a21"
+    },
+    {
+      "path": "cleanup-observations.json",
+      "sha256": "b854f32bf5dc6a8a7a6fbfbf844f77d481e8457055fe623a7365b7906e3f1fc9"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "39b671cef1b3114a580988fb1c579977971224b0118472db5b618be2b7e74ba3"
+    },
+    {
+      "path": "README.md",
+      "sha256": "8a70f9f805bc41c6786383dce6b743d59132ca227a8974bfae08f83b38a2ccc4"
+    }
+  ]
+}

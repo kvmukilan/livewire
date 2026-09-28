@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-09-28T23:28:43.055376+00:00",
+  "scope": "Additional post-run observations. Main release validator evidence remains the qualified reports and transcripts. Raw fixtures and unredacted host inventory remain private.",
+  "privateOriginal": {
+    "path": "coverage/v1-soak/application-final-audit.json",
+    "sha256": "678752acff970d1958000b02e0ddd705ab092dca7cc50ab998b7f44f745ee069"
+  },
+  "redaction": {
+    "method": "Parse JSON, deep-copy it, delete only the two JSON Pointer fields listed below, then serialize with two-space indentation and a final newline. All other JSON values and arrays are preserved without modification.",
+    "removedFields": [
+      {
+        "jsonPointer": "/osCleanupObservations/windows/listeners",
+        "removedEntryCount": 45,
+        "reason": "Unrelated host listener inventory; no owned target listener remained."
+      },
+      {
+        "jsonPointer": "/osCleanupObservations/linux/listeners",
+        "removedEntryCount": 1,
+        "reason": "Unrelated host listener inventory; no owned target listener remained."
+      }
+    ]
+  },
+  "retainedFiles": [
+    {
+      "path": "application-final-audit.redacted.json",
+      "sha256": "057f65ef140d09f6eb7662c251172c9763bdfba91ddb5b2b09226ff8109198ea",
+      "sourcePath": "coverage/v1-soak/application-final-audit.json",
+      "sourceSha256": "678752acff970d1958000b02e0ddd705ab092dca7cc50ab998b7f44f745ee069",
+      "method": "redacted JSON"
+    },
+    {
+      "path": "application-final-audit.txt",
+      "sha256": "6a68efa1f7c2892e42c6260cf8f56a90dce4a539e0b26658be218053da3f48b0",
+      "sourcePath": "coverage/v1-soak/application-final-audit.txt",
+      "sourceSha256": "997738059d3735b9b4bdf823fdddab2a02bc08430b1d415de11c7567810cdabc",
+      "method": "Copy with only CRLF line endings normalized to LF; textual content unchanged.",
+      "normalization": {
+        "sourceEncoding": "UTF-8 without BOM",
+        "retainedEncoding": "UTF-8 without BOM",
+        "sourceCRLFCount": 11,
+        "retainedCRLFCount": 0,
+        "retainedLineEnding": "LF"
+      }
+    },
+    {
+      "path": "application-final-audit.py.txt",
+      "sha256": "688acd2bf559f38b43c66d89b4e6c7e005dcba39085d0ab0b44801f265222bf4",
+      "sourcePath": "coverage/v1-soak/application-final-audit.py",
+      "sourceSha256": "688acd2bf559f38b43c66d89b4e6c7e005dcba39085d0ab0b44801f265222bf4",
+      "method": "exact byte copy, renamed to .py.txt"
+    }
+  ],
+  "privacyReview": {
+    "privateKeys": false,
+    "credentials": false,
+    "cookieContents": false,
+    "unrelatedProcessDetails": false,
+    "unrelatedListenerInventory": false,
+    "rawFixturesIncluded": false
+  },
+  "auditSourceCaveat": "The exact auditor source contains historical private paths and collects broader local host state when run. It is retained as reviewed methodology, not a standalone public reproduction script. Its raw output requires privacy review before publication.",
+  "textEncoding": "All retained public files use UTF-8 without BOM and LF line endings."
+}

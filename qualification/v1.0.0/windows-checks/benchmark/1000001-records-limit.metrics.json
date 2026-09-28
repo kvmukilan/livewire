@@ -1,0 +1,21 @@
+{
+  "case": "1000001-records-limit",
+  "decodedBytes": 60000060,
+  "error": "pcapio: capture limit exceeded: record count exceeds 1000000",
+  "expectedLimit": true,
+  "go": "go1.26.7",
+  "hostOS": "windows/amd64",
+  "loadSeconds": 0.193459,
+  "logicalCPUs": 16,
+  "memoryMethod": "Go heap sampled every 10ms; runtime reservation is not process RSS",
+  "observedPeakRSSBytes": 189890560,
+  "passed": true,
+  "planSeconds": 0,
+  "platform": "windows/amd64",
+  "processor": "amd64",
+  "records": 1000001,
+  "rssMethod": "Observed OS process high-water mark at 10ms intervals; excludes fixture file cache",
+  "runtimeReservedBytes": 189698048,
+  "sampledPeakHeapBytes": 168624288,
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122"
+}

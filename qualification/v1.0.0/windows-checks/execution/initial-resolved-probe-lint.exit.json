@@ -1,0 +1,12 @@
+{
+  "started": "2026-09-28T21:21:02.830991+00:00",
+  "finished": "2026-09-28T21:22:34.625567+00:00",
+  "exitCode": 1,
+  "toolchain": "go1.26.7",
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "all"
+  ]
+}
