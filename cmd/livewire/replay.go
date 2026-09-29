@@ -39,7 +39,11 @@ type wireReplayReport struct {
 // cmdReplay is a tcpreplay-style stateless send: blast a capture's frames onto
 // an interface at a chosen rate, with no live sequence state. Use `live` when
 // the frames must land on a real TCP peer that answers.
-func cmdReplay(args []string) (retErr error) {
+func cmdReplay(args []string) error {
+	return cmdReplayWithSender(args, backend.OpenSender)
+}
+
+func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketBackend, error)) (retErr error) {
 	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file")
@@ -80,6 +84,26 @@ func cmdReplay(args []string) (retErr error) {
 	if loop > maxReplayAttempts {
 		return fmt.Errorf("-n must not exceed %d (0 still means run until interrupted)", maxReplayAttempts)
 	}
+	var invalidRate string
+	fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "pps":
+			if *pps <= 0 {
+				invalidRate = f.Name
+			}
+		case "mbps":
+			if *mbps <= 0 {
+				invalidRate = f.Name
+			}
+		case "multiplier":
+			if *mult <= 0 {
+				invalidRate = f.Name
+			}
+		}
+	})
+	if invalidRate != "" {
+		return fmt.Errorf("-%s must be greater than zero", invalidRate)
+	}
 
 	capture, captureDigest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
@@ -115,8 +139,22 @@ func cmdReplay(args []string) (retErr error) {
 		}
 		recs = filtered
 	}
+	if len(recs) == 0 {
+		return fmt.Errorf("no captured frames match the selected sessions")
+	}
 	pace := stateless.Pace{TopSpeed: *topspeed, PPS: *pps, Mbps: *mbps, Multiplier: *mult}
-	sched := stateless.Schedule(recs, pace)
+	sched, err := stateless.CheckedSchedule(recs, pace)
+	if err != nil {
+		return err
+	}
+	for i, rec := range recs {
+		if len(rec.Data) == 0 {
+			return fmt.Errorf("capture record %d has no frame bytes; no packets were sent", i)
+		}
+		if rec.LinkType != recs[0].LinkType {
+			return fmt.Errorf("selected capture mixes link types (%d and %d); select one compatible session or capture before replay; no packets were sent", recs[0].LinkType, rec.LinkType)
+		}
+	}
 	fmt.Printf("%d frames, one pass takes %s at the chosen rate\n", len(recs), stateless.TotalDuration(sched))
 
 	var report *wireReplayReport
@@ -160,7 +198,7 @@ func cmdReplay(args []string) (retErr error) {
 		return fmt.Errorf("-i is required to send (or pass -dry-run)")
 	}
 
-	snd, err := backend.OpenSender(iface)
+	snd, err := openSender(iface)
 	if err != nil {
 		return err
 	}
@@ -169,6 +207,9 @@ func cmdReplay(args []string) (retErr error) {
 			retErr = errors.Join(retErr, fmt.Errorf("close replay sender: %w", err))
 		}
 	}()
+	if recs[0].LinkType != snd.LinkType() {
+		return fmt.Errorf("capture link type %d does not match interface link type %d; captured frames cannot be injected unchanged; no packets were sent", recs[0].LinkType, snd.LinkType())
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -185,11 +226,13 @@ func cmdReplay(args []string) (retErr error) {
 			if err := snd.Send(rec.Data); err != nil {
 				return fmt.Errorf("send frame %d: %w", i, err)
 			}
+			if report != nil {
+				report.FramesSent++
+			}
 		}
 		pass++
 		if report != nil {
 			report.Passes = pass
-			report.FramesSent = pass * len(recs)
 		}
 		fmt.Printf("pass %d complete (%d frames)\n", pass, len(recs))
 	}

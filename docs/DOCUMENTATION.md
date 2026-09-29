@@ -1,7 +1,7 @@
 # Livewire Operator Guide
 
 This is the version 1 guide. Start with [Replay workflow](WORKFLOW.md)
-for explicit intent, session selection, and offline preview.
+for fresh live sessions, session selection, and offline preview.
 
 This guide starts with commands that work. Use the Windows or Linux walkthrough
 to go from a source checkout and a PCAP to a live replay. The protocol and
@@ -18,8 +18,8 @@ Two-sided:  Livewire client NIC --> DUT --> Livewire server NIC
 ```
 
 Use one of the two primary commands for a live target: `reproduce <capture>` for
-the guided path or `live <capture>` for the same protocol-aware orchestration
-through the advanced entry point. Use `lab` only when the DUT must sit between
+the guided path or `live <capture>` to play captured application requests through fresh connections. No mode flag
+is needed for either command. `replay` sends stateless captured packets. Use `lab` only when the DUT must sit between
 two simulated endpoints.
 
 ## Quick navigation
@@ -87,7 +87,7 @@ Minimal example from an Administrator PowerShell:
 .\livewire.exe ifaces
 $Iface = '\Device\NPF_{PASTE_GUID_HERE}'
 .\livewire.exe reproduce .\issue.pcap -i $Iface -t 192.168.1.50
-# Equivalent advanced entry point: .\livewire.exe live .\issue.pcap -i $Iface -t 192.168.1.50
+# Fresh application replay: .\livewire.exe live .\issue.pcap -i $Iface -t 192.168.1.50
 ```
 
 The remaining Windows sections cover building from source, capture creation,
@@ -953,7 +953,7 @@ commands` lists the complete catalog.
 | Command | Purpose |
 |---|---|
 | `reproduce` | Guided protocol-aware replay, secure retermination, verification, and evidence |
-| `live` | The same automatic routing plus the historical advanced `live -in` controls |
+| `live` | Fresh application sessions plus historical advanced `live -in` controls |
 
 ### Advanced
 

@@ -5,6 +5,12 @@ the reviewed evidence to the source digest and the exact Windows amd64 and Linux
 amd64 executable hashes. Physical NIC/device qualification and the uncoached
 human pilot remain separate work; software-lab evidence does not assert either.
 
+For v1.0.1, the application and datagram cases exercise command defaults without
+an explicit mode. The release additionally requires a separate Linux two-hour
+`replay` run with a mixed-protocol capture, independent frame byte/order/count
+checks, accurate transmission counts and no response-verification claim.
+Historical v1.0.0 retains its original six-run gate and immutable evidence.
+
 The application matrix runs both `live <capture>` and `reproduce <capture>`
 against independent local HTTP/1, DNS/TCP, Modbus/TCP, MQTT 3.1.1, MQTT 5, DNP3,
 TLS application, FTP, explicit/implicit FTPS, and SSH peers. FTP cases exercise

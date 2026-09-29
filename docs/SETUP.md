@@ -29,7 +29,7 @@ Socket-based application replay, including HTTP/TLS/FTP/SSH, needs neither drive
 Open **PowerShell** (a normal one is fine for this step) and paste:
 
 ```powershell
-$Version = "1.0.0"
+$Version = "1.0.1"
 $Release = "https://github.com/kvmukilan/livewire/releases/download/v$Version"
 New-Item -ItemType Directory -Force C:\livewire | Out-Null
 Set-Location C:\livewire
@@ -110,7 +110,7 @@ to list them, and paste the whole `\Device\NPF_{...}` value:
 ### 1. Download it
 
 ```bash
-VERSION=1.0.0
+VERSION=1.0.1
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/livewire-$VERSION-linux-amd64"
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/SHA256SUMS"
 sha256sum --check --ignore-missing SHA256SUMS
@@ -129,7 +129,7 @@ uses `iptables`/`ip6tables`, which your distribution already has.
 ### 2. Replay a capture
 
 ```bash
-sudo livewire reproduce issue.pcap -t 192.168.1.50
+livewire reproduce issue.pcap -t 192.168.1.50
 ```
 
 Replace `192.168.1.50` with your device's address. Livewire asks which network
@@ -142,7 +142,8 @@ sudo livewire reproduce issue.pcap -t 192.168.1.50 -i eth0
 
 ### Running without sudo
 
-Grant just the two capabilities Livewire needs, instead of full root:
+Socket-based application replay already works without sudo. For packet access,
+grant the two required capabilities:
 
 ```bash
 sudo setcap cap_net_raw,cap_net_admin+ep /usr/local/bin/livewire

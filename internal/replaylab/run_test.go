@@ -14,7 +14,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/qualification"
 )
 
-func TestWholeBinaryFrontDoorsAgainstIndependentStreamPeers(t *testing.T) {
+func TestWholeBinaryDefaultFrontDoorsAgainstIndependentStreamPeers(t *testing.T) {
 	root, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)

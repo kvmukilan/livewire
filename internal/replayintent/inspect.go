@@ -275,11 +275,14 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			e.Fidelity = replay.FidelityBlocked
 			e.Blockers = []string{fmt.Sprintf("%s requires explicit wire replay; select intended sessions with --session <id> to exclude background traffic", e.SessionID)}
 		}
-		if mode == "application" && e.Mode == replay.ModeStateful {
+		// TCP needs a framing/application adapter to use a fresh OS socket.
+		// UDP and ICMP already preserve message boundaries and have live reply
+		// drivers; they do not need a captured TCP state machine.
+		if mode == "application" && e.Mode == replay.ModeStateful && e.Transport == replay.TransportTCP {
 			e.Mode = replay.ModeBlocked
 			e.Driver = "none"
 			e.Fidelity = replay.FidelityBlocked
-			e.Blockers = []string{"no application adapter; explicitly choose transport mode"}
+			e.Blockers = []string{"no TCP application adapter; use -exact-tcp for captured transport behavior or -mode auto for the advanced TCP packet driver"}
 		}
 		if e.Mode == replay.ModeBlocked {
 			reason := "no executable driver"

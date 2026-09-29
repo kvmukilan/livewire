@@ -5,8 +5,9 @@ This describes the 1.0 implementation. The
 physical-device qualification remains separate. The
 [2026-09-29 reliability review](RELIABILITY_REVIEW_2026-09-29.md) is an earlier
 implementation snapshot; protocol behavior below includes subsequent fixes.
-Positional `live capture.pcap` uses the `reproduce` entry point. `live -in`
-retains its simulation default and transport driver. Application replay uses
+Positional `live capture.pcap` and `reproduce` share the fresh-session
+orchestrator. `live -in` with explicit secure inputs also uses it; without
+secure inputs, `live -in` retains its simulation default and transport driver. Application replay uses
 operating-system TCP; transport and wire execution retain their own drivers.
 Each TCP application attempt establishes fresh connection state. TLS captures are decrypted
 offline with explicitly supplied key material, then replayed over new verified
