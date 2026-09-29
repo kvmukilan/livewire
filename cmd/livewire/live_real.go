@@ -11,26 +11,33 @@ import (
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/engine"
+	"github.com/kvmukilan/livewire/internal/evidence"
 	"github.com/kvmukilan/livewire/internal/iterate"
 	"github.com/kvmukilan/livewire/internal/livereplay"
+	"github.com/kvmukilan/livewire/internal/orchestration"
+	"github.com/kvmukilan/livewire/internal/replay"
 )
 
 // liveOpts bundles the options shared by the on-wire replay paths.
 type liveOpts struct {
-	ctx           context.Context
-	target, iface string
-	profile       string
-	seed          int64
-	noGuard       bool
-	verbose       bool
-	useTUI        bool
-	verify        engine.VerifyMode
-	adaptive      bool
-	pace          bool
-	rawL4         bool
-	sequential    bool   // replay -all flows one at a time instead of concurrently
-	report        string // JSON report path ("" = none)
-	variables     map[string]string
+	responseTimeout time.Duration
+	evidence        *evidence.Stream
+	actualPath      string
+	strictExit      bool
+	ctx             context.Context
+	target, iface   string
+	profile         string
+	seed            int64
+	noGuard         bool
+	verbose         bool
+	useTUI          bool
+	verify          engine.VerifyMode
+	adaptive        bool
+	pace            bool
+	rawL4           bool
+	sequential      bool   // replay -all flows one at a time instead of concurrently
+	report          string // JSON report path ("" = none)
+	variables       map[string]string
 	// portStride shifts the client port presented to the device. Repeated
 	// attempts must each look like a new connection; 0 replays the captured port.
 	portStride int
@@ -58,6 +65,9 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 	var passErr error
 	pass := func(i int) iterate.Tally {
 		att := o
+		exec := replay.Execution(liveContext(o))
+		exec.Attempt = i
+		att.ctx = replay.WithExecution(liveContext(o), exec)
 		att.seed = o.seed + int64(i)
 		att.portStride = i
 		if runs.Repeats() {
@@ -83,15 +93,24 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 	}
 
 	per := runs.Run(liveContext(o), pass)
+	strictErr := strictExitError(o.strictExit, liveContext(o), iterate.SummarizeContext(liveContext(o), per, runs.Times))
 	if runs.Repeats() {
-		summary := iterate.Summarize(per, runs.Times)
+		summary := iterate.SummarizeContext(liveContext(o), per, runs.Times)
 		rep.recordIterations(summary)
 		fmt.Print(summary.Plain())
 	}
 	var reportErr error
+	if o.evidence != nil {
+		count, err := o.evidence.Commit()
+		reportErr = err
+		if count > 0 && err == nil {
+			rep.ActualCapture = o.actualPath
+			fmt.Printf("Actual replay traffic: %s\n", o.actualPath)
+		}
+	}
 	if o.report != "" {
 		if werr := rep.write(o.report); werr != nil {
-			reportErr = fmt.Errorf("write replay report: %w", werr)
+			reportErr = errors.Join(reportErr, fmt.Errorf("write replay report: %w", werr))
 			fmt.Printf("report: %v\n", werr)
 		} else {
 			fmt.Printf("report written to %s\n", o.report)
@@ -101,9 +120,9 @@ func liveRun(flows []*engine.Flow, flowSel int, all bool, runs iterate.Plan, o l
 	// the replay did not complete. A repeated run reports a rate instead, so the
 	// summary is the answer and one bad attempt is not a command failure.
 	if !runs.Repeats() {
-		return errors.Join(passErr, reportErr)
+		return errors.Join(passErr, reportErr, strictErr)
 	}
-	return reportErr
+	return errors.Join(reportErr, strictErr)
 }
 
 // liveOnePass runs a real stateful replay of one flow via the shared livereplay
@@ -226,28 +245,23 @@ func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line st
 	}
 	logf(-1, fmt.Sprintf("replaying %d flows concurrently%s", len(tasks),
 		map[bool]string{true: " on the capture's original clock", false: ""}[o.pace]))
-	var wg sync.WaitGroup
 	start := time.Now()
-	for i, t := range tasks {
-		wg.Add(1)
-		go func(i int, t task) {
-			defer wg.Done()
-			if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
-				if d := time.Until(start.Add(t.offset)); d > 0 {
-					timer := time.NewTimer(d)
-					select {
-					case <-liveContext(o).Done():
-						timer.Stop()
-						results[i] = oneFlowResult{t.idx, t.flow, t.target, "failed", livereplay.Result{}, liveContext(o).Err()}
-						return
-					case <-timer.C:
-					}
+	orchestration.RunBounded(liveContext(o), len(tasks), func(i int) {
+		t := tasks[i]
+		if o.pace && t.offset > 0 { // stagger to the captured inter-flow timing
+			if d := time.Until(start.Add(t.offset)); d > 0 {
+				timer := time.NewTimer(d)
+				select {
+				case <-liveContext(o).Done():
+					timer.Stop()
+					results[i] = oneFlowResult{t.idx, t.flow, t.target, "failed", livereplay.Result{}, liveContext(o).Err()}
+					return
+				case <-timer.C:
 				}
 			}
-			results[i] = runOne(t)
-		}(i, t)
-	}
-	wg.Wait()
+		}
+		results[i] = runOne(t)
+	})
 	return results, skipped
 }
 

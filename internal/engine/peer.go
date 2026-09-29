@@ -220,7 +220,15 @@ func splitTCP(frame []byte, link wire.LinkType, n int) ([][]byte, bool) {
 	payload := append([]byte(nil), p.Payload()[:pl]...)
 
 	first := p.RebuildWithPayload(payload[:n])
-	p.SetSeq(p.Seq().AddDelta(uint32(n))) // second segment's seq
+	firstPacket, _ := wire.Parse(first, link)
+	firstPacket.SetFlags(firstPacket.Flags() &^ (wire.FlagFIN | wire.FlagPSH))
+	firstPacket.RecalcChecksums()
+	secondSeq := p.Seq().AddDelta(uint32(n))
+	if p.HasFlags(wire.FlagSYN) {
+		secondSeq = secondSeq.Add(1)
+	}
+	p.SetSeq(secondSeq)
+	p.SetFlags(p.Flags() &^ wire.FlagSYN)
 	second := p.RebuildWithPayload(payload[n:])
 	return [][]byte{first, second}, true
 }

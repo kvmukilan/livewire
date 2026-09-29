@@ -1,0 +1,383 @@
+{
+  "kind": "additional-one-process-software-check",
+  "protocol": "HTTP/1.1 over plaintext TCP on loopback",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "physicalQualified": false,
+  "humanPilotQualified": false,
+  "substitutesForRequiredTwoHourSoaks": false,
+  "runs": [
+    {
+      "run": "windows-live",
+      "platform": "windows-amd64",
+      "command": "live",
+      "pid": 37072,
+      "peerPort": 55962,
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91",
+      "started": "2026-09-28T21:24:01.667196Z",
+      "finished": "2026-09-28T22:34:01.381326Z",
+      "elapsedSeconds": 4199.71412009999,
+      "attempts": 840,
+      "sessions": 4200,
+      "requests": 8400,
+      "comparedResponses": 8400,
+      "independentPeer": {
+        "active": 0,
+        "closed": 4200,
+        "connections": 4200,
+        "peakActive": 1,
+        "rejections": 0,
+        "requests": 8400,
+        "responses": 8400
+      },
+      "samplingErrors": 0,
+      "sampleCount": 280,
+      "resources": {
+        "rssBytes": {
+          "first": 9392128,
+          "last": 20881408,
+          "minimum": 9392128,
+          "maximum": 23138304,
+          "firstThirdMedian": 18456576,
+          "lastThirdMedian": 20901888
+        },
+        "peakRssBytes": {
+          "first": 9392128,
+          "last": 23138304,
+          "minimum": 9392128,
+          "maximum": 23138304,
+          "firstThirdMedian": 19058688,
+          "lastThirdMedian": 23138304
+        },
+        "privateBytes": {
+          "first": 45273088,
+          "last": 56832000,
+          "minimum": 45273088,
+          "maximum": 59109376,
+          "firstThirdMedian": 54575104,
+          "lastThirdMedian": 56881152
+        },
+        "handles": {
+          "first": 51,
+          "last": 170,
+          "minimum": 51,
+          "maximum": 170,
+          "firstThirdMedian": 162,
+          "lastThirdMedian": 170
+        }
+      },
+      "privateEvidence": [
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/launch.json",
+          "sha256": "2dca3fb3998dfc7a89ef37780e882dffff6d32206730d12df20521966b94380f",
+          "bytes": 857
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/report.json",
+          "sha256": "80d598906edacb28d475e9644a5cee9d4d381988da2c0d26d5d9eb9e7cc0586b",
+          "bytes": 5423479
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/peer.jsonl",
+          "sha256": "4fccc71c4385916a5b653705f293b7ca200941264becc083d4c07aeb87ce8720",
+          "bytes": 990975
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/resources.jsonl",
+          "sha256": "a318cce52a213cd2157499b0b7efbc373671aa9de7f6254c64b3de3f428529d5",
+          "bytes": 82764
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/cli.log",
+          "sha256": "2abed02d9ef3fdd0e1d13c07cab0b7e489d00a269dd5d09d370f2360f2d0da86",
+          "bytes": 36014
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-live/result.json",
+          "sha256": "6184326c0b74e6293e6cfd455080a1642a06219618a27114a3057ae784be2947",
+          "bytes": 2380
+        }
+      ]
+    },
+    {
+      "run": "windows-reproduce",
+      "platform": "windows-amd64",
+      "command": "reproduce",
+      "pid": 27812,
+      "peerPort": 55963,
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91",
+      "started": "2026-09-28T21:24:01.670341Z",
+      "finished": "2026-09-28T22:34:01.381012Z",
+      "elapsedSeconds": 4199.710673599999,
+      "attempts": 840,
+      "sessions": 4200,
+      "requests": 8400,
+      "comparedResponses": 8400,
+      "independentPeer": {
+        "active": 0,
+        "closed": 4200,
+        "connections": 4200,
+        "peakActive": 1,
+        "rejections": 0,
+        "requests": 8400,
+        "responses": 8400
+      },
+      "samplingErrors": 0,
+      "sampleCount": 280,
+      "resources": {
+        "rssBytes": {
+          "first": 9342976,
+          "last": 20860928,
+          "minimum": 9342976,
+          "maximum": 22589440,
+          "firstThirdMedian": 18321408,
+          "lastThirdMedian": 20480000
+        },
+        "peakRssBytes": {
+          "first": 9342976,
+          "last": 22593536,
+          "minimum": 9342976,
+          "maximum": 22593536,
+          "firstThirdMedian": 19046400,
+          "lastThirdMedian": 22593536
+        },
+        "privateBytes": {
+          "first": 45252608,
+          "last": 56537088,
+          "minimum": 45252608,
+          "maximum": 58322944,
+          "firstThirdMedian": 54165504,
+          "lastThirdMedian": 56201216
+        },
+        "handles": {
+          "first": 50,
+          "last": 170,
+          "minimum": 50,
+          "maximum": 170,
+          "firstThirdMedian": 162,
+          "lastThirdMedian": 170
+        }
+      },
+      "privateEvidence": [
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/launch.json",
+          "sha256": "517ccc4a618f8b487025792e152e93c486c1dc8e2e2a1368593fdb849bf81bd7",
+          "bytes": 877
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/report.json",
+          "sha256": "3d8236c606d19cc1a125a7d482fd51717deb5ff5535d0c48520fadd5a6e01778",
+          "bytes": 5424407
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/peer.jsonl",
+          "sha256": "2612bd5acbdd48bf76a921a90f94e1dadd404c4f034d9a57cb913dc903d4d4b3",
+          "bytes": 990975
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/resources.jsonl",
+          "sha256": "9c2f61506d9c0c5e49f31dda9a0c2c854d40ca15ba3ccb92c637a912ea44463f",
+          "bytes": 82784
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/cli.log",
+          "sha256": "5a25fac3ea4def1a03781fc6685ef97dcc3108ea632218ec654575cec247ff63",
+          "bytes": 36019
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/windows-reproduce/result.json",
+          "sha256": "01fe30862b876dc14176fded7bbdda6a3966dce41e88bcdc185e6e112c8b6ff3",
+          "bytes": 2401
+        }
+      ]
+    },
+    {
+      "run": "linux-live",
+      "platform": "linux-amd64",
+      "command": "live",
+      "pid": 17184,
+      "peerPort": 47533,
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+      "started": "2026-09-28T21:24:03.749259Z",
+      "finished": "2026-09-28T22:34:12.920942Z",
+      "elapsedSeconds": 4209.1716840379995,
+      "attempts": 840,
+      "sessions": 4200,
+      "requests": 8400,
+      "comparedResponses": 8400,
+      "independentPeer": {
+        "active": 0,
+        "closed": 4200,
+        "connections": 4200,
+        "peakActive": 1,
+        "rejections": 0,
+        "requests": 8400,
+        "responses": 8400
+      },
+      "samplingErrors": 0,
+      "sampleCount": 281,
+      "resources": {
+        "rssBytes": {
+          "first": 7303168,
+          "last": 17760256,
+          "minimum": 7303168,
+          "maximum": 17903616,
+          "firstThirdMedian": 15351808,
+          "lastThirdMedian": 17276928
+        },
+        "peakRssBytes": {
+          "first": 7303168,
+          "last": 17760256,
+          "minimum": 7303168,
+          "maximum": 17903616,
+          "firstThirdMedian": 15351808,
+          "lastThirdMedian": 17702912
+        },
+        "fileDescriptors": {
+          "first": 4,
+          "last": 6,
+          "minimum": 4,
+          "maximum": 7,
+          "firstThirdMedian": 6,
+          "lastThirdMedian": 6
+        },
+        "threads": {
+          "first": 5,
+          "last": 13,
+          "minimum": 5,
+          "maximum": 13,
+          "firstThirdMedian": 13,
+          "lastThirdMedian": 13
+        }
+      },
+      "privateEvidence": [
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/launch.json",
+          "sha256": "db5ed13cf9dfa9171beeb99c3dd082fb816f97bd7e60745f083506c171ae6626",
+          "bytes": 835
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/report.json",
+          "sha256": "a662daba36128f212d44c8839ef46dd99ccc90f0da51596dd70ac7bff30548e6",
+          "bytes": 5511999
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/peer.jsonl",
+          "sha256": "7d087c6ca301c7b219fc54b481ffc39d1aa6b9e31a087d1ca2d65c595d6150c4",
+          "bytes": 990975
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/resources.jsonl",
+          "sha256": "e21a9cd19c6ce38c1a05000166849b68e7104f35b54cb3ae4d28c4451969b1ab",
+          "bytes": 81023
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/cli.log",
+          "sha256": "eae4738d7221d6647ed853e2dfb9b86fbe69643f4d574095dfc6758b1ecce919",
+          "bytes": 36016
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-live/result.json",
+          "sha256": "1c71b90df2f2377d9ce99b55f1e0070bfa23c607ef4b8897c06c75dfe1ed35fc",
+          "bytes": 2315
+        }
+      ]
+    },
+    {
+      "run": "linux-reproduce",
+      "platform": "linux-amd64",
+      "command": "reproduce",
+      "pid": 17197,
+      "peerPort": 47973,
+      "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+      "binarySHA256": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+      "started": "2026-09-28T21:24:03.786142Z",
+      "finished": "2026-09-28T22:34:12.927250Z",
+      "elapsedSeconds": 4209.141113351,
+      "attempts": 840,
+      "sessions": 4200,
+      "requests": 8400,
+      "comparedResponses": 8400,
+      "independentPeer": {
+        "active": 0,
+        "closed": 4200,
+        "connections": 4200,
+        "peakActive": 1,
+        "rejections": 0,
+        "requests": 8400,
+        "responses": 8400
+      },
+      "samplingErrors": 0,
+      "sampleCount": 281,
+      "resources": {
+        "rssBytes": {
+          "first": 7307264,
+          "last": 17489920,
+          "minimum": 7307264,
+          "maximum": 18317312,
+          "firstThirdMedian": 14958592,
+          "lastThirdMedian": 16814080
+        },
+        "peakRssBytes": {
+          "first": 7307264,
+          "last": 17489920,
+          "minimum": 7307264,
+          "maximum": 18317312,
+          "firstThirdMedian": 14958592,
+          "lastThirdMedian": 16936960
+        },
+        "fileDescriptors": {
+          "first": 4,
+          "last": 6,
+          "minimum": 4,
+          "maximum": 6,
+          "firstThirdMedian": 6,
+          "lastThirdMedian": 6
+        },
+        "threads": {
+          "first": 5,
+          "last": 13,
+          "minimum": 5,
+          "maximum": 13,
+          "firstThirdMedian": 12,
+          "lastThirdMedian": 13
+        }
+      },
+      "privateEvidence": [
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/launch.json",
+          "sha256": "bc2d688b4d09117d887c18ac8b9982731cafd9337e887561ade8aa88bdad1f47",
+          "bytes": 855
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/report.json",
+          "sha256": "c66f71f0be65c8019929ecb116d713d9f03873fafc7cbe0c94c6b63405c8728a",
+          "bytes": 5511848
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/peer.jsonl",
+          "sha256": "d19e83dfa0af190675d08bb0170defd91bb1a5ac9a6d0cfc455e966d65fc8760",
+          "bytes": 990975
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/resources.jsonl",
+          "sha256": "0f4aeac5aa392a5d85a44bf5a29da35d4c02e76f90a2f6f2c23808927f29000a",
+          "bytes": 81060
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/cli.log",
+          "sha256": "51155db790fda8f94bb52e20b639ccf335a74b2385d41fc7330a9a6b9dc964e2",
+          "bytes": 36021
+        },
+        {
+          "path": "coverage/v1-long-process-pacing/linux-reproduce/result.json",
+          "sha256": "e5269d742b9f9efb230ee84a941831c9a3fd0ec4fce83a6149d38b85a0882a21",
+          "bytes": 2331
+        }
+      ]
+    }
+  ],
+  "memoryInterpretation": "15-second process samples; observed RSS/private-memory/handle/fd values only. No resource pass/fail threshold or comprehensive absence-of-leaks claim. The program retains repetition reports, so memory observations include accumulated report state."
+}

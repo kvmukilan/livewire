@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""Independent, ignored long-process HTTP cookie qualification supplement."""
+import argparse
+import ctypes
+import hashlib
+import json
+import os
+from pathlib import Path
+import runpy
+import secrets
+import signal
+import socketserver
+import statistics
+import struct
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime, timezone
+
+SOURCE = "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122"
+BINARIES = {"windows": "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91", "linux": "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3"}
+
+
+def utc():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def checksum(data):
+    data += b"\0" if len(data) % 2 else b""
+    value = sum(struct.unpack("!" + "H" * (len(data) // 2), data))
+    while value >> 16:
+        value = (value & 65535) + (value >> 16)
+    return (~value) & 65535
+
+
+def capture(path, port, sessions):
+    """Independent Ethernet/IPv4/TCP fixture, five distinct complete flows."""
+    output = bytearray(struct.pack("<IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 65535, 1))
+    requests = [b"GET /login HTTP/1.1\r\nHost: localhost\r\n\r\n", b"GET /data HTTP/1.1\r\nHost: localhost\r\nCookie: session=captured\r\n\r\n"]
+    responses = [b"HTTP/1.1 200 OK\r\nSet-Cookie: session=captured; Path=/\r\nContent-Length: 5\r\n\r\nhello", b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nworld"]
+    tick = 0
+    for number in range(sessions):
+        client_seq, server_seq = 10000, 50000
+        frames = [(True, 2, b""), (False, 18, b""), (True, 16, b"")]
+        for request, response in zip(requests, responses):
+            frames.extend([(True, 24, request), (False, 24, response)])
+        frames.extend([(True, 17, b""), (False, 17, b""), (True, 16, b"")])
+        for client, flags, payload in frames:
+            src, dst = bytes([192, 0, 2, 10]), bytes([198, 51, 100, 20])
+            sport, dport = 41000 + number, port
+            seq, ack = client_seq, server_seq
+            if not client:
+                src, dst, sport, dport, seq, ack = dst, src, dport, sport, ack, seq
+            tcp = struct.pack("!HHIIBBHHH", sport, dport, seq, ack if flags & 16 else 0, 80, flags, 65535, 0, 0) + payload
+            pseudo = src + dst + struct.pack("!BBH", 0, 6, len(tcp))
+            tcp = tcp[:16] + struct.pack("!H", checksum(pseudo + tcp)) + tcp[18:]
+            ip = struct.pack("!BBHHHBBH4s4s", 69, 0, 20 + len(tcp), tick, 0, 64, 6, 0, src, dst)
+            ip = ip[:10] + struct.pack("!H", checksum(ip)) + ip[12:]
+            frame = bytes.fromhex("0200000000020200000000010800") + ip + tcp
+            output.extend(struct.pack("<IIII", 1700000000 + tick // 1000, (tick % 1000) * 1000, len(frame), len(frame)))
+            output.extend(frame)
+            advance = len(payload) + bool(flags & 3)
+            if client:
+                client_seq += advance
+            else:
+                server_seq += advance
+            tick += 1
+    with path.open("xb") as handle:
+        handle.write(output)
+
+
+class Peer(socketserver.ThreadingTCPServer):
+    daemon_threads = True
+    allow_reuse_address = False
+
+    def __init__(self, output):
+        self.lock = threading.Lock()
+        self.counts = dict(connections=0, closed=0, active=0, peakActive=0, requests=0, responses=0, rejections=0)
+        self.errors = []
+        self.nonce = secrets.token_hex(12)
+        self.events = (output / "peer.jsonl").open("x", encoding="utf-8", newline="\n")
+        super().__init__(("127.0.0.1", 0), Handler)
+
+    def snapshot(self):
+        with self.lock:
+            return dict(self.counts)
+
+    def event(self, **values):
+        self.events.write(json.dumps(dict(at=utc(), **values), sort_keys=True) + "\n")
+        self.events.flush()
+
+
+class Handler(socketserver.StreamRequestHandler):
+    def handle(self):
+        peer = self.server
+        self.connection.settimeout(10)
+        with peer.lock:
+            peer.counts["connections"] += 1
+            number = peer.counts["connections"]
+            peer.counts["active"] += 1
+            peer.counts["peakActive"] = max(peer.counts["peakActive"], peer.counts["active"])
+        cookie = f"{peer.nonce}-{number}"
+        passed = False
+        try:
+            for index, path in enumerate(("/login", "/data")):
+                line = self.rfile.readline(8193)
+                if line != f"GET {path} HTTP/1.1\r\n".encode():
+                    raise RuntimeError(f"connection {number}: wrong request method/path/order")
+                headers = {}
+                length = len(line)
+                while True:
+                    line = self.rfile.readline(8193)
+                    length += len(line)
+                    if not line or length > 32768:
+                        raise RuntimeError(f"connection {number}: incomplete/oversized headers")
+                    if line == b"\r\n":
+                        break
+                    key, value = line.decode("ascii").split(":", 1)
+                    headers[key.lower()] = value.strip()
+                if int(headers.get("content-length", "0")) != 0 or "transfer-encoding" in headers:
+                    raise RuntimeError(f"connection {number}: unexpected request body")
+                if index == 0 and "cookie" in headers:
+                    raise RuntimeError(f"connection {number}: prior-session cookie leaked into fresh login")
+                if index == 1 and headers.get("cookie") != "session=" + cookie:
+                    raise RuntimeError(f"connection {number}: data request did not use this connection's login cookie")
+                with peer.lock:
+                    peer.counts["requests"] += 1
+                response = b"HTTP/1.1 200 OK\r\n"
+                if index == 0:
+                    response += f"Set-Cookie: session={cookie}; Path=/\r\n".encode()
+                response += b"Content-Length: 5\r\n\r\n" + (b"hello" if index == 0 else b"world")
+                self.wfile.write(response)
+                self.wfile.flush()
+                with peer.lock:
+                    peer.counts["responses"] += 1
+            if self.rfile.read(1) != b"":
+                raise RuntimeError(f"connection {number}: extra bytes after captured exchange")
+            passed = True
+        except Exception as error:
+            with peer.lock:
+                peer.counts["rejections"] += 1
+                peer.errors.append(str(error))
+        finally:
+            with peer.lock:
+                peer.counts["active"] -= 1
+                peer.counts["closed"] += 1
+                peer.event(event="connection-closed", connection=number, passed=passed, counts=dict(peer.counts))
+
+
+def resources(process):
+    if os.name == "nt":
+        from ctypes import wintypes
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD)] + [(name, ctypes.c_size_t) for name in ("PeakWorkingSetSize", "WorkingSetSize", "QuotaPeakPagedPoolUsage", "QuotaPagedPoolUsage", "QuotaPeakNonPagedPoolUsage", "QuotaNonPagedPoolUsage", "PagefileUsage", "PeakPagefileUsage", "PrivateUsage")]
+        memory, count = Counters(), wintypes.DWORD()
+        memory.cb = ctypes.sizeof(memory)
+        psapi, kernel = ctypes.WinDLL("psapi", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+        kernel.GetProcessHandleCount.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        if not psapi.GetProcessMemoryInfo(int(process._handle), ctypes.byref(memory), memory.cb):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not kernel.GetProcessHandleCount(int(process._handle), ctypes.byref(count)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return dict(rssBytes=memory.WorkingSetSize, peakRssBytes=memory.PeakWorkingSetSize, privateBytes=memory.PrivateUsage, handles=count.value)
+    status = {}
+    for line in Path(f"/proc/{process.pid}/status").read_text().splitlines():
+        if ":" in line:
+            name, value = line.split(":", 1)
+            status[name] = value.strip()
+    return dict(rssBytes=int(status.get("VmRSS", "0 kB").split()[0]) * 1024, peakRssBytes=int(status.get("VmHWM", "0 kB").split()[0]) * 1024, fileDescriptors=len(list(Path(f"/proc/{process.pid}/fd").iterdir())), threads=int(status.get("Threads", "0")))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument("--command", choices=("live", "reproduce"), required=True)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--attempts", type=int, default=840)
+    parser.add_argument("--sessions", type=int, default=5)
+    parser.add_argument("--gap", default="5s")
+    parser.add_argument("--sample-seconds", type=float, default=15)
+    args = parser.parse_args()
+    platform = "windows" if os.name == "nt" else "linux"
+    actual_binary = hashlib.sha256(args.binary.read_bytes()).hexdigest()
+    assert actual_binary == BINARIES[platform], "binary differs from frozen candidate"
+    source_digest = runpy.run_path(str(args.root / "coverage/package-v1-qualification.py"))["source_digest"]
+    assert source_digest(args.root) == SOURCE, "source changed"
+    args.out.mkdir(parents=True, exist_ok=False)
+    peer = Peer(args.out)
+    server_thread = threading.Thread(target=peer.serve_forever, daemon=True)
+    server_thread.start()
+    input_path, report_path = args.out / "input.pcap", args.out / "report.json"
+    capture(input_path, peer.server_address[1], args.sessions)
+    argv = [str(args.binary), args.command, str(input_path), "-mode", "application", "-t", "127.0.0.1", "-n", str(args.attempts), "-gap", args.gap, "-strict-exit", "-report", str(report_path), "-run-timeout", "95m"]
+    started, monotonic = utc(), time.monotonic()
+    observations, errors = [], []
+    with (args.out / "cli.log").open("xb") as output, (args.out / "resources.jsonl").open("x", encoding="utf-8", newline="\n") as samples:
+        process = subprocess.Popen(argv, stdout=output, stderr=subprocess.STDOUT, cwd=args.root, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
+        interrupted = False
+        launch = dict(platform=platform, command=args.command, pid=process.pid, peerPort=peer.server_address[1], started=started, argv=argv, binarySHA256=actual_binary, sourceDigest=SOURCE, requestedAttempts=args.attempts, sessionsPerAttempt=args.sessions)
+        (args.out / "launch.json").write_text(json.dumps(launch, indent=2) + "\n", encoding="utf-8", newline="\n")
+        print(json.dumps(launch), flush=True)
+        while process.poll() is None:
+            observation = dict(at=utc(), elapsedSeconds=time.monotonic() - monotonic, peer=peer.snapshot())
+            try:
+                observation.update(resources(process))
+            except (OSError, ValueError) as error:
+                observation["samplingError"] = str(error)
+            observations.append(observation)
+            samples.write(json.dumps(observation, sort_keys=True) + "\n"); samples.flush()
+            if (args.out / 'stop.request').exists() and not interrupted:
+                interrupted = True
+                errors.append('explicitly interrupted by stop.request; excluded from completed qualification')
+                process.send_signal(signal.CTRL_BREAK_EVENT if os.name == 'nt' else signal.SIGINT)
+            if peer.snapshot()["rejections"]:
+                errors.append("independent peer rejected an exchange")
+                process.terminate()
+            if time.monotonic() - monotonic > 96 * 60:
+                errors.append("external 96-minute watchdog expired")
+                process.kill()
+            try:
+                process.wait(timeout=args.sample_seconds)
+            except subprocess.TimeoutExpired:
+                pass
+        exit_code = process.returncode
+    deadline = time.monotonic() + 12
+    while peer.snapshot()["active"] and time.monotonic() < deadline:
+        time.sleep(0.02)
+    peer.shutdown(); peer.server_close(); server_thread.join(timeout=2)
+    counts = peer.snapshot(); peer.events.close()
+    expected_sessions = args.attempts * args.sessions
+    expected_requests = 2 * expected_sessions
+    if exit_code != 0: errors.append(f"CLI exit {exit_code}")
+    if counts["requests"] != expected_requests or counts["responses"] != expected_requests: errors.append("independent request/response total differs")
+    if counts["connections"] != expected_sessions or counts["closed"] != expected_sessions or counts["active"] or counts["rejections"]: errors.append("peer connection cleanup or accepted-connection total differs")
+    errors.extend(peer.errors)
+    compared = 0
+    try:
+        report = json.loads(report_path.read_bytes())
+        assert report["attempts"] == args.attempts and report["version"] == "1.0.0" and report["tool"] == "livewire"
+        assert len(report["sessions"]) == expected_sessions
+        per_attempt = {}
+        for session in report["sessions"]:
+            assert session["completed"] and session["verified"] and session["matched"] and not session.get("error") and session["cleanup"] == "complete"
+            assert session["comparedResponses"] == 2 and session["sent"] == 2
+            per_attempt[session["attempt"]] = per_attempt.get(session["attempt"], 0) + 1
+            compared += session["comparedResponses"]
+        assert per_attempt == {i: args.sessions for i in range(1, args.attempts + 1)}
+    except (OSError, ValueError, KeyError, AssertionError) as error:
+        errors.append(f"report did not prove every attempt/session: {type(error).__name__}: {error}")
+    if source_digest(args.root) != SOURCE: errors.append("source changed during check")
+    if hashlib.sha256(args.binary.read_bytes()).hexdigest() != actual_binary: errors.append("binary changed during check")
+    resource_summary = {}
+    for field in ("rssBytes", "peakRssBytes", "privateBytes", "handles", "fileDescriptors", "threads"):
+        values = [item[field] for item in observations if field in item]
+        if values:
+            width = max(1, len(values) // 3)
+            resource_summary[field] = dict(first=values[0], last=values[-1], minimum=min(values), maximum=max(values), firstThirdMedian=statistics.median(values[:width]), lastThirdMedian=statistics.median(values[-width:]))
+    result = dict(**launch, finished=utc(), elapsedSeconds=time.monotonic()-monotonic, exitCode=exit_code, passed=not errors, errors=errors, peer=counts, comparedResponses=compared, reportAttempts=args.attempts, expectedSessionResults=expected_sessions, expectedHTTPRequests=expected_requests, sampleCount=len(observations), samplingErrors=sum("samplingError" in s for s in observations), resources=resource_summary, scope="Additional one-process loopback repetition check; not a substitute for required two-hour matrix or physical qualification", memoryInterpretation="Observed working-set/private-memory and handle/fd samples only; no invented pass threshold or leak-free bound")
+    (args.out / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print(json.dumps(result), flush=True)
+    return 0 if result["passed"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

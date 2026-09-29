@@ -12,16 +12,82 @@ type MQTT struct{}
 
 func (MQTT) Name() string { return "mqtt" }
 func (MQTT) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
+	p := firstPayload(s)
+	if !mqttSignature(p) {
+		client, server, err := replay.TCPPayloadStreams(&s)
+		if err == nil {
+			if len(client) > 0 {
+				p = client
+			} else {
+				p = server
+			}
+		}
+	}
+	if !mqttSignature(p) {
+		return 0
+	}
 	if c := portConfidence(s, 1883, 8883); c > 0 {
 		return c
 	}
-	p := firstPayload(s)
-	if len(p) >= 2 && p[0]>>4 >= 1 && p[0]>>4 <= 15 {
-		if _, _, ok := mqttRemaining(p[1:]); ok {
-			return 30
+	return 30
+}
+
+func mqttSignature(raw []byte) bool {
+	if len(raw) < 2 {
+		return false
+	}
+	typ, flags := raw[0]>>4, raw[0]&15
+	if typ == 0 || typ > 15 {
+		return false
+	}
+	if typ == 3 {
+		if flags>>1&3 == 3 {
+			return false
+		}
+	} else {
+		want := byte(0)
+		if typ == 6 || typ == 8 || typ == 10 {
+			want = 2
+		}
+		if flags != want {
+			return false
 		}
 	}
-	return 0
+	n, used, ok := mqttRemaining(raw[1:])
+	if !ok || n > len(raw)-1-used {
+		return false
+	}
+	body := raw[1+used : 1+used+n]
+	switch typ {
+	case 1:
+		name, _, ok := mqttUTF8(body, 0)
+		if !ok || (name != "MQTT" && name != "MQIsdp") {
+			return false
+		}
+		version, _, _, _, ok := mqttConnectLayout(body)
+		return ok && (version == 3 || version == 4 || version == 5)
+	case 2:
+		return len(body) >= 2 && body[0]&0xfe == 0
+	case 3:
+		_, off, ok := mqttUTF8(body, 0)
+		if !ok {
+			return false
+		}
+		if flags&6 != 0 {
+			return off+2 <= len(body) && binary.BigEndian.Uint16(body[off:]) != 0
+		}
+		return true
+	case 4, 5, 6, 7, 8, 9, 10, 11:
+		return len(body) >= 2 && binary.BigEndian.Uint16(body) != 0
+	case 12, 13:
+		return len(body) == 0
+	case 14, 15:
+		return len(body) == 0 || len(body) >= 2
+	}
+	return false
 }
 
 func (MQTT) Decode(_ replay.Direction, data []byte) ([]replay.Message, error) {
@@ -99,7 +165,7 @@ func mqttPacketIDOffset(typ uint8, body []byte, qos uint8) (int, bool) {
 			return 0, false
 		}
 		off = 2 + int(binary.BigEndian.Uint16(body[:2]))
-	case 4, 5, 6, 7, 9, 11, 14:
+	case 4, 5, 6, 7, 8, 9, 10, 11:
 		off = 0
 	default:
 		return 0, false
@@ -322,22 +388,42 @@ func (MQTT) Correlate(expected, actual replay.Message, state *replay.RuntimeStat
 		if typ != 3 || qos == 0 || state == nil {
 			return replay.Match{Reason: "packet identifier differs"}
 		}
-		if state.Learned == nil {
-			state.Learned = map[string][]byte{}
-		}
-		state.Learned[mqttServerIDKey(expectedID)] = []byte{byte(actualID >> 8), byte(actualID)}
 		return replay.Match{Matched: true, Key: fmt.Sprintf("server-publish:%d=>%d", expectedID, actualID)}
 	}
 	return replay.Match{Matched: true, Key: fmt.Sprint(expected.Fields["packetId"])}
 }
 
+func (MQTT) Observe(dir replay.Direction, expected, actual replay.Message, state *replay.RuntimeState) error {
+	if err := observeMQTTTransition(dir, actual, state); err != nil {
+		return err
+	}
+	if dir != replay.ServerToClient || actual.Fields["type"] != uint8(3) {
+		return nil
+	}
+	expectedID, ok := mqttFieldUint16(expected.Fields["packetId"])
+	actualID, hasID := mqttFieldUint16(actual.Fields["packetId"])
+	if ok && hasID {
+		state.Learned[mqttServerIDKey(expectedID)] = []byte{byte(actualID >> 8), byte(actualID)}
+		if expectedID != actualID {
+			state.Transformations = append(state.Transformations, "mqtt: live broker packet identifier mapped")
+		}
+	}
+	return nil
+}
+
 func (MQTT) Compare(expected, actual replay.Message, mode replay.VerifyMode) []replay.Difference {
+	if mode == replay.VerifyOff {
+		return nil
+	}
 	var out []replay.Difference
 	typ, _ := expected.Fields["type"].(uint8)
+	if typ == 2 && actual.Fields["mqttVersion"] == uint8(5) {
+		return mqtt5ConnackComparison(expected, actual)
+	}
 	fields := []string{"type", "packetId", "qos", "topic"}
 	if typ == 3 {
 		// A server chooses its own QoS PUBLISH identifier on each fresh
-		// session. Correlate learns it and Prepare applies it to later client
+		// session. Observe learns it and Prepare applies it to later client
 		// acknowledgement packets, so the numeric drift is not a mismatch.
 		fields = []string{"type", "qos", "topic"}
 	}
@@ -354,7 +440,7 @@ func (MQTT) Compare(expected, actual replay.Message, mode replay.VerifyMode) []r
 			}
 		}
 	}
-	if mode == replay.VerifyStrict && !bytes.Equal(want, got) {
+	if !bytes.Equal(want, got) {
 		out = append(out, replay.Difference{Field: "message", Expected: "byte-identical", Actual: "different bytes", Structural: true})
 	}
 	return out
@@ -362,6 +448,12 @@ func (MQTT) Compare(expected, actual replay.Message, mode replay.VerifyMode) []r
 
 func (MQTT) NormalizeExpected(direction replay.Direction, message replay.Message, state *replay.RuntimeState) (replay.Message, error) {
 	if direction != replay.ServerToClient || state == nil {
+		return message, nil
+	}
+	// Only a broker PUBREL continues a broker-owned PUBLISH transaction.
+	// PUBACK/PUBREC/PUBCOMP and subscription responses acknowledge client
+	// transactions, whose identifier namespace is independent of the broker's.
+	if message.Fields["type"] != uint8(6) {
 		return message, nil
 	}
 	expectedID, ok := mqttFieldUint16(message.Fields["packetId"])
@@ -387,7 +479,9 @@ func (MQTT) NormalizeExpected(direction replay.Direction, message replay.Message
 
 func mqttClientAcknowledgement(message replay.Message) bool {
 	typ, _ := message.Fields["type"].(uint8)
-	return typ == 4 || typ == 5 || typ == 6 || typ == 7
+	// A client PUBREL continues its own PUBLISH, so it must retain the
+	// client identifier even if a broker PUBLISH used the same captured ID.
+	return typ == 4 || typ == 5 || typ == 7
 }
 
 func mqttFieldUint16(value any) (uint16, bool) {

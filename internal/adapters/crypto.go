@@ -14,6 +14,9 @@ type TLS struct{}
 
 func (TLS) Name() string { return "tls-reterminate" }
 func (TLS) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
 	if dissect.DetectTLS(firstPayload(s)).IsTLS {
 		return 100
 	}
@@ -32,6 +35,9 @@ type SSH struct{}
 
 func (SSH) Name() string { return "ssh-reterminate" }
 func (SSH) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
 	if dissect.DetectSSH(firstPayload(s)) {
 		return 100
 	}

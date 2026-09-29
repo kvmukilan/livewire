@@ -70,12 +70,16 @@ func printProtocolReadiness(ready protocolReadiness) {
 // positional `live` experience. It deliberately contains values, not flag-set
 // details, so protocol runners do not need to know which front door was used.
 type orchestratorOptions struct {
+	executionFlags
+	captureDigest                       string
 	capture, iface, target              string
 	keylog, serverName, ca              string
 	insecure, strict, wire              bool
 	user, password, privateKey, hostKey string
 	commands, expects                   []string
 	timeout                             time.Duration
+	responseTimeout                     time.Duration
+	expectFault                         string
 	gap                                 time.Duration
 	report                              string
 	times                               int
@@ -110,6 +114,9 @@ func runProtocolCompatibility(kind protocolKind, args []string) error {
 // handled=false means the caller should use the normal protocol/transport plan.
 func orchestrateProtocolCapture(records []*pcapio.Record, opts orchestratorOptions) (handled bool, err error) {
 	if opts.wire {
+		if opts.inspection != nil {
+			return false, nil
+		}
 		if opts.iface == "" {
 			return true, fmt.Errorf("explicit wire replay needs -i <connection>; no packets were sent")
 		}
@@ -265,6 +272,10 @@ func ftpNeedsKeyLog(session *replay.Session) bool {
 	return session.Server.Port == 990 || strings.Contains(strings.ToUpper(string(client)), "AUTH TLS\r\n")
 }
 
+// sshPasswordEnv supplies an SSH password without putting it on the command
+// line. The interactive prompt remains the preferred path.
+const sshPasswordEnv = "LIVEWIRE_SSH_PASSWORD"
+
 func resolveSSHRequirements(opts *orchestratorOptions) error {
 	if opts.user == "" && isTerminal(os.Stdin) {
 		opts.user = prompt("SSH username: ")
@@ -274,6 +285,11 @@ func resolveSSHRequirements(opts *orchestratorOptions) error {
 	}
 	if opts.password != "" && opts.privateKey != "" {
 		return fmt.Errorf("SSH accepts exactly one authentication method; pass either -pass or -key, not both")
+	}
+	if opts.password == "" && opts.privateKey == "" {
+		// A password on the command line lands in shell history and process
+		// listings; the environment is the scripted alternative to the prompt.
+		opts.password = os.Getenv(sshPasswordEnv)
 	}
 	if opts.password == "" && opts.privateKey == "" && isTerminal(os.Stdin) {
 		opts.privateKey = prompt("SSH private-key path (leave blank to enter a password): ")
@@ -338,6 +354,8 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 	var reportRegistry *replay.Registry
 	if opts.inspection != nil {
 		cfg := secureexec.Config{Inspection: opts.inspection, Target: opts.target, ServerName: opts.serverName, User: opts.user, Password: opts.password, Commands: opts.commands, Expects: opts.expects, Variables: opts.variables, Timeout: opts.timeout, Insecure: opts.insecure, Verify: replay.VerifyLenient}
+		cfg.Scenario = opts.scenario
+		cfg.ExchangeTimeout = opts.responseTimeout
 		if opts.strict {
 			cfg.Verify = replay.VerifyStrict
 		}
@@ -363,10 +381,17 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 		}
 	}
 	var errs []error
+	var faults []*faultObservation
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := opts.executionFlags.context(ctx)
+	defer cancel()
 	runs := iterate.Plan{Times: opts.times, Gap: opts.gap, StopWhenDifferent: opts.stopWhenDifferent}.Normalize()
 	per := runs.Run(ctx, func(index int) iterate.Tally {
+		exec := replay.Execution(ctx)
+		exec.Attempt = index
+		exec.Scenario = replay.NewScenarioRuntime(opts.scenario)
+		attemptCtx := replay.WithExecution(ctx, exec)
 		attempt := index + 1
 		if opts.times > 1 {
 			fmt.Printf("\n---- fresh secure attempt %d of %d ----\n", attempt, opts.times)
@@ -377,21 +402,26 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 		if prepared == nil {
 			runErr = runProtocolCompatibility(kind, args)
 		} else {
-			outcome, e := prepared.Run(ctx)
+			outcome, e := prepared.Run(attemptCtx)
 			directOutcome = &outcome
 			runErr = e
 			if e != nil {
 				outcome.Error = redactProtocolError(e, opts).Error()
 			}
-			digest, digestErr := sha256File(opts.capture)
-			report := newReterminationReport(string(kind), digest, opts.target, opts.inspection.Plan, reportRegistry, opts.variables, append(append([]string{opts.user, opts.password}, opts.commands...), opts.expects...)...)
+			report := newReterminationReport(string(kind), opts.captureDigest, opts.target, opts.inspection.Plan, reportRegistry, opts.variables, append(append([]string{opts.user, opts.password}, opts.commands...), opts.expects...)...)
 			report.Outcome = outcome
+			report.Fault = observeExpectedFault(attemptCtx, opts.expectFault, outcome.Requests, outcome.Cleanup, e)
+			faults = append(faults, report.Fault)
+			if report.Fault != nil && report.Fault.Matched {
+				runErr = nil
+			}
+			report.secretValues = append(report.secretValues, exec.Scenario.SecretValues()...)
 			report.Transformations = []string{"fresh session executed using explicit replay intent and selected capture sessions"}
 			if opts.insecure {
 				report.Limitations = append(report.Limitations, "TLS peer identity verification was explicitly disabled")
 			}
 			path := protocolAttemptReportPath(opts.report, attempt, opts.times)
-			publicationErr = errors.Join(digestErr, report.write(path))
+			publicationErr = report.write(path)
 			runErr = errors.Join(runErr, publicationErr)
 			fmt.Printf("RESULT: %s\n", iterate.ClassifyVerified(outcome.Completed, outcome.Verified, outcome.Matched, false).Plain())
 			if publicationErr == nil {
@@ -431,7 +461,7 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 		errs = append(errs, ctx.Err())
 	}
 	if opts.times > 1 {
-		summary := iterate.Summarize(per, runs.Times)
+		summary := iterate.SummarizeContext(ctx, per, runs.Times)
 		fmt.Print(summary.Plain())
 		if len(per) > 0 {
 			fmt.Printf("Secure report paths: %s through %s\n",
@@ -439,6 +469,8 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 				protocolAttemptReportPath(opts.report, len(per), opts.times))
 		}
 	}
+	errs = append(errs, strictExitError(opts.strictExit, ctx, iterate.SummarizeContext(ctx, per, runs.Times)))
+	errs = append(errs, faultExpectationError(ctx, opts.expectFault, faults))
 	return errors.Join(errs...)
 }
 

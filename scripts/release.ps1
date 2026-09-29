@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "0.9.0-rc.2",
+    [string]$Version = "1.0.0",
     [string]$OutputRoot = "dist"
 )
 
@@ -17,26 +17,46 @@ if ((& go env GOVERSION).Trim() -ne $requiredGo) {
     throw "Release artifacts require $requiredGo; set GOTOOLCHAIN=$requiredGo"
 }
 if (Test-Path -LiteralPath $output) {
-    Remove-Item -LiteralPath $output -Recurse -Force
+    throw "Refusing to replace existing artifacts at $output; use a new version or a fresh -OutputRoot"
 }
-New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $reported = (& go run ./cmd/livewire version 2>&1 | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $reported -ne "livewire $Version") {
     throw "Version mismatch: expected livewire $Version, got '$reported'"
 }
+New-Item -ItemType Directory -Path $output -Force | Out-Null
 
 $targets = @(
     @{ GOOS = "linux"; GOARCH = "amd64"; Name = "livewire-$Version-linux-amd64" },
     @{ GOOS = "linux"; GOARCH = "arm64"; Name = "livewire-$Version-linux-arm64" },
     @{ GOOS = "windows"; GOARCH = "amd64"; Name = "livewire-$Version-windows-amd64.exe" }
 )
-$documents = @("LICENSE", "README.md", "SETUP.md", "WINDOWS-QUICKSTART.md", "DOCUMENTATION.md", "CHANGELOG.md", "SECURITY.md", "RELEASE_AUDIT.md", "WORKFLOW.md")
+# Packaged documents sit flat beside the executable. The operator guides live
+# under docs/ in the repository, so their relative links are rewritten to match.
+$documents = @(
+    @{ Source = "LICENSE"; Name = "LICENSE" },
+    @{ Source = "README.md"; Name = "README.md" },
+    @{ Source = "CHANGELOG.md"; Name = "CHANGELOG.md" },
+    @{ Source = "SECURITY.md"; Name = "SECURITY.md" },
+    @{ Source = "docs/SETUP.md"; Name = "SETUP.md" },
+    @{ Source = "docs/COMMANDS.md"; Name = "COMMANDS.md" },
+    @{ Source = "docs/WINDOWS-QUICKSTART.md"; Name = "WINDOWS-QUICKSTART.md" },
+    @{ Source = "docs/DOCUMENTATION.md"; Name = "DOCUMENTATION.md" },
+    @{ Source = "docs/RELEASE_AUDIT.md"; Name = "RELEASE_AUDIT.md" },
+    @{ Source = "docs/WORKFLOW.md"; Name = "WORKFLOW.md" },
+    @{ Source = "docs/PRODUCTION.md"; Name = "PRODUCTION.md" },
+    @{ Source = "docs/RELIABILITY_IMPLEMENTATION.md"; Name = "RELIABILITY_IMPLEMENTATION.md" },
+    @{ Source = "docs/V1_QUALIFICATION.md"; Name = "V1_QUALIFICATION.md" }
+)
 
 function Copy-ReleaseText([string]$Source, [string]$Destination) {
     # Match .gitattributes even when an editor produced CRLF in the worktree.
     # Otherwise Git normalizes committed documents after checksums were made.
     $text = [IO.File]::ReadAllText($Source).Replace("`r`n", "`n")
+    if ($Destination.EndsWith(".md")) {
+        # Every packaged document sits in one flat folder.
+        $text = $text.Replace("](../", "](").Replace("](docs/", "](")
+    }
     [IO.File]::WriteAllText($Destination, $text, [Text.UTF8Encoding]::new($false))
 }
 
@@ -68,11 +88,11 @@ try {
     }
 
     foreach ($document in $documents) {
-        $source = Join-Path $repo $document
+        $source = Join-Path $repo $document.Source
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "Release document is missing: $document"
+            throw "Release document is missing: $($document.Source)"
         }
-        Copy-ReleaseText $source (Join-Path $output $document)
+        Copy-ReleaseText $source (Join-Path $output $document.Name)
     }
     Copy-ReleaseText (Join-Path $repo "scripts\setup-windows.ps1") (Join-Path $output "setup-windows.ps1")
 
@@ -95,8 +115,8 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     New-Item -ItemType Directory -Path $windowsStage -Force | Out-Null
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
-        "SETUP.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
-        "RELEASE_AUDIT.md", "WORKFLOW.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
+        "SETUP.md", "COMMANDS.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
+        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "RELIABILITY_IMPLEMENTATION.md", "V1_QUALIFICATION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
     }
@@ -105,7 +125,12 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     $zipPath = Join-Path $output "livewire-$Version-windows-amd64.zip"
     & go run ./scripts/releasegen.go zip -source $windowsStage -output $zipPath
     if ($LASTEXITCODE -ne 0) { throw "Deterministic Windows ZIP generation failed" }
-    Remove-Item -LiteralPath $windowsStage -Recurse -Force
+    $resolvedStage = (Resolve-Path -LiteralPath $windowsStage).Path
+    if ($resolvedStage -ne [IO.Path]::GetFullPath((Join-Path $output "windows-amd64")) -or
+        -not $resolvedStage.StartsWith($output + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove a staging directory outside the release output"
+    }
+    Remove-Item -LiteralPath $resolvedStage -Recurse -Force
 
     $checksumPath = Join-Path $output "SHA256SUMS"
     & go run ./scripts/releasegen.go checksums -directory $output -output $checksumPath

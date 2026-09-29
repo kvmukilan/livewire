@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.0",
+  "suite": "application",
+  "platform": "linux-amd64",
+  "environment": "Linux amd64 on WSL2; clean rebuilt frozen release binary; independent loopback software peers; all16 application cases; no physical devices",
+  "command": "live",
+  "binarySha256": "9c869c163f08ff6db6e8bcc444d4b0539fc48f3e2e6dd3334bc019a1a8075273",
+  "sourceDigest": "f2556ac8dbc8d3313d7bfed9e0279ce27a8c2501fa0fa4d8b5db8b947c11964b",
+  "started": "2026-09-28T20:49:09.735770166Z",
+  "finished": "2026-09-28T21:08:34.961883441Z",
+  "interrupted": false,
+  "cleanupVerified": true,
+  "case": {
+    "name": "mqtt311-tls",
+    "passes": 32,
+    "failures": 1,
+    "firstAt": "2026-09-28T20:49:18.471677353Z",
+    "lastAt": "2026-09-28T21:07:32.384699623Z",
+    "requestsObserved": 864,
+    "responsesVerified": 576,
+    "cleanupVerified": true,
+    "repeatedProcessPasses": 32
+  },
+  "originalRunReportSHA256": "3a2a5f4d4bb44e52200c7c8b5d5daa8bc706484844b2ecddb88ef110736eac68",
+  "originalTranscriptSHA256": "4abf3a8a204dc4b1428923f570d8a41a261cf79ec03a6c67a4001183bbc8ad96",
+  "originalRunDirectory": "coverage/v1-soak/linux-live-final",
+  "fixedProbeSourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "excludedFromPassingQualification": true
+}

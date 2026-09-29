@@ -34,7 +34,8 @@ func executeReplayPlan(cfg executePlanConfig) []plannedResult {
 	return planexec.Execute(planexec.Config{
 		Context: cfg.Context, Trace: cfg.Trace, Plan: cfg.Plan, Registry: cfg.Registry,
 		Flows: cfg.Flows, Iface: cfg.Iface, TargetIP: cfg.TargetIP, Variables: cfg.Variables,
-		Verify: replay.VerifyMode(cfg.Live.verify.String()),
+		Verify:          replay.VerifyMode(cfg.Live.verify.String()),
+		ExchangeTimeout: cfg.Live.responseTimeout,
 		TCPConfig: func(flow *engine.Flow, session *replay.Session) livereplay.Config {
 			return cfg.Live.config(flow, cfg.TargetIP, session.Server.Port)
 		},

@@ -238,6 +238,9 @@ func ftpDataSessionMatches(candidate, control *replay.Session, endpoint netip.Ad
 func (FTP) Name() string { return "ftp" }
 
 func (FTP) Detect(s replay.Session) replay.Confidence {
+	if s.Transport != replay.TransportTCP {
+		return 0
+	}
 	line := strings.ToUpper(string(firstLine(firstPayload(s))))
 	if ftpReplyCode(line) != 0 || ftpCommand(line) != "" {
 		return 100

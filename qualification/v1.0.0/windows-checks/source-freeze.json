@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.0",
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "blockingFindings": [
+    "Qualification has not been completed"
+  ],
+  "platforms": {
+    "linux-amd64": {
+      "protocolDeviceCombinations": [],
+      "commandSoaks": {
+        "live": {
+          "seconds": 0,
+          "passed": false,
+          "cleanupVerified": false,
+          "evidence": null
+        },
+        "reproduce": {
+          "seconds": 0,
+          "passed": false,
+          "cleanupVerified": false,
+          "evidence": null
+        }
+      },
+      "os": "",
+      "driver": "",
+      "nic": "",
+      "dut": "",
+      "firmware": "",
+      "binarySha256": "",
+      "scenarios": {
+        "application": [],
+        "cancellation": [],
+        "capture": [],
+        "changed-response-body": [],
+        "changed-resume-input": [],
+        "concurrent-resume": [],
+        "corrupt-journal": [],
+        "crash-after-response": [],
+        "crash-after-send": [],
+        "crash-before-send": [],
+        "crash-during-checkpoint": [],
+        "disk-full": [],
+        "driver-error": [],
+        "failed-cleanup": [],
+        "icmp": [],
+        "interface-removal": [],
+        "invalid-credentials": [],
+        "live-state-verify-off": [],
+        "malformed-frames": [],
+        "out-of-order-duplicates": [],
+        "report-collision": [],
+        "reproduce-live-equivalence": [],
+        "secret-free-journal": [],
+        "split-coalesced-frames": [],
+        "stateful-tcp": [],
+        "target-disconnect": [],
+        "tls-live-state": [],
+        "two-interface-dut": [],
+        "udp": [],
+        "uncertain-write-recovery": [],
+        "unsolicited-traffic": [],
+        "wire": []
+      },
+      "soak": {
+        "seconds": 0,
+        "passed": false,
+        "cleanupVerified": false,
+        "evidence": []
+      }
+    },
+    "windows-amd64": {
+      "protocolDeviceCombinations": [],
+      "commandSoaks": {
+        "live": {
+          "seconds": 0,
+          "passed": false,
+          "cleanupVerified": false,
+          "evidence": null
+        },
+        "reproduce": {
+          "seconds": 0,
+          "passed": false,
+          "cleanupVerified": false,
+          "evidence": null
+        }
+      },
+      "os": "",
+      "driver": "",
+      "nic": "",
+      "dut": "",
+      "firmware": "",
+      "binarySha256": "",
+      "scenarios": {
+        "application": [],
+        "cancellation": [],
+        "capture": [],
+        "changed-response-body": [],
+        "changed-resume-input": [],
+        "concurrent-resume": [],
+        "corrupt-journal": [],
+        "crash-after-response": [],
+        "crash-after-send": [],
+        "crash-before-send": [],
+        "crash-during-checkpoint": [],
+        "disk-full": [],
+        "driver-error": [],
+        "failed-cleanup": [],
+        "icmp": [],
+        "interface-removal": [],
+        "invalid-credentials": [],
+        "live-state-verify-off": [],
+        "malformed-frames": [],
+        "out-of-order-duplicates": [],
+        "report-collision": [],
+        "reproduce-live-equivalence": [],
+        "secret-free-journal": [],
+        "split-coalesced-frames": [],
+        "stateful-tcp": [],
+        "target-disconnect": [],
+        "tls-live-state": [],
+        "two-interface-dut": [],
+        "udp": [],
+        "uncertain-write-recovery": [],
+        "unsolicited-traffic": [],
+        "wire": []
+      },
+      "soak": {
+        "seconds": 0,
+        "passed": false,
+        "cleanupVerified": false,
+        "evidence": []
+      }
+    }
+  },
+  "browser": {
+    "browserVersion": "",
+    "checks": {
+      "changed-inputs": false,
+      "desktop-width": false,
+      "downloads": false,
+      "keyboard": false,
+      "narrow-width": false,
+      "preview": false,
+      "results": false,
+      "start-stop": false
+    },
+    "evidence": []
+  },
+  "benchmarks": [],
+  "pilot": []
+}

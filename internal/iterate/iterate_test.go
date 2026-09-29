@@ -206,6 +206,15 @@ func TestPlanRunCancelDuringGapKeepsFinishedAttempts(t *testing.T) {
 	}
 }
 
+func TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	s := SummarizeContext(ctx, []Tally{{Same: 1}}, 5)
+	if s.Status != "cancelled" || s.Attempts != 1 || s.Same != 1 {
+		t.Fatalf("incorrect interrupted summary: %+v", s)
+	}
+}
+
 func TestPlanRunNilContext(t *testing.T) {
 	//lint:ignore SA1012 a nil context is tolerated so callers need no guard.
 	got := Plan{Times: 2}.Run(nil, func(int) Tally { return Tally{Same: 1} })

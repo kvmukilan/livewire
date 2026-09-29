@@ -1,6 +1,9 @@
 package replay
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type Confidence int
 
@@ -11,8 +14,17 @@ type Message struct {
 }
 
 type RuntimeState struct {
-	Variables map[string]string
-	Learned   map[string][]byte
+	Variables  map[string]string
+	Learned    map[string][]byte
+	Phase      SessionPhase
+	Generation uint64
+	Protocol   map[string]any
+	// Pending holds protocol-control replies queued by stateful decoding. The
+	// connection's single reader drains it before attempting another read.
+	Pending         []Message
+	LastWrite       time.Time
+	LastRead        time.Time
+	Transformations []string
 }
 
 type Match struct {

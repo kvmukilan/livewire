@@ -65,10 +65,11 @@ func runTLSReplayArgs(args []string) error {
 	if *timeout <= 0 || *timeout > 10*time.Minute {
 		return fmt.Errorf("-timeout must be greater than zero and at most 10m")
 	}
-	records, _, err := loadRecords(inPath)
+	capture, digest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
+	records := capture.Records
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
 	trace, err = replayintent.Select(trace, selectedSessions, nil)
 	if err != nil {
@@ -142,10 +143,6 @@ func runTLSReplayArgs(args []string) error {
 		return err
 	}
 	*reportPath = resolvedReport
-	digest, err := sha256File(inPath)
-	if err != nil {
-		return fmt.Errorf("capture digest: %w", err)
-	}
 	host, _, err := net.SplitHostPort(target)
 	if err != nil {
 		return fmt.Errorf("invalid -target: %w", err)
@@ -210,6 +207,7 @@ func runTLSReplayArgs(args []string) error {
 	} else {
 		report.Outcome.Completed = true
 	}
+	report.Outcome.Finalize(ctx, runErr)
 	if err := report.write(*reportPath); err != nil {
 		if runErr != nil {
 			return fmt.Errorf("%w (also could not write TLS report: %v)", runErr, err)

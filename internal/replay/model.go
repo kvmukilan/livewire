@@ -125,8 +125,13 @@ const (
 )
 
 type PlanEntry struct {
-	Excluded          bool      `json:"excluded,omitempty"`
-	SessionID         string    `json:"sessionId"`
+	Capabilities *Capabilities `json:"capabilities,omitempty"`
+	Excluded     bool          `json:"excluded,omitempty"`
+	SessionID    string        `json:"sessionId"`
+	// Fingerprint names the exchange by its content, so it survives the
+	// renumbering that trimming or merging a capture causes. See
+	// Session.Fingerprint.
+	Fingerprint       string    `json:"fingerprint,omitempty"`
 	Transport         Transport `json:"transport"`
 	Driver            string    `json:"driver"`
 	Adapter           string    `json:"adapter,omitempty"`

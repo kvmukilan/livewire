@@ -1,0 +1,20 @@
+{"Time":"2026-09-29T02:59:23.546232879+05:30","Action":"start","Package":"github.com/kvmukilan/livewire/internal/ftpreplay"}
+{"Time":"2026-09-29T02:59:23.551413341+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPCancellationReleasesBlockedControlRead"}
+{"Time":"2026-09-29T02:59:23.55145552+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPCancellationReleasesBlockedControlRead","Output":"=== RUN   TestFTPCancellationReleasesBlockedControlRead\n"}
+{"Time":"2026-09-29T02:59:23.595401771+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPCancellationReleasesBlockedControlRead","Output":"--- PASS: TestFTPCancellationReleasesBlockedControlRead (0.04s)\n"}
+{"Time":"2026-09-29T02:59:23.595440053+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPCancellationReleasesBlockedControlRead","Elapsed":0.04}
+{"Time":"2026-09-29T02:59:23.595452777+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPDataReadCancellationAndDeadline"}
+{"Time":"2026-09-29T02:59:23.595455552+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPDataReadCancellationAndDeadline","Output":"=== RUN   TestFTPDataReadCancellationAndDeadline\n"}
+{"Time":"2026-09-29T02:59:23.646005322+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPDataReadCancellationAndDeadline","Output":"--- PASS: TestFTPDataReadCancellationAndDeadline (0.05s)\n"}
+{"Time":"2026-09-29T02:59:23.646047612+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestFTPDataReadCancellationAndDeadline","Elapsed":0.05}
+{"Time":"2026-09-29T02:59:23.646062159+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestPassiveFTPReplayCoordinatesDataAndCredentials"}
+{"Time":"2026-09-29T02:59:23.646066127+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestPassiveFTPReplayCoordinatesDataAndCredentials","Output":"=== RUN   TestPassiveFTPReplayCoordinatesDataAndCredentials\n"}
+{"Time":"2026-09-29T02:59:23.670849548+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestPassiveFTPReplayCoordinatesDataAndCredentials","Output":"--- PASS: TestPassiveFTPReplayCoordinatesDataAndCredentials (0.02s)\n"}
+{"Time":"2026-09-29T02:59:23.670894412+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestPassiveFTPReplayCoordinatesDataAndCredentials","Elapsed":0.02}
+{"Time":"2026-09-29T02:59:23.670900904+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestProtectedPassiveDataConnection"}
+{"Time":"2026-09-29T02:59:23.670903709+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestProtectedPassiveDataConnection","Output":"=== RUN   TestProtectedPassiveDataConnection\n"}
+{"Time":"2026-09-29T02:59:23.715014418+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestProtectedPassiveDataConnection","Output":"--- PASS: TestProtectedPassiveDataConnection (0.04s)\n"}
+{"Time":"2026-09-29T02:59:23.715058952+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Test":"TestProtectedPassiveDataConnection","Elapsed":0.04}
+{"Time":"2026-09-29T02:59:23.715066125+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Output":"PASS\n"}
+{"Time":"2026-09-29T02:59:23.716211754+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Output":"ok  \tgithub.com/kvmukilan/livewire/internal/ftpreplay\t0.170s\n"}
+{"Time":"2026-09-29T02:59:23.716236741+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/ftpreplay","Elapsed":0.17}

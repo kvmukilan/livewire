@@ -52,6 +52,23 @@ func (a *AtomicFile) Write(p []byte) (int, error) { return a.file.Write(p) }
 func (a *AtomicFile) File() *os.File              { return a.file }
 func (a *AtomicFile) Name() string                { return a.target }
 
+// PreservePartial closes an unfinished artifact without deleting its private
+// temporary file. The returned path is explicitly partial and never published
+// under the successful artifact's target name.
+func (a *AtomicFile) PreservePartial() (string, error) {
+	if a == nil {
+		return "", nil
+	}
+	path := a.tmp
+	var err error
+	if a.file != nil {
+		err = errors.Join(a.file.Sync(), a.file.Close())
+		a.file = nil
+	}
+	a.tmp = ""
+	return path, err
+}
+
 // Commit flushes, closes, and publishes the completed file without replacing an
 // existing target. A hard link is used for the publication step because link
 // creation is atomic and has consistent no-replace semantics on Unix and

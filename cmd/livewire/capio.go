@@ -1,9 +1,32 @@
 package main
 
 import (
+	"crypto/sha256"
+	"errors"
+	"fmt"
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"io"
+	"os"
 )
+
+// loadCaptureSnapshot hashes the exact byte stream passed to the strict loader.
+// A later rename or edit of the source cannot change the report's identity.
+func loadCaptureSnapshot(path string) (capture pcapio.Capture, digest string, retErr error) {
+	// #nosec G703 -- the CLI operator explicitly selects a local capture path;
+	// unlike the dashboard, the CLI has no confined directory. Parsing is bounded.
+	f, err := os.Open(path)
+	if err != nil {
+		return capture, "", err
+	}
+	defer func() { retErr = errors.Join(retErr, f.Close()) }()
+	h := sha256.New()
+	capture, err = orchestration.Load(io.TeeReader(f, h))
+	if err != nil {
+		return capture, "", err
+	}
+	return capture, fmt.Sprintf("sha256:%x", h.Sum(nil)), nil
+}
 
 // input preserves the small iterator surface used by older command stages while
 // delegating all parsing, validation, and limits to pcapio.LoadFile.

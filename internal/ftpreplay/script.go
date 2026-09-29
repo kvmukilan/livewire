@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
@@ -56,7 +57,7 @@ func BuildScript(session *replay.Session, keylog *tlsreplay.KeyLog) (Script, err
 		if err != nil {
 			return Script{}, err
 		}
-		return Script{Turns: turns, ProtectData: scriptProtectsData(turns)}, nil
+		return checkedScript(turns, false, false)
 	}
 	if keylog == nil {
 		return Script{}, fmt.Errorf("ftpreplay: FTPS capture requires a matching NSS key log")
@@ -96,7 +97,7 @@ func BuildScript(session *replay.Session, keylog *tlsreplay.KeyLog) (Script, err
 		}
 	}
 	sortTurns(turns)
-	return Script{Turns: turns, Explicit: explicit, Implicit: implicit, ProtectData: scriptProtectsData(turns)}, nil
+	return checkedScript(turns, explicit, implicit)
 }
 
 func timedPlainTurns(client, server replay.TCPStreamTimeline, clientEnd, serverEnd int) ([]Turn, error) {
@@ -151,11 +152,82 @@ func findTLSStart(data []byte, start int) int {
 	return -1
 }
 
-func scriptProtectsData(turns []Turn) bool {
+func checkedScript(turns []Turn, explicit, implicit bool) (Script, error) {
+	settings, err := transferSettings(turns)
+	if err != nil {
+		return Script{}, err
+	}
+	script := Script{Turns: turns, Explicit: explicit, Implicit: implicit}
+	for _, setting := range settings {
+		script.ProtectData = script.ProtectData || setting.protected
+	}
+	return script, nil
+}
+
+type dataSetting struct{ protected, active bool }
+
+// transferSettings follows final control replies, so rejected PROT commands
+// never change protection and accepted PROT C applies only to later transfers.
+func transferSettings(turns []Turn) ([]dataSetting, error) {
+	type command struct {
+		name, argument string
+		transfer       int
+	}
+	var pending []command
+	var settings []dataSetting
+	var current dataSetting
 	for _, turn := range turns {
-		if turn.Direction == replay.ClientToServer && strings.EqualFold(strings.TrimSpace(string(turn.Message.Raw)), "PROT P") {
-			return true
+		fields := strings.Fields(string(turn.Message.Raw))
+		if len(fields) == 0 {
+			continue
+		}
+		if turn.Direction == replay.ClientToServer {
+			cmd := command{name: strings.ToUpper(fields[0]), transfer: -1}
+			if len(fields) > 1 {
+				cmd.argument = strings.ToUpper(fields[1])
+			}
+			if isTransferCommand(cmd.name) {
+				cmd.transfer = len(settings)
+				settings = append(settings, current)
+			}
+			pending = append(pending, cmd)
+			continue
+		}
+		if len(pending) == 0 {
+			continue
+		} // Server greeting.
+		codeText := fields[0]
+		if len(codeText) < 3 {
+			return nil, fmt.Errorf("ftpreplay: malformed control reply while determining data protection")
+		}
+		code, err := strconv.Atoi(codeText[:3])
+		if err != nil {
+			return nil, fmt.Errorf("ftpreplay: invalid control reply while determining data protection")
+		}
+		cmd := pending[0]
+		if code/100 == 2 {
+			switch cmd.name {
+			case "PROT":
+				switch cmd.argument {
+				case "P":
+					current.protected = true
+				case "C":
+					current.protected = false
+				default:
+					return nil, fmt.Errorf("ftpreplay: accepted PROT %s is unsupported; only C and P are supported", cmd.argument)
+				}
+			case "PORT", "EPRT":
+				current.active = true
+			case "PASV", "EPSV":
+				current.active = false
+			}
+		}
+		if code/100 == 1 && cmd.transfer >= 0 {
+			settings[cmd.transfer] = current
+		}
+		if code/100 != 1 {
+			pending = pending[1:]
 		}
 	}
-	return false
+	return settings, nil
 }

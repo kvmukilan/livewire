@@ -104,7 +104,7 @@ func (s *Server) startSecureRun(w http.ResponseWriter, req adaptiveRunReq, diges
 			j.progress("result", in.Route.Session.ID, tally.Worst().Plain())
 			return tally
 		})
-		summary := iterate.Summarize(per, runs.Times)
+		summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
 		j.finish(ok && j.ctx.Err() == nil, summary.Plain())
 	})
 	if err != nil {

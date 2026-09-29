@@ -44,11 +44,14 @@ func DetectSSH(payload []byte) bool {
 // dnp3ObjectGroup120 is the IEEE 1815 Secure Authentication object group.
 const dnp3ObjectGroup120 = 120
 
-// UsesSecureAuth reports whether a DNP3 frame carries Secure Authentication
-// objects (group 120). Objects begin after the transport octet and the 2-byte
-// app header, so the first object's group byte is at UserData[3].
+// UsesSecureAuth conservatively flags the legacy group-120 byte pattern after
+// the transport octet and two application-header octets. Keep the check on
+// transport continuations too: they have no application header, so such a hit
+// is heuristic, but changing header parsing must not remove an existing
+// security blocker. This is not complete object or fragment inspection; a
+// negative result does not establish that fragmented traffic is free of SA.
 func (d DNP3) UsesSecureAuth() bool {
-	if !d.HasApp || len(d.UserData) < 4 {
+	if len(d.UserData) < 4 {
 		return false
 	}
 	return d.UserData[3] == dnp3ObjectGroup120

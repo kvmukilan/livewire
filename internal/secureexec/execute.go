@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -17,12 +18,14 @@ import (
 	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/replayintent"
+	"github.com/kvmukilan/livewire/internal/runstate"
 	"github.com/kvmukilan/livewire/internal/sshreplay"
 	"github.com/kvmukilan/livewire/internal/tlsreplay"
 	"golang.org/x/crypto/ssh"
 )
 
 type Config struct {
+	Scenario                        *replay.Scenario
 	Inspection                      *replayintent.Inspection
 	Registry                        *replay.Registry
 	Target, ServerName              string
@@ -33,14 +36,64 @@ type Config struct {
 	Insecure                        bool
 	Verify                          replay.VerifyMode
 	Timeout                         time.Duration
+	ExchangeTimeout                 time.Duration
 	Progress                        func(string)
 }
 
 type Prepared struct {
-	run func(context.Context) (Outcome, error)
+	run         func(context.Context) (Outcome, error)
+	sessionID   string
+	restartSafe bool
+	recover     func(context.Context) (bool, *runstate.Result, error)
 }
 
-func (p *Prepared) Run(ctx context.Context) (Outcome, error) { return p.run(ctx) }
+func (p *Prepared) Run(ctx context.Context) (o Outcome, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return Outcome{Status: replay.ResultStatus(false, false, false, false, err)}, err
+	}
+	var saved *runstate.Result
+	defer replay.Execution(ctx).Scenario.End(p.sessionID)
+	restartSafe := p.restartSafe
+	if !restartSafe && p.recover != nil {
+		var proven *runstate.Result
+		restartSafe, proven, err = p.recover(ctx)
+		if err != nil {
+			return o, err
+		}
+		if proven != nil {
+			key := fmt.Sprintf("%d/%s", replay.Execution(ctx).Attempt+1, p.sessionID)
+			err = replay.Execution(ctx).Journal.Finish(key, *proven)
+			o = Outcome{Completed: err == nil, VerificationEvidence: replay.VerificationEvidence{Scope: "recovery target-state probe", ReasonCode: "recovered_unverified", Cleanup: "complete"}}
+			o.Finalize(ctx, err)
+			return o, err
+		}
+	}
+	ctx, saved, err = replay.BeginSession(ctx, p.sessionID, restartSafe)
+	if err != nil {
+		return o, err
+	}
+	if saved != nil {
+		o = Outcome{Completed: saved.Completed, Verified: saved.Verified, Matched: saved.Matched, Requests: saved.Sent, Responses: saved.Received}
+		o.Finalize(ctx, nil)
+		return o, nil
+	}
+	defer func() {
+		err = errors.Join(err, replay.FinishSession(ctx, runstate.Result{Completed: o.Completed, Verified: o.Verified, Matched: o.Matched, Sent: o.Requests, Received: o.Responses}))
+		o.Finalize(ctx, err)
+	}()
+	if err = replay.RecordOperation(ctx, "intent", 0); err != nil {
+		return o, err
+	}
+	o, err = p.run(ctx)
+	if err == nil {
+		err = ctx.Err()
+	}
+	o.Finalize(ctx, err)
+	return o, err
+}
 
 func Prepare(c Config) (*Prepared, error) {
 	if c.Inspection == nil || !c.Inspection.Readiness.Supported {
@@ -57,6 +110,9 @@ func Prepare(c Config) (*Prepared, error) {
 	if c.Timeout <= 0 || c.Timeout > 10*time.Minute {
 		return nil, fmt.Errorf("timeout must be greater than zero and at most 10m")
 	}
+	if c.ExchangeTimeout < 0 || c.ExchangeTimeout > 10*time.Minute {
+		return nil, fmt.Errorf("response timeout must be between 0 and 10m")
+	}
 	if c.Verify == "" {
 		c.Verify = replay.VerifyLenient
 	}
@@ -72,7 +128,7 @@ func Prepare(c Config) (*Prepared, error) {
 		return prepareSSH(c)
 	}
 	var keys *tlsreplay.KeyLog
-	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) {
+	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) || len(c.KeyLog) > 0 {
 		if len(c.KeyLog) == 0 {
 			return nil, fmt.Errorf("matching NSS key log is required (-keylog)")
 		}
@@ -81,8 +137,15 @@ func Prepare(c Config) (*Prepared, error) {
 			return nil, e
 		}
 	}
+	var ftpScript ftpreplay.Script
+	if route.Kind == replayintent.FTP {
+		ftpScript, e = ftpreplay.BuildScript(s, keys)
+		if e != nil {
+			return nil, e
+		}
+	}
 	var tc *tls.Config
-	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) {
+	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) || ftpScript.ProtectData {
 		name := c.ServerName
 		if name == "" {
 			name = host
@@ -100,15 +163,16 @@ func Prepare(c Config) (*Prepared, error) {
 		}
 	}
 	if route.Kind == replayintent.FTP {
-		script, e := ftpreplay.BuildScript(s, keys)
-		if e != nil {
-			return nil, e
-		}
+		script := ftpScript
 		data, e := ftpreplay.MatchDataSessions(c.Inspection.Trace, s, script)
 		if e != nil {
 			return nil, e
 		}
-		return &Prepared{run: func(ctx context.Context) (Outcome, error) {
+		data, e = ftpreplay.PrepareDataSessions(s, script, data, keys)
+		if e != nil {
+			return nil, e
+		}
+		return &Prepared{sessionID: s.ID, run: func(ctx context.Context) (Outcome, error) {
 			r, err := ftpreplay.RunContext(ctx, ftpreplay.Config{Control: s, Data: data, Address: c.Target, Script: script, Variables: c.Variables, TLSConfig: tc, Timeout: c.Timeout, Verify: c.Verify, Progress: c.Progress})
 			o := Outcome{Completed: r.Completed, Verified: r.Verified, Adapter: "ftp", Requests: r.Commands, Responses: r.Replies, Differences: r.Differences, Transfers: r.Transfers, PeerIdentityChecked: r.TLS && !c.Insecure}
 			o.Matched = o.Completed && o.Verified && len(r.Differences) == 0
@@ -129,7 +193,7 @@ func Prepare(c Config) (*Prepared, error) {
 	if e != nil {
 		return nil, e
 	}
-	innerSession := replay.Session{Transport: replay.TransportTCP, Client: s.Client, Server: s.Server}
+	innerSession := replay.Session{ID: s.ID, Transport: replay.TransportTCP, Client: s.Client, Server: s.Server}
 	for i, m := range messages {
 		d := replay.ClientToServer
 		if m.Role == tlsreplay.FromServer {
@@ -145,12 +209,17 @@ func Prepare(c Config) (*Prepared, error) {
 		}
 	}
 	// Each attempt needs new learned state and newly prepared dynamic values.
+	if c.Scenario != nil {
+		if e := c.Scenario.ValidateSession(&innerSession, adapter); e != nil {
+			return nil, e
+		}
+	}
 	makeScript := func() ([]tlsreplay.AppMessage, *replay.RuntimeState, error) {
 		vars := map[string]string{}
 		for k, v := range c.Variables {
 			vars[k] = v
 		}
-		state := &replay.RuntimeState{Variables: vars, Learned: map[string][]byte{}}
+		state := replay.NewRuntimeState(vars)
 		if adapter == nil {
 			return tlsreplay.ConversationOrder(messages), state, nil
 		}
@@ -160,23 +229,23 @@ func Prepare(c Config) (*Prepared, error) {
 	if _, _, e = makeScript(); e != nil {
 		return nil, e
 	}
-	return &Prepared{run: func(ctx context.Context) (Outcome, error) {
+	return &Prepared{sessionID: s.ID, restartSafe: replay.ScenarioRestartSafe(adapter, &innerSession, c.Scenario), recover: func(ctx context.Context) (bool, *runstate.Result, error) {
+		d := &tls.Dialer{NetDialer: &net.Dialer{Timeout: c.Timeout}, Config: tc}
+		return replay.CheckRecovery(ctx, &innerSession, adapter, c.Variables, c.Timeout, func(ctx context.Context) (net.Conn, error) { return d.DialContext(ctx, "tcp", c.Target) }, true)
+	}, run: func(ctx context.Context) (Outcome, error) {
 		script, state, err := makeScript()
 		if err != nil {
 			return Outcome{}, err
 		}
 		verified := c.Verify != replay.VerifyOff && (c.Verify == replay.VerifyStrict || adapter != nil)
-		r, err := tlsreplay.ReTerminateContext(ctx, tlsreplay.ReTermConfig{Address: c.Target, TLSConfig: tc, Script: script, Timeout: c.Timeout, Verify: c.Verify == replay.VerifyStrict, Adapter: adapter, State: state, VerifyMode: c.Verify})
+		r, err := tlsreplay.ReTerminateContext(ctx, tlsreplay.ReTermConfig{SessionID: s.ID, Address: c.Target, TLSConfig: tc, Script: script, Timeout: c.Timeout, ExchangeTimeout: c.ExchangeTimeout, Profile: c.Inspection.Plan.Profile, Verify: c.Verify == replay.VerifyStrict, Adapter: adapter, State: state, VerifyMode: c.Verify})
 		o := Outcome{Completed: err == nil, Adapter: "opaque plaintext"}
 		if adapter != nil {
 			o.Adapter = adapter.Name()
 		}
-		for _, m := range script {
-			if m.Role == tlsreplay.FromClient {
-				o.Requests++
-			}
-		}
 		if r != nil {
+			o.Requests = r.Requests
+			o.VerificationEvidence = r.VerificationEvidence
 			o.Verified = verified && len(r.Responses) > 0
 			o.Responses = len(r.Responses)
 			o.Mismatches = r.Mismatches
@@ -234,7 +303,7 @@ func prepareSSH(c Config) (*Prepared, error) {
 		}
 	}
 	verify = verify && c.Verify != replay.VerifyOff
-	return &Prepared{run: func(ctx context.Context) (Outcome, error) {
+	return &Prepared{sessionID: c.Inspection.Route.Session.ID, run: func(ctx context.Context) (Outcome, error) {
 		r, err := sshreplay.ReTerminateContext(ctx, sshreplay.Config{Address: c.Target, Auth: sshreplay.Auth{User: c.User, Password: c.Password, PrivateKey: c.PrivateKey}, Commands: commands, Timeout: c.Timeout, Verify: verify, HostKey: key})
 		o := Outcome{Completed: err == nil, Verified: verify && allExpected, Adapter: "ssh-reterminate", ProtocolVersion: "SSHv2", Requests: len(commands)}
 		if r != nil {

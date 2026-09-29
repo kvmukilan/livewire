@@ -12,6 +12,7 @@ package iterate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -259,6 +260,7 @@ func ShiftPort(captured uint16, n int) uint16 {
 // Summary reduces every attempt to the answer a peer needs: what happened, how
 // often, and whether the device was consistent about it.
 type Summary struct {
+	Status string `json:"status,omitempty"`
 	// Attempts is the number that actually ran, which is fewer than the plan
 	// asked for if the run stopped early.
 	Attempts int `json:"attempts"`
@@ -324,7 +326,21 @@ func Summarize(per []Tally, requested int) Summary {
 	}
 	s.Verdict = worst
 	s.VerdictName = worst.String()
+	s.Status = map[Verdict]string{Same: "matched", Different: "different", WireOnly: "wire", Unverified: "unverified", Incomplete: "incomplete"}[worst]
 	s.Intermittent = len(per) > 1 && !s.Consistent
+	return s
+}
+
+// SummarizeContext retains completed attempts while reporting an interrupted
+// repetition as interrupted, including a stop during the gap between attempts.
+func SummarizeContext(ctx context.Context, per []Tally, requested int) Summary {
+	s := Summarize(per, requested)
+	if ctx != nil && ctx.Err() != nil {
+		s.Status = "incomplete"
+		if errors.Is(ctx.Err(), context.Canceled) {
+			s.Status = "cancelled"
+		}
+	}
 	return s
 }
 
@@ -334,7 +350,9 @@ func Summarize(per []Tally, requested int) Summary {
 func (s Summary) Plain() string {
 	var b strings.Builder
 	b.WriteString("\n================================\n")
-	if s.Intermittent {
+	if s.Status == "cancelled" {
+		b.WriteString("OVERALL: CANCELLED; COMPLETED ATTEMPTS RETAINED\n")
+	} else if s.Intermittent {
 		b.WriteString("OVERALL: INTERMITTENT\n")
 	} else {
 		b.WriteString("OVERALL: " + s.Verdict.Plain() + "\n")
@@ -360,8 +378,8 @@ func (s Summary) Plain() string {
 		b.WriteString("Only one attempt ran, so this is what happened that time, not how often\n")
 		b.WriteString("it happens. Send us the report file.\n")
 	case s.Verdict == Same:
-		fmt.Fprintf(&b, "The device behaved as it did in the recording on all %d attempts.\n", s.Attempts)
-		b.WriteString("If the recording shows the problem, the problem reproduces on this device.\n")
+		fmt.Fprintf(&b, "The checked responses matched the recording on all %d attempts.\n", s.Attempts)
+		b.WriteString("This establishes response equivalence within the selected verification scope. Use an explicit fault expectation to test a reset or response timeout.\n")
 	case s.Verdict == Different:
 		fmt.Fprintf(&b, "The device answered differently on all %d attempts — consistently, not by\n", s.Attempts)
 		b.WriteString("chance. Send us the report file.\n")

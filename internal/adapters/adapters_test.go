@@ -302,6 +302,9 @@ func TestMQTTLearnsBrokerPacketIDAcrossQoSFlow(t *testing.T) {
 	if match := adapter.Correlate(expected[0], actual[0], state); !match.Matched {
 		t.Fatalf("broker PUBLISH did not correlate: %+v", match)
 	}
+	if err := replay.Observe(adapter, replay.ServerToClient, expected[0], actual[0], state); err != nil {
+		t.Fatal(err)
+	}
 	if diffs := adapter.Compare(expected[0], actual[0], replay.VerifyStrict); len(diffs) != 0 {
 		t.Fatalf("fresh broker packet ID should be normalized: %+v", diffs)
 	}
@@ -340,6 +343,9 @@ func TestRulePackLengthFramingVolatileAndCopy(t *testing.T) {
 	}
 	actual, _ := a.Decode(replay.ServerToClient, []byte{0xaa, 5, 7, 9, 0})
 	state := &replay.RuntimeState{Learned: map[string][]byte{}}
+	if err := replay.Observe(a, replay.ServerToClient, msgs[0], actual[0], state); err != nil {
+		t.Fatal(err)
+	}
 	if !a.Correlate(msgs[0], actual[0], state).Matched || state.Learned["token"][0] != 9 {
 		t.Fatal("correlation/copy learning failed")
 	}

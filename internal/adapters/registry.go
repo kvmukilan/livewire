@@ -2,7 +2,7 @@ package adapters
 
 import "github.com/kvmukilan/livewire/internal/replay"
 
-const BuiltInAdapterVersion = "1"
+const BuiltInAdapterVersion = "3"
 
 // DefaultRegistry returns a fresh registry so callers can add proprietary rule
 // packs without mutating process-global state.

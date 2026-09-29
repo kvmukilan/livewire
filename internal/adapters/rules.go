@@ -297,7 +297,11 @@ func (a *RuleAdapter) Correlate(expected, actual replay.Message, state *replay.R
 			return replay.Match{Reason: f.Name + " differs"}
 		}
 	}
-	if state != nil {
+	return replay.Match{Matched: true}
+}
+
+func (a *RuleAdapter) Observe(dir replay.Direction, _, actual replay.Message, state *replay.RuntimeState) error {
+	if dir == replay.ServerToClient && state != nil {
 		if state.Learned == nil {
 			state.Learned = map[string][]byte{}
 		}
@@ -307,7 +311,7 @@ func (a *RuleAdapter) Correlate(expected, actual replay.Message, state *replay.R
 			}
 		}
 	}
-	return replay.Match{Matched: true}
+	return nil
 }
 
 func (a *RuleAdapter) Compare(expected, actual replay.Message, mode replay.VerifyMode) []replay.Difference {

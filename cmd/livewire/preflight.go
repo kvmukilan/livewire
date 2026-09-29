@@ -116,11 +116,25 @@ func assessCapture(recs []*pcapio.Record, flows []*engine.Flow) preflightReport 
 			encrypted++
 			add("blocker", "encrypted-flow", fmt.Sprintf("flow %d is TLS/SSH; captured ciphertext cannot reproduce a fresh authenticated session", i), 20)
 		}
-		if frames, _, err := dissect.ParseDNP3Stream(clientPayload); err == nil {
-			for _, frame := range frames {
-				if frame.UsesSecureAuth() {
+		// Use reconstructed streams, not packet arrival order: retransmissions,
+		// split object headers and server-originated authentication all matter.
+		for _, session := range trace.Sessions {
+			if session.Transport != replay.TransportTCP || session.Client.IP != f.Client.Addr || session.Client.Port != f.Client.Port || session.Server.IP != f.Server.Addr || session.Server.Port != f.Server.Port {
+				continue
+			}
+			client, server, streamErr := replay.TCPPayloadStreams(session)
+			if streamErr != nil {
+				continue // the plan reports missing or conflicting TCP bytes
+			}
+			for _, stream := range [][]byte{client, server} {
+				recognized, secure, err := dissect.InspectDNP3Stream(stream)
+				if recognized && (secure || err != nil) {
 					encrypted++
-					add("blocker", "dnp3-secure-auth", fmt.Sprintf("flow %d uses DNP3 Secure Authentication; live nonces make captured authentication data invalid", i), 20)
+					detail := "uses DNP3 Secure Authentication; live nonces make captured authentication data invalid"
+					if err != nil {
+						detail = "has DNP3 content whose authentication boundary cannot be checked: " + err.Error()
+					}
+					add("blocker", "dnp3-secure-auth", fmt.Sprintf("flow %d %s", i, detail), 20)
 					break
 				}
 			}

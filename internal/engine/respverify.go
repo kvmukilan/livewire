@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kvmukilan/livewire/internal/dissect"
+	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
@@ -72,8 +73,9 @@ const (
 // Modbus and DNP3 streams are compared message-by-message for meaningful
 // diagnostics; anything else falls back to a byte-for-byte compare.
 type respVerifier struct {
-	mode  VerifyMode
-	proto proto
+	captureError error
+	mode         VerifyMode
+	proto        proto
 
 	exp    []byte // expected server payload: captured S2C data, concatenated in order
 	live   []byte // reassembled live server payload, indexed from the first data byte
@@ -92,11 +94,12 @@ func newRespVerifier(f *Flow, mode VerifyMode) *respVerifier {
 	if mode == VerifyOff {
 		return nil
 	}
-	exp := expectedServerPayload(f)
+	exp, err := expectedServerPayload(f)
 	return &respVerifier{
-		mode:  mode,
-		proto: detectProto(f, exp),
-		exp:   exp,
+		captureError: err,
+		mode:         mode,
+		proto:        detectProto(f, exp),
+		exp:          exp,
 	}
 }
 
@@ -269,16 +272,34 @@ func (v *respVerifier) checkDNP3() []Mismatch {
 
 // expectedServerPayload concatenates every captured server-to-client payload in
 // timeline order: the reference stream a live device should reproduce.
-func expectedServerPayload(f *Flow) []byte {
-	var out []byte
+func expectedServerPayload(f *Flow) ([]byte, error) {
+	s := &replay.Session{Transport: replay.TransportTCP, Client: replay.Endpoint{IP: f.Client.Addr, Port: f.Client.Port}, Server: replay.Endpoint{IP: f.Server.Addr, Port: f.Server.Port}}
 	for i := range f.Packets {
 		cp := f.Packets[i]
-		if cp.Dir != S2C || cp.PayloadLen <= 0 {
-			continue
+		dir := replay.ClientToServer
+		if cp.Dir == S2C {
+			dir = replay.ServerToClient
 		}
-		out = append(out, payloadOf(cp)...)
+		s.Events = append(s.Events, replay.Event{PacketIndex: cp.Index, Record: cp.Rec, Direction: dir, Payload: payloadOf(cp)})
 	}
-	return out
+	_, server, err := replay.TCPPayloadStreams(s)
+	return server, err
+}
+
+func (v *respVerifier) finish() {
+	if v == nil {
+		return
+	}
+	want, got := len(v.exp), v.contig
+	unit := "bytes"
+	if v.framed() {
+		want = countMessages(v.proto, v.exp)
+		got = countMessages(v.proto, v.live[:v.contig])
+		unit = "messages"
+	}
+	if want != got {
+		v.all = append(v.all, Mismatch{Structural: true, Detail: fmt.Sprintf("response %s count differs: expected %d, received %d", unit, want, got)})
+	}
 }
 
 // payloadOf extracts a captured packet's transport payload bytes.

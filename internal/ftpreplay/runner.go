@@ -55,6 +55,15 @@ type Result struct {
 }
 
 func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	defer func() {
+		if ctx.Err() != nil {
+			retErr = errors.Join(ctx.Err(), retErr)
+			result.Completed = false
+		}
+	}()
 	if cfg.Control == nil || cfg.Address == "" {
 		return Result{}, fmt.Errorf("ftpreplay: control session and target address are required")
 	}
@@ -78,6 +87,10 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 	}
 	dialer := net.Dialer{Timeout: cfg.Timeout}
 	raw, err := dialer.DialContext(ctx, "tcp", cfg.Address)
+	if err != nil {
+		return Result{}, err
+	}
+	raw, err = bindConnection(ctx, raw, cfg.Timeout)
 	if err != nil {
 		return Result{}, err
 	}
@@ -178,6 +191,13 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 			if err != nil {
 				return result, fmt.Errorf("ftpreplay: passive data connection: %w", err)
 			}
+			dataConn, err = bindConnection(ctx, dataConn, cfg.Timeout)
+			if err != nil {
+				return result, err
+			}
+		}
+		if replyCommand.name == "AUTH" && cfg.Script.Explicit && code/100 != 2 && messageInt(turn.Message, "code")/100 == 2 && !result.TLS {
+			return result, fmt.Errorf("ftpreplay: target rejected captured AUTH TLS; refusing an unencrypted control session")
 		}
 		if replyCommand.name == "AUTH" && code/100 == 2 && !result.TLS {
 			if cfg.TLSConfig == nil {
@@ -192,10 +212,17 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 		if replyCommand.name == "PROT" && code/100 == 2 && replyCommand.protection != nil {
 			protectData = *replyCommand.protection
 		}
+		if replyCommand.name == "PROT" && code/100 == 2 && replyCommand.protection == nil {
+			return result, fmt.Errorf("ftpreplay: accepted unsupported PROT mode; only C and P are supported")
+		}
+		if replyCommand.name == "PROT" && replyCommand.protection != nil && *replyCommand.protection && code/100 != 2 && messageInt(turn.Message, "code")/100 == 2 && !protectData {
+			return result, fmt.Errorf("ftpreplay: target rejected captured PROT P; refusing an unprotected data transfer")
+		}
 		if isTransferCommand(replyCommand.name) && code/100 == 1 {
 			if dataIndex >= len(cfg.Data) {
 				return result, fmt.Errorf("ftpreplay: no mapped data session for %s", replyCommand.name)
 			}
+			activeData := dataConn == nil
 			if dataConn == nil {
 				if active == nil {
 					return result, fmt.Errorf("ftpreplay: %s has no negotiated data connection", replyCommand.name)
@@ -204,7 +231,10 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 				if err != nil {
 					return result, err
 				}
-				dataConn = accepted
+				dataConn, err = bindConnection(ctx, accepted, cfg.Timeout)
+				if err != nil {
+					return result, err
+				}
 				if err := active.Close(); err != nil {
 					active = nil
 					return result, fmt.Errorf("ftpreplay: close accepted active listener: %w", err)
@@ -221,7 +251,8 @@ func RunContext(ctx context.Context, cfg Config) (result Result, retErr error) {
 				}
 				dataConn = secured
 			}
-			transfer, transferErr := runTransfer(dataConn, cfg.Control, cfg.Data[dataIndex], replyCommand.name)
+			dataSession := cfg.Data[dataIndex]
+			transfer, transferErr := runTransferForRole(dataConn, dataSession, replyCommand.name, dataFTPClientIsTCPClient(cfg.Control, dataSession, activeData))
 			closeErr := dataConn.Close()
 			dataConn = nil
 			if err := errors.Join(transferErr, wrapClose("data connection", closeErr)); err != nil {
@@ -261,6 +292,9 @@ func requestedProtection(command string, raw []byte) *bool {
 	}
 	fields := strings.Fields(string(raw))
 	if len(fields) != 2 {
+		return nil
+	}
+	if !strings.EqualFold(fields[1], "P") && !strings.EqualFold(fields[1], "C") {
 		return nil
 	}
 	protected := strings.EqualFold(fields[1], "P")
@@ -382,18 +416,40 @@ func acceptContext(ctx context.Context, listener net.Listener, timeout time.Dura
 	go func() { conn, err := listener.Accept(); ch <- answer{conn, err} }()
 	select {
 	case <-ctx.Done():
-		return nil, errors.Join(ctx.Err(), wrapClose("active listener", listener.Close()))
+		closeErr := wrapClose("active listener", listener.Close())
+		result := <-ch
+		if result.conn != nil {
+			closeErr = errors.Join(closeErr, wrapClose("cancelled accepted data connection", result.conn.Close()))
+		}
+		return nil, errors.Join(ctx.Err(), closeErr)
 	case result := <-ch:
 		return result.conn, result.err
 	}
 }
 
 func runTransfer(conn net.Conn, control, data *replay.Session, command string) (TransferResult, error) {
+	return runTransferForRole(conn, data, command, dataFTPClientIsTCPClient(control, data, false))
+}
+
+// Session directions follow the captured TCP initiator when SYN is available,
+// or the first payload otherwise. Distinct control-client addresses identify
+// the FTP client in either case; accepted active/passive negotiation resolves
+// captures whose peers share an address (for example loopback).
+func dataFTPClientIsTCPClient(control, data *replay.Session, active bool) bool {
+	if data.Client.IP == control.Client.IP && data.Server.IP != control.Client.IP {
+		return true
+	}
+	if data.Server.IP == control.Client.IP && data.Client.IP != control.Client.IP {
+		return false
+	}
+	return !active
+}
+
+func runTransferForRole(conn net.Conn, data *replay.Session, command string, ftpClientIsTCPClient bool) (TransferResult, error) {
 	clientStream, serverStream, err := replay.TCPPayloadStreams(data)
 	if err != nil {
 		return TransferResult{}, err
 	}
-	ftpClientIsTCPClient := data.Client.IP == control.Client.IP
 	fromFTPClient, fromFTPServer := clientStream, serverStream
 	if !ftpClientIsTCPClient {
 		fromFTPClient, fromFTPServer = serverStream, clientStream
