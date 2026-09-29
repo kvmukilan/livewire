@@ -1,0 +1,35 @@
+{
+  "scope": "Only task-owned processes and 32 target listeners on each operating system; no unrelated inventory or process arguments.",
+  "independentSnapshots": {
+    "windows": {
+      "observedAt": "2026-09-29T22:36:29.8671300Z",
+      "os": "Microsoft Windows NT 10.0.26200.0",
+      "remainingTargetListeners": [],
+      "remainingOwnedProcesses": [],
+      "auditedTargetListenerCount": 32
+    },
+    "linux": {
+      "observedAt": "2026-09-29T22:36:31.749516+00:00",
+      "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.42",
+      "remainingTargetListeners": [],
+      "remainingOwnedProcesses": [],
+      "auditedTargetListenerCount": 32
+    }
+  },
+  "linuxBaselineObserver": {
+    "observedAt": "2026-09-29T22:34:57.733627+00:00",
+    "stage": "final",
+    "scope": "Only assigned Linux live/reproduce application processes and their target listeners; unrelated host inventory omitted.",
+    "targetListenerCountChecked": 32,
+    "remainingTargetListeners": [],
+    "remainingOriginalSocketInodes": [],
+    "cleanupVerified": true,
+    "verified": true,
+    "originalProcessCount": 6,
+    "originalListenerCount": 32,
+    "baselineSHA256": "c16ec6baa2c56b8af0afe0e18582ea7e22504d6dadcb692ca5d9aef9df6799f7",
+    "observerSHA256": "cec2ae3070cd71d7235980be4b2b964ec522891afe4ccd739ee684bffb6a08b9",
+    "remainingOwnedProcesses": [],
+    "remainingOwnedListeners": []
+  }
+}

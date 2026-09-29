@@ -204,7 +204,7 @@ report file.
 
 Only needed if you are changing Livewire. Compatibility starts at **Go 1.26.7**,
 which is also the toolchain the official artifacts are reproducibly built with.
-[CONTRIBUTING.md](../CONTRIBUTING.md) covers the full developer workflow.
+[CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) covers the full developer workflow.
 
 ```bash
 git clone https://github.com/kvmukilan/livewire.git

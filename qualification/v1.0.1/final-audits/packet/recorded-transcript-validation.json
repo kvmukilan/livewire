@@ -1,0 +1,15 @@
+{
+  "command": [
+    "wsl.exe",
+    "-u",
+    "root",
+    "--",
+    "bash",
+    "-lc",
+    "cd /mnt/c/Users/kvmuk/livewire && GOTOOLCHAIN=go1.26.7 LIVEWIRE_PACKET_LAB_SMOKE=/mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-packet LIVEWIRE_STATELESS_LAB_SMOKE=/mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-stateless go test -count=1 -v ./internal/qualification -run '^TestRecorded(Packet|Stateless)LabTranscript$'"
+  ],
+  "exitCode": 0,
+  "finished": "2026-09-29T22:45:49.498190+00:00",
+  "logSha256": "8068ffb8e88a08923ec4698735689b0fd3875da3c75716e5970f49459a8d69d9",
+  "started": "2026-09-29T22:36:18.789509+00:00"
+}

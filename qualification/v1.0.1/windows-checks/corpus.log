@@ -1,0 +1,12 @@
+==> corpus
+./cmd/livewire: passed
+./internal/replayintent: passed
+./internal/ftpreplay: passed
+./internal/secureexec: passed
+./internal/sshreplay: passed
+./internal/replay: passed
+./internal/livereplay: passed
+./internal/securefile: passed
+./internal/iterate: passed
+corpus evidence: C:\Users\kvmuk\AppData\Local\Temp\livewire-corpus-20260929T204144
+==> corpus ok (13.5s)

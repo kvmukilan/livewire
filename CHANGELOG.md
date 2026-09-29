@@ -29,7 +29,13 @@ automatic packet-TCP selection can pass `-mode auto` explicitly.
 - Qualify public application/datagram defaults and add a required separate
   two-hour stateless mixed-frame replay run with independent byte/order checks.
 - Keep v1.0.0 artifacts and evidence immutable. The follow-up requires fresh
-  source-bound qualification before publication; see [release disposition](docs/V1_FOLLOWUP.md).
+  source-bound qualification before publication; see [release disposition](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/V1_FOLLOWUP.md).
+
+All seven required software-lab soaks completed: 79 case combinations, 17,015
+CLI processes and 51,045 replay iterations, with every case exceeding two hours,
+zero failures and verified cleanup. See the [evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
+for exact scope and hashes. Physical NIC/DUT, Windows physical Npcap faults,
+native arm64 runtime, human-pilot and visual-browser qualification are not claimed.
 
 ## [1.0.0] - 2026-09-29
 

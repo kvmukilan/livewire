@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "platform": "linux-amd64",
+  "action": "Publication selection only; no tests, metrics, logs or captures changed.",
+  "originalChecksSha256": "6a614317fe06d1ba26861b1966dcdcd5fc3d874a9abc5655af53a353f0c6f6de",
+  "originalChecksPrivateArchive": "coverage/v1.0.1-checks-publication-review/linux-checks.original.json",
+  "excludedPrivateArtifacts": [
+    {
+      "bytes": 6482028,
+      "reason": "Scratch benchmark executable retained privately. All six benchmark metric evidence references and completed gate records remain bound.",
+      "privatePath": "benchmark/qualifybench",
+      "privateSha256": "7bab07d26c3ee4d759e850239a10292fe441f875b092608378b91869187bf742"
+    }
+  ],
+  "nestedHashReferencesReverified": 15,
+  "reviewedSyntheticComparisonCaptures": []
+}

@@ -1,0 +1,1 @@
+{"decodedBytes":60000060,"error":"pcapio: capture limit exceeded: record count exceeds 1000000","expectedLimit":true,"go":"go1.26.7","loadSeconds":0.1651164,"memoryMethod":"Go heap sampled every 10ms; runtime reservation is not process RSS","passed":true,"planSeconds":0,"platform":"windows/amd64","records":1000001,"runtimeReservedBytes":189607936,"sampledPeakHeapBytes":167446536}

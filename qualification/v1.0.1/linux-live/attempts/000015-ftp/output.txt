@@ -1,0 +1,26 @@
+Replay intent: application; 37 selected packet(s), 0 explicitly excluded.
+Detected FTP. Opening fresh coordinated control and data connections; captured endpoints will be renegotiated.
+
+---- fresh secure attempt 1 of 3 ----
+RESULT: SAME AS THE RECORDING
+Report: /mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-live/attempts/000015-ftp/report.attempt-1.json
+Attempt 1 of 3: SAME AS THE RECORDING
+
+---- fresh secure attempt 2 of 3 ----
+RESULT: SAME AS THE RECORDING
+Report: /mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-live/attempts/000015-ftp/report.attempt-2.json
+Attempt 2 of 3: SAME AS THE RECORDING
+
+---- fresh secure attempt 3 of 3 ----
+RESULT: SAME AS THE RECORDING
+Report: /mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-live/attempts/000015-ftp/report.attempt-3.json
+Attempt 3 of 3: SAME AS THE RECORDING
+
+================================
+OVERALL: SAME AS THE RECORDING
+  same as the recording   3 of 3
+
+The checked responses matched the recording on all 3 attempts.
+This establishes response equivalence within the selected verification scope. Use an explicit fault expectation to test a reset or response timeout.
+================================
+Secure report paths: /mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-live/attempts/000015-ftp/report.attempt-1.json through /mnt/c/Users/kvmuk/livewire/coverage/v1.0.1-soak/linux-live/attempts/000015-ftp/report.attempt-3.json

@@ -13,7 +13,9 @@ plaintext and opened fresh verified sessions. Its software labs exercised the
 supported secure protocols. The audit did find an HTTP/1 TLS interoperability
 gap with peers requiring ALPN, validation/reporting gaps in stateless replay,
 and cross-session ordering in the advanced wire route.
-These are being qualified as v1.0.1; no different binaries will reuse v1.0.0.
+These changes form the v1.0.1 patch; no different binaries will reuse v1.0.0.
+The [v1.0.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
+remains the historical record for that release.
 
 ## Command contract
 
@@ -50,10 +52,35 @@ checks the separate stateless `replay` command against an independent capture,
 comparing mixed-protocol frame bytes, order, count and unverified report status.
 The advanced wire fixture also checks 40 interleaved sessions and tied timestamps.
 
-The changed binaries require fresh Windows/Linux checks and complete two-hour
-case spans. Historical v1.0.0 results cannot qualify v1.0.1. Publication remains
-gated by the current manifest, matching executable hashes, CI, reproducible
-artifacts, attestations, and independent published-download verification.
+The frozen v1.0.1 Windows and Linux automated gates have passed under Go 1.26.7,
+including build, vet, tests, dashboard checks, static/vulnerability analysis,
+race, shuffle, fuzz, coverage, corpus, protocol-fault and recovery/cleanup checks.
+Aggregate statement coverage is 68.1% on Windows and 67.8% on Linux; all package
+floors passed. [RELEASE_AUDIT.md](RELEASE_AUDIT.md) records the frozen source
+identity, complete coverage table and retained gate evidence.
+
+The scans found zero called vulnerabilities and zero vulnerabilities in imported
+packages. GO-2026-5932 concerns only the unimported OpenPGP packages within the
+required `golang.org/x/crypto` module; the dependency audit and advisory scope
+are retained in the [security review](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/security-review/README.md).
+
+All seven two-hour runs completed with zero failures: 79 case combinations,
+17,015 CLI processes and 51,045 replay iterations. Every required case exceeded
+two hours, and independent audits verified cleanup. The fresh
+[v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md),
+[application audit](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/final-audits/application/README.md)
+and [packet/stateless audit](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/final-audits/packet/README.md)
+retain the completed results. Historical v1.0.0 evidence was not reused to
+qualify these changed binaries.
+
+Frozen-source CI passed in [PR run 36627049037](https://github.com/kvmukilan/livewire/actions/runs/36627049037)
+and [push run 36627037090](https://github.com/kvmukilan/livewire/actions/runs/36627037090).
+Publication still requires final manifest validation, final release-commit CI,
+matching executable hashes, reproducible artifacts, attestations, and
+independent published-download verification. The
+[Release workflow](https://github.com/kvmukilan/livewire/actions/workflows/release.yml)
+and [v1.0.1 release page](https://github.com/kvmukilan/livewire/releases/tag/v1.0.1)
+record actual publication status; these documents do not predeclare its success.
 
 ## TLS inputs and limits
 
