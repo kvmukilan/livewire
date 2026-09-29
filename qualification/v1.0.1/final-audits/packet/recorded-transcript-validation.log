@@ -1,0 +1,13 @@
+=== RUN   TestRecordedPacketLabTranscript
+=== RUN   TestRecordedPacketLabTranscript/live
+    lab_packet_test.go:139: validated live: 7 cases, 18406 hashed artifacts
+=== RUN   TestRecordedPacketLabTranscript/reproduce
+    lab_packet_test.go:139: validated reproduce: 7 cases, 18406 hashed artifacts
+--- PASS: TestRecordedPacketLabTranscript (545.30s)
+    --- PASS: TestRecordedPacketLabTranscript/live (265.55s)
+    --- PASS: TestRecordedPacketLabTranscript/reproduce (279.75s)
+=== RUN   TestRecordedStatelessLabTranscript
+    lab_stateless_test.go:234: validated stateless replay: 349 passes, 7329 observed frames
+--- PASS: TestRecordedStatelessLabTranscript (23.61s)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/qualification	568.908s

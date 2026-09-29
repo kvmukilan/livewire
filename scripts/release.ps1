@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "1.0.1",
     [string]$OutputRoot = "dist"
 )
 
@@ -46,7 +46,8 @@ $documents = @(
     @{ Source = "docs/WORKFLOW.md"; Name = "WORKFLOW.md" },
     @{ Source = "docs/PRODUCTION.md"; Name = "PRODUCTION.md" },
     @{ Source = "docs/RELIABILITY_IMPLEMENTATION.md"; Name = "RELIABILITY_IMPLEMENTATION.md" },
-    @{ Source = "docs/V1_QUALIFICATION.md"; Name = "V1_QUALIFICATION.md" }
+    @{ Source = "docs/V1_QUALIFICATION.md"; Name = "V1_QUALIFICATION.md" },
+    @{ Source = "docs/V1_FOLLOWUP.md"; Name = "V1_FOLLOWUP.md" }
 )
 
 function Copy-ReleaseText([string]$Source, [string]$Destination) {
@@ -116,7 +117,7 @@ and checksum manifest. Windows may display an unknown-publisher warning.
     foreach ($name in @(
         "livewire-$Version-windows-amd64.exe", "setup-windows.ps1", "WINDOWS-QUICKSTART.md",
         "SETUP.md", "COMMANDS.md", "DOCUMENTATION.md", "README.md", "CHANGELOG.md", "LICENSE", "SECURITY.md",
-        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "RELIABILITY_IMPLEMENTATION.md", "V1_QUALIFICATION.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
+        "RELEASE_AUDIT.md", "WORKFLOW.md", "PRODUCTION.md", "RELIABILITY_IMPLEMENTATION.md", "V1_QUALIFICATION.md", "V1_FOLLOWUP.md", "WINDOWS-UNSIGNED.txt", "livewire-$Version.cdx.json"
     )) {
         Copy-Item -LiteralPath (Join-Path $output $name) -Destination $windowsStage
     }

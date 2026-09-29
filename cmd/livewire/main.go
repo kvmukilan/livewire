@@ -49,8 +49,8 @@ var commands = []command{
 		summary: "check local prerequisites without sending traffic"},
 	{name: "reproduce", group: groupEveryday, run: cmdReproduce,
 		summary: "replay a recorded exchange on your device and say whether it behaved the same"},
-	{name: "live", group: groupAdvanced, run: cmdLive,
-		summary: "protocol-aware live replay plus advanced compatibility controls"},
+	{name: "live", group: groupEveryday, run: cmdLive,
+		summary: "play application requests through fresh live connections"},
 
 	{name: "check", group: groupEveryday, run: cmdCheck,
 		summary: "look at a capture: what's in it, and whether it can be replayed"},
@@ -83,11 +83,11 @@ var commands = []command{
 		summary: "capture summary only (now part of 'check')"},
 	{name: "analyze", group: groupCompat, run: cmdAnalyze, replacement: "check",
 		summary: "replayability assessment only (now part of 'check')"},
-	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay, replacement: "reproduce",
+	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay, replacement: "live",
 		summary: "TLS-specific compatibility entry point (automatic in reproduce/live)"},
-	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay, replacement: "reproduce",
+	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay, replacement: "live",
 		summary: "FTP/FTPS compatibility entry point (automatic in reproduce/live)"},
-	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay, replacement: "reproduce",
+	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay, replacement: "live",
 		summary: "SSH-specific compatibility entry point (automatic in reproduce/live)"},
 }
 

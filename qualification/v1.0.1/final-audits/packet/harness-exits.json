@@ -1,0 +1,29 @@
+{
+  "observation": "Original unified execution sessions polled to completion; no replacement processes.",
+  "observedAt": "2026-09-29 22:35:41 UTC",
+  "packet": {
+    "exitCode": 0,
+    "processId": 624,
+    "sessionId": 9378,
+    "toolResult": {
+      "chunk_id": "98df89",
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": "",
+      "wall_time_seconds": 9.7e-06
+    }
+  },
+  "schemaVersion": 1,
+  "stateless": {
+    "exitCode": 0,
+    "processId": 630,
+    "sessionId": 13216,
+    "toolResult": {
+      "chunk_id": "6340a7",
+      "exit_code": 0,
+      "original_token_count": 0,
+      "output": "",
+      "wall_time_seconds": 9.2e-06
+    }
+  }
+}

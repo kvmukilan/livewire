@@ -1,0 +1,110 @@
+{
+  "captureDigest": "sha256:cf93cd5f1747e8b1f764818904b5e431f02f521e5da5c644115d2c74e03f5438",
+  "completed": true,
+  "framesPerPass": 7,
+  "framesSent": 21,
+  "interface": "vc86c37e09df",
+  "limitations": [
+    "captured frames are not adapted to a live session and replies are not compared with the recording"
+  ],
+  "mode": "wire",
+  "passes": 3,
+  "selection": {
+    "entries": [
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "5e1127006cb3",
+        "mode": "wire",
+        "packetIndexes": [
+          0,
+          1
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "0845ca6c39b5",
+        "mode": "wire",
+        "packetIndexes": [
+          2
+        ],
+        "sessionId": "udp-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "0ce631da6ec1",
+        "mode": "wire",
+        "packetIndexes": [
+          3
+        ],
+        "sessionId": "udp-1",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "bb7f07d3aa66",
+        "mode": "wire",
+        "packetIndexes": [
+          4
+        ],
+        "sessionId": "icmp4-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "icmp4"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "7bb1110232ec",
+        "mode": "wire",
+        "packetIndexes": [
+          5
+        ],
+        "sessionId": "icmp6-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "icmp6"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "mode": "wire",
+        "packetIndexes": [
+          6
+        ],
+        "sessionId": "raw-0",
+        "transport": "raw",
+        "warnings": [
+          "frames have no supported stateful session model and will only be emitted in explicit wire mode"
+        ]
+      }
+    ],
+    "packets": 7,
+    "profile": "wire"
+  },
+  "status": "wire",
+  "tool": "livewire",
+  "verified": false,
+  "version": "1.0.1",
+  "when": "2026-09-29T21:25:28.768040638Z"
+}

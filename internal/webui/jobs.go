@@ -417,6 +417,12 @@ func (s *Server) runReplay(j *job, path string, req replayReq) {
 }
 
 func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
+	sched, err := stateless.CheckedSchedule(recs, stateless.Pace{})
+	if err != nil {
+		j.log(err.Error())
+		j.finish(false, "invalid replay schedule")
+		return
+	}
 	snd, err := backend.OpenSender(iface)
 	if err != nil {
 		j.log(err.Error())
@@ -441,7 +447,6 @@ func (s *Server) runStateless(j *job, recs []*pcapio.Record, iface string) {
 		backendOpen = false
 		j.finish(true, summary)
 	}
-	sched := stateless.Schedule(recs, stateless.Pace{})
 	j.log(fmt.Sprintf("stateless replay: %d frames", len(recs)))
 	start := time.Now()
 	for i, rec := range recs {

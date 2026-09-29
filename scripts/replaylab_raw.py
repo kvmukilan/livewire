@@ -27,6 +27,7 @@ TCP_REQ, TCP_RESP = b"STATEFUL REQUEST\n", b"STATEFUL RESPONSE\n"
 UDP_REQ, UDP_RESP = b"udp-lab-request", b"udp-lab-response"
 WIRE_REQ = b"wire-lab-request"
 ECHO = b"packet-lab-echo"
+STATELESS_MACS = (bytes.fromhex("024242000001"), bytes.fromhex("024242000002"))
 DNS_QUERY = bytes.fromhex("123401000001000000000000") + b"\x03lab\x07example\x00\x00\x01\x00\x01"
 
 
@@ -54,7 +55,7 @@ def collect_evidence(folder, expected):
     """Bind every owned artifact and reject loss/change after a successful check."""
     found = {}
     for path in sorted(folder.iterdir()):
-        if path.name in ("live.run.json", "reproduce.run.json"):
+        if path.name in ("live.run.json", "reproduce.run.json", "replay.run.json"):
             continue
         ref = evidence_ref(folder, path)
         found[ref["path"]] = ref["sha256"]
@@ -138,13 +139,36 @@ def fixtures(folder, cmac, smac):
         return out
 
     rows = {"dns-udp": udp(53, DNS_QUERY, dns_reply(DNS_QUERY)), "udp": udp(19000, UDP_REQ, UDP_RESP),
-            "icmp4": icmp(False), "icmp6": icmp(True), "stateful-tcp": tcp(), "transport-tcp": tcp(), "wire": udp(19003, WIRE_REQ)}
+            "icmp4": icmp(False), "icmp6": icmp(True), "stateful-tcp": tcp(), "transport-tcp": tcp()}
     for name, frames in rows.items():
         with open(folder / (name + ".pcap"), "wb") as f:
             f.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
             for i, frame in enumerate(frames):
                 f.write(struct.pack("<IIII", 1700000000, i * 20000, len(frame), len(frame)))
                 f.write(frame)
+    wire_fixture(folder / "wire.pcap")
+
+
+def wire_fixture(path):
+    """Forty sessions interleave two frames each, including timestamp ties."""
+    cmac, smac = STATELESS_MACS
+    frames = []
+    for phase in range(2):
+        for session in range(40):
+            payload = WIRE_REQ + (":%02d:%d" % (session, phase)).encode("ascii")
+            sp, dp = 41000 + session, 19100 + session
+            if session % 2:
+                body = struct.pack("!HHHH", sp, dp, 8 + len(payload), 0) + payload
+                proto, offset = 17, 6
+            else:
+                body = struct.pack("!HHIIBBHHH", sp, dp, 1000 + phase * len(payload), 9000, 80, 24, 65535, 0, 0) + payload
+                proto, offset = 6, 16
+            frames.append(packet(C4, S4, proto, transport(C4, S4, proto, body, offset), cmac, smac).ljust(60, b"\0"))
+    with Path(path).open("xb") as output:
+        output.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
+        for i, frame in enumerate(frames):
+            output.write(struct.pack("<IIII", 1700000000, (i // 4) * 2000, len(frame), len(frame)) + frame)
+    return frames
 
 
 def serve(log_path):
@@ -238,6 +262,85 @@ def decode_pcap(path):
     return out
 
 
+def stateless_fixture(path):
+    """Opaque mixed Ethernet bytes; no application/security semantics claimed."""
+    cmac, smac = STATELESS_MACS
+    frames = []
+    for reverse, payload in ((False, b"plain TCP bytes"), (True, bytes.fromhex("1703030020") + bytes(range(32)))):
+        src, dst, sp, dp = (S4, C4, 443, 40000) if reverse else (C4, S4, 40000, 443)
+        body = struct.pack("!HHIIBBHHH", sp, dp, 1000, 9000, 80, 24, 65535, 0, 0) + payload
+        frames.append(packet(src, dst, 6, transport(src, dst, 6, body, 16), cmac, smac, reverse))
+    for port, payload in ((53, DNS_QUERY), (19000, b"unknown UDP bytes")):
+        body = struct.pack("!HHHH", 40001, port, 8 + len(payload), 0) + payload
+        frames.append(packet(C4, S4, 17, transport(C4, S4, 17, body, 6), cmac, smac))
+    echo = struct.pack("!BBHHH", 8, 0, 0, 4242, 1) + ECHO
+    echo = echo[:2] + struct.pack("!H", checksum(echo)) + echo[4:]
+    frames.append(packet(C4, S4, 1, echo, cmac, smac))
+    echo = struct.pack("!BBHHH", 128, 0, 0, 4242, 1) + ECHO
+    frames.append(packet(C6, S6, 58, transport(C6, S6, 58, echo, 2), cmac, smac))
+    frames.append(smac + cmac + bytes.fromhex("88b5") + b"unknown Ethernet payload")
+    frames = [frame.ljust(60, b"\0") for frame in frames]
+    with Path(path).open("xb") as output:
+        output.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
+        for i, frame in enumerate(frames):
+            output.write(struct.pack("<IIII", 1700000000, i * 20000, len(frame), len(frame)) + frame)
+    return frames
+
+
+def ethernet_frames(path):
+    data = Path(path).read_bytes()
+    if len(data) < 24 or data[:4] not in (b"\xd4\xc3\xb2\xa1", b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\xc3\xd4", b"\xa1\xb2\x3c\x4d"):
+        raise ValueError("not a complete classic PCAP")
+    endian = "<" if data[:4] in (b"\xd4\xc3\xb2\xa1", b"\x4d\x3c\xb2\xa1") else ">"
+    if struct.unpack_from(endian + "I", data, 20)[0] != 1:
+        raise ValueError("stateless observation must be Ethernet")
+    frames, offset = [], 24
+    while offset < len(data):
+        if offset + 16 > len(data): raise ValueError("truncated PCAP record")
+        _, _, captured, original = struct.unpack_from(endian + "IIII", data, offset)
+        offset += 16
+        if captured != original or captured < 14 or offset + captured > len(data):
+            raise ValueError("truncated Ethernet frame")
+        frames.append(data[offset:offset + captured])
+        offset += captured
+    return frames
+
+
+def verify_stateless_report(report, fixture, capture, repeats, version):
+    expected = ethernet_frames(fixture)
+    observed = ethernet_frames(capture)
+    if not expected or observed != expected * repeats:
+        raise ValueError("independent stateless bytes/order/count differ")
+    wanted = {"tool": "livewire", "version": version, "mode": "wire", "status": "wire",
+              "completed": True, "verified": False, "passes": repeats, "framesPerPass": len(expected),
+              "framesSent": len(observed), "captureDigest": "sha256:" + sha(fixture)}
+    if any(type(report.get(k)) is not type(v) or report.get(k) != v for k, v in wanted.items()) or report.get("error"):
+        raise ValueError("stateless report differs or claims verified application behavior")
+    return len(observed)
+
+
+def verify_wire_capture(fixture, capture, repeats):
+    expected, observed = ethernet_frames(fixture), ethernet_frames(capture)
+    if not expected or observed != expected * repeats:
+        raise ValueError("independent wire bytes/order/count differ")
+    return len(observed)
+
+
+def verify_wire_report(report, fixture, repeats, version):
+    frame_count = len(ethernet_frames(fixture))
+    if report.get("version") != version or report.get("attempts") != repeats or report.get("selectedPackets") != frame_count or report.get("captureDigest") != "sha256:" + sha(fixture) or report.get("outcome", {}).get("status") != "wire":
+        raise ValueError("wire CLI summary differs from captured frames")
+    totals, seen = {}, set()
+    for session in report.get("sessions", []):
+        key = (session.get("attempt"), session.get("sessionId"))
+        if key in seen or type(key[0]) is not int or key[0] not in range(1, repeats + 1) or not key[1] or session.get("completed") is not True or session.get("verified") is not False or session.get("matched") is not False or session.get("status") != "wire" or session.get("mode") != "wire" or type(session.get("sent")) is not int or session["sent"] != session.get("packetCount"):
+            raise ValueError("wire CLI session incomplete, duplicated or claims verification")
+        seen.add(key)
+        totals[key[0]] = totals.get(key[0], 0) + session["sent"]
+    if totals != {attempt: frame_count for attempt in range(1, repeats + 1)}:
+        raise ValueError("wire CLI per-attempt sent frame counts differ")
+
+
 def verify_packets(name, rows, repeats):
     if name.startswith("icmp"):
         proto, request_type, reply_type = (58, 128, 129) if name == "icmp6" else (1, 8, 0)
@@ -318,6 +421,10 @@ class Lab:
         def mac(namespace, interface):
             info = json.loads(self.run(["ip", "-n", namespace, "-j", "link", "show", "dev", interface]))
             return bytes.fromhex(info[0]["address"].replace(":", ""))
+        if self.args.command == ["replay"]:
+            stateless_fixture(self.out / "mixed-frames.pcap")
+            self.event(event="setup", clientNamespace=self.client, serverNamespace=self.server, scriptSha256=sha(__file__))
+            return
         fixtures(self.out, mac(self.client, self.cif), mac(self.server, self.sif))
         self.spawn(["ip", "netns", "exec", self.server, sys.executable, str(Path(__file__).resolve()), "--serve", str(self.server_log)], self.out / "peer-process.log")
         deadline = time.monotonic() + 5
@@ -329,15 +436,22 @@ class Lab:
     def execute(self, command, name, round_number):
         if sha(self.args.binary) != self.binary_sha:
             raise RuntimeError("CLI binary changed during qualification")
+        if command == "replay":
+            return self.execute_stateless(round_number)
         prefix = self.out / ("%s-%s-%05d" % (command, name, round_number))
         capture = Path(str(prefix) + ".independent.pcap")
-        cap = self.spawn(["ip", "netns", "exec", self.server, "tcpdump", "--immediate-mode", "-U", "-n", "-i", self.sif, "-w", str(capture), "ip or ip6"], str(prefix) + ".tcpdump.log")
+        capture_filter = "ether src 02:42:42:00:00:01" if name == "wire" else "ip or ip6"
+        cap = self.spawn(["ip", "netns", "exec", self.server, "tcpdump", "--immediate-mode", "-U", "-n", "-i", self.sif, "-w", str(capture), capture_filter], str(prefix) + ".tcpdump.log")
         deadline = time.monotonic() + 5
         while not capture.exists() or capture.stat().st_size < 24:
             if cap.poll() is not None or time.monotonic() > deadline: raise RuntimeError("independent capture did not start")
             time.sleep(0.02)
         mode = "transport" if name == "transport-tcp" else "wire" if name == "wire" else "auto"
-        argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), command, str(self.out / (name + ".pcap")), "-t", S6 if name == "icmp6" else S4, "-i", self.cif, "-mode", mode, "-n", "3", "-gap", "50ms", "-run-timeout", "20s", "-report", str(prefix) + ".report.json", "-actual-out", str(prefix) + ".actual.pcap"]
+        argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), command, str(self.out / (name + ".pcap")), "-t", S6 if name == "icmp6" else S4, "-i", self.cif, "-n", "3", "-gap", "50ms", "-run-timeout", "20s", "-report", str(prefix) + ".report.json", "-actual-out", str(prefix) + ".actual.pcap"]
+        # Datagram/echo cases exercise the public defaults. Packet-pattern TCP
+        # and wire cases deliberately retain explicit advanced compatibility.
+        if name in ("stateful-tcp", "transport-tcp", "wire"):
+            argv += ["-mode", mode]
         if name == "wire":
             target_index = argv.index("-t")
             del argv[target_index:target_index + 2]
@@ -364,9 +478,11 @@ class Lab:
         cap.lab_log_handle.close()
         self.handles.remove(cap.lab_log_handle)
         if result.returncode != 0: raise RuntimeError("CLI failed for %s/%s: %s" % (command, name, result.stdout + result.stderr))
-        requests, responses = verify_packets(name, decode_pcap(capture), 3)
+        fixture = self.out / (name + ".pcap")
+        requests, responses = (verify_wire_capture(fixture, capture, 3), 0) if name == "wire" else verify_packets(name, decode_pcap(capture), 3)
         report = json.loads(Path(str(prefix) + ".report.json").read_text())
         if report.get("attempts") != 3: raise RuntimeError("CLI did not execute all repeated attempts")
+        if name == "wire": verify_wire_report(report, fixture, 3, self.args.version)
         rules = self.run(["ip", "netns", "exec", self.client, "iptables-save"])
         Path(str(prefix) + ".firewall.txt").write_text(rules, encoding="utf-8")
         if "livewire" in rules.lower() or "--tcp-flags" in rules: raise RuntimeError("TCP RST guard leaked after CLI exit")
@@ -374,6 +490,8 @@ class Lab:
                      Path(str(prefix) + ".tcpdump.log"), Path(str(prefix) + ".firewall.txt")]
         if name != "wire":
             artifacts.append(Path(str(prefix) + ".actual.pcap"))
+        else:
+            artifacts.append(fixture)
         for artifact in artifacts:
             ref = evidence_ref(self.out, artifact)
             self.checked_evidence[ref["path"]] = ref["sha256"]
@@ -386,8 +504,50 @@ class Lab:
         case["requestsObserved"] += requests
         case["responsesVerified"] += responses
         case["cleanupVerified"] = True
-        self.event(event="pass", command=command, case=name, round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, requests=requests, responses=responses, elapsedSeconds=round(time.monotonic() - monotonic, 4), impairment="netem delay 5ms 1ms loss 2% reorder 10% 50%" if impaired else "none", independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=Path(str(prefix) + ".report.json").name, reportSha256=self.checked_evidence[Path(str(prefix) + ".report.json").name])
+        proof = {"fixture": fixture.name, "fixtureSha256": self.checked_evidence[fixture.name]} if name == "wire" else {}
+        self.event(event="pass", command=command, case=name, round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, requests=requests, responses=responses, elapsedSeconds=round(time.monotonic() - monotonic, 4), impairment="netem delay 5ms 1ms loss 2% reorder 10% 50%" if impaired else "none", independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=Path(str(prefix) + ".report.json").name, reportSha256=self.checked_evidence[Path(str(prefix) + ".report.json").name], **proof)
         print(json.dumps({"command": command, "case": name, "round": round_number, "passes": case["passes"]}), flush=True)
+
+    def execute_stateless(self, round_number):
+        prefix = self.out / ("replay-mixed-frames-%05d" % round_number)
+        capture = Path(str(prefix) + ".independent.pcap")
+        fixture = self.out / "mixed-frames.pcap"
+        capture_filter = " or ".join("ether src " + ":".join("%02x" % b for b in mac) for mac in STATELESS_MACS)
+        cap = self.spawn(["ip", "netns", "exec", self.server, "tcpdump", "--immediate-mode", "-U", "-n", "-i", self.sif, "-w", str(capture), capture_filter], str(prefix) + ".tcpdump.log")
+        deadline = time.monotonic() + 5
+        while not capture.exists() or capture.stat().st_size < 24:
+            if cap.poll() is not None or time.monotonic() > deadline: raise RuntimeError("independent stateless capture did not start")
+            time.sleep(0.02)
+        report_path = Path(str(prefix) + ".report.json")
+        output_path = Path(str(prefix) + ".cli.log")
+        began = utc()
+        argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), "replay", "-in", str(fixture), "-i", self.cif, "-n", "3", "-report", str(report_path)]
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=25)
+        output_path.write_text(result.stdout + result.stderr, encoding="utf-8")
+        time.sleep(0.05)
+        cap.send_signal(signal.SIGINT)
+        cap.wait(timeout=5)
+        self.children.remove(cap)
+        cap.lab_log_handle.close()
+        self.handles.remove(cap.lab_log_handle)
+        if result.returncode != 0: raise RuntimeError("stateless CLI failed: " + result.stdout + result.stderr)
+        frames = verify_stateless_report(json.loads(report_path.read_text()), fixture, capture, 3, self.args.version)
+        rules = self.run(["ip", "netns", "exec", self.client, "iptables-save"])
+        firewall = Path(str(prefix) + ".firewall.txt")
+        firewall.write_text(rules, encoding="utf-8")
+        if "livewire" in rules.lower() or "--tcp-flags" in rules: raise RuntimeError("stateless replay left a firewall guard")
+        for artifact in (fixture, capture, report_path, output_path, firewall, Path(str(prefix) + ".tcpdump.log")):
+            ref = evidence_ref(self.out, artifact)
+            self.checked_evidence[ref["path"]] = ref["sha256"]
+        finished = utc()
+        case = self.results["replay"]["mixed-frames"]
+        case["firstAt"] = case.get("firstAt", began)
+        case["lastAt"], case["cleanupVerified"] = finished, True
+        case["passes"] += 1
+        case["repeatedProcessPasses"] += 1
+        case["framesObserved"] = case.get("framesObserved", 0) + frames
+        self.event(event="pass", command="replay", case="mixed-frames", round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, framesObserved=frames, requests=0, responses=0, fixture=fixture.name, fixtureSha256=self.checked_evidence[fixture.name], independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=report_path.name, reportSha256=self.checked_evidence[report_path.name], output=output_path.name, firewall=firewall.name, firewallSha256=self.checked_evidence[firewall.name])
+        print(json.dumps({"command": "replay", "case": "mixed-frames", "round": round_number, "passes": case["passes"], "frames": frames}), flush=True)
 
     def cleanup(self):
         clean = True
@@ -422,7 +582,7 @@ class Lab:
             evidence = [{"path": name, "sha256": digest} for name, digest in sorted(self.checked_evidence.items())]
             evidence.append(evidence_ref(self.out, self.transcript))
         for command, cases in self.results.items():
-            doc = {"schemaVersion": 1, "version": self.args.version, "suite": "packet", "platform": "linux-amd64", "environment": "Linux isolated owned network namespaces and veth; software peers; no physical NIC qualification", "command": command, "binarySha256": self.binary_sha, "sourceDigest": self.args.source_digest, "started": self.started, "finished": utc(), "interrupted": interrupted, "cleanupVerified": clean, "cases": list(cases.values()), "evidence": evidence}
+            doc = {"schemaVersion": 1, "version": self.args.version, "suite": "stateless" if command == "replay" else "packet", "platform": "linux-amd64", "environment": "Linux isolated owned network namespaces and veth; software peers; no physical NIC qualification", "command": command, "binarySha256": self.binary_sha, "sourceDigest": self.args.source_digest, "started": self.started, "finished": utc(), "interrupted": interrupted, "cleanupVerified": clean, "cases": list(cases.values()), "evidence": evidence}
             (self.out / (command + ".run.json")).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         if evidence_error is not None:
             raise evidence_error
@@ -436,18 +596,26 @@ def main():
     p.add_argument("--binary", required=True)
     p.add_argument("--output", required=True, help="new directory for immutable evidence")
     p.add_argument("--source-digest", required=True)
-    p.add_argument("--version", default="1.0.0")
-    p.add_argument("--command", choices=["live", "reproduce"], action="append")
-    p.add_argument("--case", choices=CASES, action="append", help="targeted smoke checks; omit for full qualification")
+    p.add_argument("--version", required=True, help="expected executable release version")
+    p.add_argument("--command", choices=["live", "reproduce", "replay"], action="append", help="omit for both stateful front doors; replay uses a separate output directory")
+    p.add_argument("--case", choices=CASES + ["mixed-frames"], action="append", help="targeted smoke checks; omit for full qualification")
     p.add_argument("--duration", type=float, default=7200)
     p.add_argument("--round-gap", type=float, default=5)
     p.add_argument("--netem", action="store_true", help="exercise stateful TCP with namespace-local loss, jitter, and reordering")
     args = p.parse_args()
     args.command = args.command or ["live", "reproduce"]
-    args.case = args.case or CASES
+    if "replay" in args.command:
+        if args.command != ["replay"] or args.case not in (None, ["mixed-frames"]): p.error("replay requires a separate run containing only mixed-frames")
+        args.case = ["mixed-frames"]
+    else:
+        args.case = args.case or CASES
+        if "mixed-frames" in args.case: p.error("mixed-frames requires --command replay")
     if os.geteuid() != 0: p.error("requires root for owned network namespaces and raw packet capture")
     lab = Lab(args)
     interrupted, clean = True, False
+    def terminate(_signum, _frame):
+        raise KeyboardInterrupt("packet lab terminated")
+    previous_term = signal.signal(signal.SIGTERM, terminate)
     try:
         lab.setup()
         round_number = 0
@@ -468,8 +636,11 @@ def main():
             time.sleep(args.round_gap)
         interrupted = False
     finally:
-        clean = lab.cleanup()
-        lab.finish(interrupted, clean)
+        try:
+            clean = lab.cleanup()
+            lab.finish(interrupted, clean)
+        finally:
+            signal.signal(signal.SIGTERM, previous_term)
     if not clean: raise RuntimeError("lab cleanup was not verified")
 
 

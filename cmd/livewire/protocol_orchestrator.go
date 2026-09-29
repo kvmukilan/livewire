@@ -221,7 +221,7 @@ func resolveKeyLogWithPrompt(capture, explicit, label string, interactive bool, 
 		if len(candidates) > 0 {
 			hint = fmt.Sprintf(" A possible key log is %q; it was not read automatically.", candidates[0])
 		}
-		return "", fmt.Errorf("%s needs the matching NSS key log; pass -keylog <file>.%s", label, hint)
+		return "", fmt.Errorf("%s needs the matching NSS key log; pass -keylog <file>.%s %s", label, hint, missingTLSKeyLogGuidance)
 	}
 	def := ""
 	if len(candidates) > 0 {
@@ -237,10 +237,12 @@ func resolveKeyLogWithPrompt(capture, explicit, label string, interactive bool, 
 		value = def
 	}
 	if value == "" {
-		return "", fmt.Errorf("%s cannot be reproduced without a matching key log; rerun with -keylog <file>", label)
+		return "", fmt.Errorf("%s cannot be reproduced without a matching key log; rerun with -keylog <file>. %s", label, missingTLSKeyLogGuidance)
 	}
 	return value, nil
 }
+
+const missingTLSKeyLogGuidance = "A fresh TLS handshake creates new keys; it cannot decrypt the recorded session. Use that session's key log, or record again with TLS key logging enabled, to recover the application messages."
 
 func keyLogCandidates(capture string) []string {
 	base := strings.TrimSuffix(capture, filepath.Ext(capture))

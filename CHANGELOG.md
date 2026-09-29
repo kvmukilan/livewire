@@ -2,6 +2,41 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.0.1] - 2026-09-30
+
+Fresh application sessions are now the default for `live`, `reproduce` and
+`check`; operators no longer need a mode-selection step. The separate `replay`
+command remains stateless packet injection. Advanced mode/profile overrides and
+historical `live -in` controls remain available. Scripts relying on v1.0.0's
+automatic packet-TCP selection can pass `-mode auto` explicitly.
+
+- Offer `http/1.1` ALPN during fresh HTTP/1 TLS handshakes, including peers that
+  require ALPN. Keep certificate verification enabled and never negotiate h2/h3.
+- Verify both primary commands without mode flags across captured TLS 1.2/1.3
+  and fresh sessions using different keys, with invalid-key and identity tests.
+- Route `live -in` with explicit secure inputs such as `-keylog` through fresh
+  sessions too. Preserve legacy dry runs and reject conflicting controls before
+  loading captures or credentials.
+- Reject invalid/conflicting/overflowing stateless pacing and incompatible
+  capture/interface link types before sending. Preserve frame bytes and record
+  order; report successful sends accurately when a later send fails.
+- Handle rejected stateless schedules in the local dashboard before opening
+  packet access.
+- Preserve original packet order across interleaved sessions in advanced wire
+  replay, using one sender and withholding completion until sender cleanup.
+- Mark dashboard outcomes incomplete when packet evidence cannot be published,
+  retaining observed counts and private partial evidence without success claims.
+- Qualify public application/datagram defaults and add a required separate
+  two-hour stateless mixed-frame replay run with independent byte/order checks.
+- Keep v1.0.0 artifacts and evidence immutable. The follow-up requires fresh
+  source-bound qualification before publication; see [release disposition](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/V1_FOLLOWUP.md).
+
+All seven required software-lab soaks completed: 79 case combinations, 17,015
+CLI processes and 51,045 replay iterations, with every case exceeding two hours,
+zero failures and verified cleanup. See the [evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
+for exact scope and hashes. Physical NIC/DUT, Windows physical Npcap faults,
+native arm64 runtime, human-pilot and visual-browser qualification are not claimed.
+
 ## [1.0.0] - 2026-09-29
 
 Version 1 qualifies the supported replay routes with controlled software peers

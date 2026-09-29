@@ -26,7 +26,7 @@ func cmdCheck(args []string) error {
 	details := fs.Bool(flagDetails, false, "also show the per-session replay plan and checksum validation")
 	jsonPath := fs.String("json", "", "also write the machine-readable assessment to this file")
 	keylog := fs.String("keylog", "", "matching key log for inspecting encrypted FTP session groups")
-	mode := fs.String("mode", "auto", "replay intent: application | transport | wire | auto")
+	mode := fs.String("mode", "", "advanced compatibility override: application | transport | wire | auto (default: fresh application sessions)")
 	var selectedSessions fileFlags
 	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	profileName := fs.String("profile", "functional", "requested replay fidelity: functional | timing | transport | wire")
@@ -40,7 +40,7 @@ func cmdCheck(args []string) error {
 		fmt.Println("\nLook at a capture without touching the network: what traffic it holds, and")
 		fmt.Println("whether livewire can replay it faithfully. Run this before 'reproduce' if")
 		fmt.Println("you want to know what you were sent.")
-		printFlags(fs, flagIn, flagDetails, "json", "mode", "session")
+		printFlags(fs, flagIn, flagDetails, "json", "session")
 	}
 
 	// Accept the capture as a bare argument too: 'check foo.pcap' is what a
@@ -96,7 +96,7 @@ func cmdCheck(args []string) error {
 			return err
 		}
 	}
-	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: keys, Mode: *mode, Profile: string(profile), Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
+	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: keys, Mode: defaultReplayMode(*mode, string(profile)), Profile: string(profile), Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
 	if err != nil {
 		return err
 	}

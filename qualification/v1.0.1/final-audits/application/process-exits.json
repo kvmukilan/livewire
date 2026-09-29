@@ -1,0 +1,43 @@
+{
+  "scope": "Four assigned application qualification harnesses only; process identifiers and command lines omitted.",
+  "observations": [
+    {
+      "run": "windows-live",
+      "exitCode": 0,
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-live.exit.json",
+        "sha256": "236ed69ee4b164b5b7dc672f6beebcf38851c98bec1e88afc494e5241a0d2847"
+      },
+      "method": "Windows GetExitCodeProcess on original process handle",
+      "observedAt": "2026-09-29T22:34:11.715702+00:00"
+    },
+    {
+      "run": "windows-reproduce",
+      "exitCode": 0,
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-reproduce.exit.json",
+        "sha256": "b91ab124dd901c2ed82b438256c69c681ff33f7342e9ea823300d712109ca79b"
+      },
+      "method": "Windows GetExitCodeProcess on original process handle",
+      "observedAt": "2026-09-29T22:34:11.744467+00:00"
+    },
+    {
+      "run": "linux-live",
+      "exitCode": 0,
+      "source": {
+        "path": "coverage/v1.0.1-soak/linux-live.exit",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "method": "Exit status recorded by the assigned Linux shell supervisor after the harness returned"
+    },
+    {
+      "run": "linux-reproduce",
+      "exitCode": 0,
+      "source": {
+        "path": "coverage/v1.0.1-soak/linux-reproduce.exit",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+      },
+      "method": "Exit status recorded by the assigned Linux shell supervisor after the harness returned"
+    }
+  ]
+}

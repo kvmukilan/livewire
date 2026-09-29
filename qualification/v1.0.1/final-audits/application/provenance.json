@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-29T22:36:53.521116+00:00",
+  "scope": "Additional four-application post-run audit; official qualification and publication remain separate.",
+  "privateAudit": {
+    "path": "coverage/v1.0.1-soak/application-final-audit.json",
+    "sha256": "9cf61883b108a8fac4c8ab708a2438a5a007cbb1d33655f7da30b8aa71648f4e"
+  },
+  "privateAuditor": {
+    "path": "coverage/v1.0.1-soak/application-final-audit.py",
+    "sha256": "5a9c540b06c22987dd6ed4cf5afbb6eb0ab4092d520dfd02cdb9d5ec29c35b3b"
+  },
+  "publicAuditMethod": "Parse private JSON, remove the listed JSON Pointers, replace auditedTargetPorts with auditedTargetListenerCount, serialize UTF-8 without BOM using LF. No run results changed.",
+  "removedJSONPointers": [
+    "/runs/0/targets",
+    "/runs/0/exitRecord/pid",
+    "/runs/1/targets",
+    "/runs/1/exitRecord/pid",
+    "/runs/2/targets",
+    "/runs/3/targets",
+    "/osCleanupObservations/windows/auditedTargetPorts",
+    "/osCleanupObservations/linux/auditedTargetPorts"
+  ],
+  "replacements": {
+    "/osCleanupObservations/windows/auditedTargetListenerCount": 32,
+    "/osCleanupObservations/linux/auditedTargetListenerCount": 32
+  },
+  "exactCopies": [
+    {
+      "publicFile": "application-final-audit.txt",
+      "source": {
+        "path": "coverage/v1.0.1-soak/application-final-audit.txt",
+        "sha256": "d5754029063c8319a7b449235d1fa479330f57eb044938212674682094eba30b"
+      }
+    }
+  ],
+  "derivedFiles": [
+    {
+      "publicFile": "process-exits.json",
+      "method": "Selected exit code, method, observation timestamp and private source hash; omitted process IDs and command lines."
+    },
+    {
+      "publicFile": "cleanup-observations.json",
+      "source": {
+        "path": "coverage/v1.0.1-soak/linux-application-cleanup-final.json",
+        "sha256": "795bb2cdf0fd1d7958b29b9422ffb1360834c78775b1650f4295eed45e6e16b7"
+      },
+      "method": "Combined independently observed, task-scoped cleanup JSON with redacted unified-audit snapshots; verified no remaining process/listener entries."
+    },
+    {
+      "publicFile": "harness-completion.log",
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-live.stdout.log",
+        "sha256": "8fa719c712554d606e81b13ee8308535ba5d71ac2b813b13d5a50a55d26834ee"
+      },
+      "method": "Exact last line only, prefixed with the run name; earlier log lines omitted."
+    },
+    {
+      "publicFile": "process-exits.json",
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-live.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "method": "Verified empty stderr; no contents copied."
+    },
+    {
+      "publicFile": "harness-completion.log",
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-reproduce.stdout.log",
+        "sha256": "715f9ead77f1f14544cd081a13f4651ffc8257598b4689a7dd378aef4829e56d"
+      },
+      "method": "Exact last line only, prefixed with the run name; earlier log lines omitted."
+    },
+    {
+      "publicFile": "process-exits.json",
+      "source": {
+        "path": "coverage/v1.0.1-soak/windows-reproduce.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "method": "Verified empty stderr; no contents copied."
+    },
+    {
+      "publicFile": "harness-completion.log",
+      "source": {
+        "path": "coverage/v1.0.1-soak/linux-live.log",
+        "sha256": "4206899f06721b39dd8b4512c50505718672277aa23d35dab9fff857db21101b"
+      },
+      "method": "Exact last line only, prefixed with the run name; earlier log lines omitted."
+    },
+    {
+      "publicFile": "harness-completion.log",
+      "source": {
+        "path": "coverage/v1.0.1-soak/linux-reproduce.log",
+        "sha256": "d62324105704adf57addd180861ab7b165dd11b25d202e31f5e047b3433caa75"
+      },
+      "method": "Exact last line only, prefixed with the run name; earlier log lines omitted."
+    }
+  ],
+  "publicFiles": {
+    "application-final-audit.json": "244c3fb1a846b9ea1cdd85bedfdb4bd50445cd72fe77ecb3ffee9f7d29f6876c",
+    "application-final-audit.txt": "d5754029063c8319a7b449235d1fa479330f57eb044938212674682094eba30b",
+    "cleanup-observations.json": "7644c27a047425c53d1872c6004417f10e1e52998e670eca202dd0e35a2e88ed",
+    "harness-completion.log": "b8928d0560440e437f25f6f716df93e958f9fc3023708102fcf1b55ec7a05019",
+    "process-exits.json": "68dd6afe9eff91efe9dd224dd6676e29886c8f5b64800f7bb343eb895db647fb",
+    "README.md": "e214783b52eeb261a08e712de61f45a5c4b787279aa8fdf91aa9156bc133aef3"
+  }
+}

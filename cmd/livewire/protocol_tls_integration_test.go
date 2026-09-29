@@ -8,8 +8,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 	"net"
@@ -81,17 +83,21 @@ func testTLSCertificate(t *testing.T) (tls.Certificate, []byte) {
 }
 
 func captureHTTPOverTLS(t *testing.T, cert tls.Certificate) ([]tlsWireEvent, []byte) {
+	return captureHTTPOverTLSVersion(t, cert, tls.VersionTLS12)
+}
+
+func captureHTTPOverTLSVersion(t *testing.T, cert tls.Certificate, version uint16) ([]tlsWireEvent, []byte) {
 	t.Helper()
 	clientRaw, serverRaw := net.Pipe()
 	timeline := &tlsWireTimeline{}
 	var keylog bytes.Buffer
 	server := tls.Server(&tlsTimelineConn{Conn: serverRaw, timeline: timeline}, &tls.Config{
-		Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12,
+		Certificates: []tls.Certificate{cert}, MinVersion: version, MaxVersion: version,
 		CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
 	})
 	client := tls.Client(&tlsTimelineConn{Conn: clientRaw, timeline: timeline, client: true}, &tls.Config{
 		InsecureSkipVerify: true, // #nosec G402 -- capture fixture only; the replay itself verifies the peer.
-		MinVersion:         tls.VersionTLS12, MaxVersion: tls.VersionTLS12,
+		MinVersion:         version, MaxVersion: version,
 		CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256}, KeyLogWriter: &keylog,
 	})
 	request := []byte("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
@@ -135,6 +141,228 @@ func captureHTTPOverTLS(t *testing.T, cert tls.Certificate) ([]tlsWireEvent, []b
 	timeline.mu.Lock()
 	defer timeline.mu.Unlock()
 	return append([]tlsWireEvent(nil), timeline.events...), append([]byte(nil), keylog.Bytes()...)
+}
+
+type tlsHTTPPeerObservation struct {
+	state   tls.ConnectionState
+	request []byte
+	err     error
+}
+
+// Each peer has a different certificate/key from the recorded session. It can
+// only decode the application request after a successful new TLS handshake.
+func startTLSHTTPPeer(t *testing.T, config *tls.Config) (string, <-chan tlsHTTPPeerObservation) {
+	t.Helper()
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	done := make(chan tlsHTTPPeerObservation, 1)
+	go func() {
+		var observed tlsHTTPPeerObservation
+		defer func() { done <- observed }()
+		conn, err := listener.Accept()
+		if err != nil {
+			observed.err = err
+			return
+		}
+		defer conn.Close()
+		if err = conn.SetDeadline(time.Now().Add(4 * time.Second)); err != nil {
+			observed.err = err
+			return
+		}
+		secure := conn.(*tls.Conn)
+		if err = secure.Handshake(); err != nil {
+			observed.err = err
+			return
+		}
+		observed.state = secure.ConnectionState()
+		want := []byte("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+		buf := make([]byte, len(want))
+		n, err := io.ReadFull(secure, buf)
+		observed.request = buf[:n]
+		if err != nil {
+			observed.err = err
+			return
+		}
+		if !bytes.Equal(observed.request, want) {
+			observed.err = errors.New("fresh TLS peer received different application request")
+			return
+		}
+		_, observed.err = secure.Write([]byte("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"))
+	}()
+	return listener.Addr().String(), done
+}
+
+func awaitTLSHTTPPeer(t *testing.T, done <-chan tlsHTTPPeerObservation) tlsHTTPPeerObservation {
+	t.Helper()
+	select {
+	case observed := <-done:
+		return observed
+	case <-time.After(5 * time.Second):
+		t.Fatal("fresh TLS peer did not finish")
+		return tlsHTTPPeerObservation{}
+	}
+}
+
+func TestUnifiedTLSNoModeUsesFreshHandshakeAcrossVersions(t *testing.T) {
+	for _, command := range []struct {
+		name string
+		run  func([]string) error
+	}{{"live", cmdLive}, {"live-in", func(args []string) error { return cmdLive(append([]string{"-in"}, args...)) }}, {"reproduce", cmdReproduce}} {
+		for _, captured := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
+			t.Run(command.name+"/captured-"+tls.VersionName(captured), func(t *testing.T) {
+				captureCert, _ := testTLSCertificate(t)
+				liveCert, liveCA := testTLSCertificate(t)
+				events, keys := captureHTTPOverTLSVersion(t, captureCert, captured)
+				capture, keyPath, caPath := writeTLSFixture(t, t.TempDir(), events, keys, liveCA)
+				liveVersion := uint16(tls.VersionTLS13)
+				if captured == tls.VersionTLS13 {
+					liveVersion = tls.VersionTLS12
+				}
+				target, done := startTLSHTTPPeer(t, &tls.Config{
+					Certificates: []tls.Certificate{liveCert}, MinVersion: liveVersion, MaxVersion: liveVersion,
+					NextProtos: []string{"http/1.1"},
+					GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
+						if len(hello.SupportedProtos) != 1 || hello.SupportedProtos[0] != "http/1.1" {
+							return nil, fmt.Errorf("peer requires only supported ALPN http/1.1, got %q", hello.SupportedProtos)
+						}
+						return nil, nil
+					},
+				})
+				reportPath := filepath.Join(t.TempDir(), "result.json")
+				err := command.run([]string{capture, "-t", target, "-keylog", keyPath, "-server-name", "localhost", "-ca", caPath, "-strict", "-timeout", "3s", "-report", reportPath})
+				observed := awaitTLSHTTPPeer(t, done)
+				if err != nil || observed.err != nil {
+					t.Fatalf("%s captured=%s live=%s: replay=%v peer=%v", command.name, tls.VersionName(captured), tls.VersionName(liveVersion), err, observed.err)
+				}
+				if !observed.state.HandshakeComplete || observed.state.Version != liveVersion || observed.state.NegotiatedProtocol != "http/1.1" || len(observed.request) == 0 {
+					t.Fatalf("fresh session was not established as requested: %+v", observed.state)
+				}
+				data, err := os.ReadFile(reportPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var report reterminationReport
+				if err = json.Unmarshal(data, &report); err != nil {
+					t.Fatal(err)
+				}
+				o := report.Outcome
+				if !o.Completed || !o.Verified || !o.Matched || !o.PeerIdentityChecked || o.ProtocolVersion != tls.VersionName(liveVersion) || o.ALPN != "http/1.1" || o.Requests != 1 || o.Compared != 1 {
+					t.Fatalf("fresh TLS result lacks verified application evidence: %s", data)
+				}
+			})
+		}
+	}
+}
+
+func TestUnifiedTLSCertificateFailureSendsNoApplicationBytes(t *testing.T) {
+	for _, command := range []struct {
+		name string
+		run  func([]string) error
+	}{{"live", cmdLive}, {"reproduce", cmdReproduce}} {
+		for _, reason := range []string{"wrong-hostname", "untrusted-ca"} {
+			t.Run(command.name+"/"+reason, func(t *testing.T) {
+				captureCert, _ := testTLSCertificate(t)
+				liveCert, roots := testTLSCertificate(t)
+				name := "localhost"
+				if reason == "wrong-hostname" {
+					name = "different-device.invalid"
+				} else {
+					_, roots = testTLSCertificate(t)
+				}
+				events, keys := captureHTTPOverTLS(t, captureCert)
+				capture, keyPath, caPath := writeTLSFixture(t, t.TempDir(), events, keys, roots)
+				target, done := startTLSHTTPPeer(t, &tls.Config{Certificates: []tls.Certificate{liveCert}, MinVersion: tls.VersionTLS12})
+				reportPath := filepath.Join(t.TempDir(), "rejected.json")
+				err := command.run([]string{capture, "-t", target, "-keylog", keyPath, "-server-name", name, "-ca", caPath, "-timeout", "3s", "-report", reportPath})
+				observed := awaitTLSHTTPPeer(t, done)
+				if err == nil || !strings.Contains(err.Error(), "certificate") || observed.err == nil || len(observed.request) != 0 {
+					t.Fatalf("certificate failure must precede application traffic: replay=%v peer=%v requestBytes=%d", err, observed.err, len(observed.request))
+				}
+				data, readErr := os.ReadFile(reportPath)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				var report reterminationReport
+				if err = json.Unmarshal(data, &report); err != nil {
+					t.Fatal(err)
+				}
+				if report.Outcome.Completed || report.Outcome.Verified || report.Outcome.Matched || report.Outcome.PeerIdentityChecked || report.Outcome.Requests != 0 {
+					t.Fatalf("rejected identity must not claim replay success: %s", data)
+				}
+			})
+		}
+	}
+}
+
+func TestUnifiedTLSInvalidInputsStopBeforeDial(t *testing.T) {
+	cert, ca := testTLSCertificate(t)
+	events, keys := captureHTTPOverTLS(t, cert)
+	dir := t.TempDir()
+	capture, keyPath, caPath := writeTLSFixture(t, dir, events, keys, ca)
+	_, wrongKeys := captureHTTPOverTLS(t, cert)
+	wrongKeyPath := filepath.Join(dir, "other-session.keys")
+	badCAPath := filepath.Join(dir, "invalid-ca.pem")
+	for path, data := range map[string][]byte{wrongKeyPath: wrongKeys, badCAPath: []byte("not a PEM certificate")} {
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	opaque := make([]byte, 1024)
+	state := uint32(0x9e3779b9)
+	for i := range opaque {
+		state ^= state << 13
+		state ^= state >> 17
+		state ^= state << 5
+		opaque[i] = byte(state)
+	}
+	opaqueCapture := writeProtocolStub(t, dir, "opaque", 44444, opaque)
+	for _, command := range []struct {
+		name string
+		run  func([]string) error
+	}{{"live", cmdLive}, {"reproduce", cmdReproduce}} {
+		for _, tc := range []struct {
+			name, capture, keylog, ca, want string
+		}{
+			{"missing-keylog", capture, "", caPath, "-keylog <file>"},
+			{"wrong-session-keylog", capture, wrongKeyPath, caPath, "no keylog entry"},
+			{"malformed-ca", capture, keyPath, badCAPath, "CA contains no parseable certificates"},
+			{"opaque", opaqueCapture, "", "", "appears encrypted or opaque"},
+		} {
+			t.Run(command.name+"/"+tc.name, func(t *testing.T) {
+				listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer listener.Close()
+				args := []string{tc.capture, "-t", listener.Addr().String(), "-report", filepath.Join(t.TempDir(), "result.json")}
+				if tc.keylog != "" {
+					args = append(args, "-keylog", tc.keylog)
+				}
+				if tc.ca != "" {
+					args = append(args, "-ca", tc.ca)
+				}
+				err = command.run(args)
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("wanted offline error %q, got %v", tc.want, err)
+				}
+				if err = listener.SetDeadline(time.Now().Add(25 * time.Millisecond)); err != nil {
+					t.Fatal(err)
+				}
+				conn, acceptErr := listener.AcceptTCP()
+				if conn != nil {
+					_ = conn.Close()
+					t.Fatal("invalid capture or secure input caused an unexpected network connection")
+				}
+				var netErr net.Error
+				if !errors.As(acceptErr, &netErr) || !netErr.Timeout() {
+					t.Fatalf("could not establish no-dial observation: %v", acceptErr)
+				}
+			})
+		}
+	}
 }
 
 func writeTLSFixture(t *testing.T, dir string, events []tlsWireEvent, keylog, ca []byte) (capture, keylogPath, caPath string) {

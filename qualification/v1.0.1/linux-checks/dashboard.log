@@ -1,0 +1,16 @@
+==> dashboard
+$ node --test scripts/dashboard.test.cjs
+✔ changing capture invalidates an old preview and disables Start (2.606759ms)
+✔ a late inspection response cannot restore stale state (1.638663ms)
+✔ failed reinspection clears the previous successful preview (1.223094ms)
+✔ two rapid Start actions submit only one run (2.001284ms)
+✔ zero gap is sent as zero; session selection cannot silently become all (0.768562ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 126.20833
+==> dashboard ok (320ms)

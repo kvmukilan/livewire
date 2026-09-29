@@ -1,0 +1,72 @@
+==> fuzz
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/94 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 94/94 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 2629 (876/sec), new interesting: 0 (total: 94)
+fuzz: elapsed: 6s, execs: 2629 (0/sec), new interesting: 0 (total: 94)
+fuzz: elapsed: 9s, execs: 2629 (0/sec), new interesting: 0 (total: 94)
+fuzz: elapsed: 11s, execs: 200000 (118765/sec), new interesting: 0 (total: 94)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	10.702s
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/197 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 197/197 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 23716 (7903/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 6s, execs: 36675 (4319/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 9s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 12s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 15s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 18s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 21s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 24s, execs: 36675 (0/sec), new interesting: 1 (total: 198)
+fuzz: elapsed: 27s, execs: 200000 (65015/sec), new interesting: 1 (total: 198)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	26.577s
+$ go test ./internal/lab -run=^$ -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/254 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 254/254 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 40176 (13392/sec), new interesting: 1 (total: 255)
+fuzz: elapsed: 6s, execs: 99067 (19624/sec), new interesting: 1 (total: 255)
+fuzz: elapsed: 9s, execs: 161072 (20675/sec), new interesting: 2 (total: 256)
+fuzz: elapsed: 11s, execs: 200008 (22749/sec), new interesting: 2 (total: 256)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/lab	10.810s
+$ go test ./internal/tlsreplay -run=^$ -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/27 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 27/27 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 32404 (10800/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 6s, execs: 64498 (10697/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 9s, execs: 96545 (10680/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 12s, execs: 130662 (11373/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 15s, execs: 159288 (9541/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 18s, execs: 187330 (9350/sec), new interesting: 0 (total: 27)
+fuzz: elapsed: 19s, execs: 200000 (8919/sec), new interesting: 0 (total: 27)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	19.449s
+$ go test ./internal/replay -run=^$ -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/48 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 48/48 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 35783 (11925/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 6s, execs: 79821 (14680/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 9s, execs: 122423 (14201/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 12s, execs: 162115 (13229/sec), new interesting: 0 (total: 48)
+fuzz: elapsed: 15s, execs: 200000 (14520/sec), new interesting: 0 (total: 48)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/replay	14.629s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/8 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 8/8 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 77981 (25987/sec), new interesting: 0 (total: 8)
+fuzz: elapsed: 6s, execs: 153005 (25012/sec), new interesting: 0 (total: 8)
+fuzz: elapsed: 7s, execs: 200000 (36832/sec), new interesting: 0 (total: 8)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	7.285s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/95 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 95/95 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 92157 (30717/sec), new interesting: 0 (total: 95)
+fuzz: elapsed: 6s, execs: 185706 (31182/sec), new interesting: 0 (total: 95)
+fuzz: elapsed: 7s, execs: 200000 (28516/sec), new interesting: 0 (total: 95)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	6.534s
+==> fuzz ok (1m45.994s)

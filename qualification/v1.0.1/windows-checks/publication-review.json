@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "platform": "windows-amd64",
+  "action": "Publication selection only; no tests, metrics, logs or captures changed.",
+  "originalChecksSha256": "c52b37d66a7e35df022a6bb07d0239ec027572b3d9397a2e01ebc6489f9576d3",
+  "originalChecksPrivateArchive": "coverage/v1.0.1-checks-publication-review/windows-checks.original.json",
+  "excludedPrivateArtifacts": [
+    {
+      "bytes": 6699520,
+      "reason": "Scratch benchmark executable retained privately. All six benchmark metric evidence references and completed gate records remain bound.",
+      "privatePath": "benchmark/qualifybench.exe",
+      "privateSha256": "4ae15a815acd08e8a0a336dc898538f6dce370abeea0467752cae8d3e3539dd0"
+    }
+  ],
+  "nestedHashReferencesReverified": 15,
+  "reviewedSyntheticComparisonCaptures": [
+    {
+      "path": "release-comparison/0.7.0-gzip-arp.pcap",
+      "sha256": "25897d374788599399c89f20b10f12f8d59386bcb758e70868240dbbc5f9a5d4",
+      "bytes": 4667,
+      "records": 6,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    },
+    {
+      "path": "release-comparison/0.7.0-gzip.pcap",
+      "sha256": "6ed73bc2bf06671cd96cc563e46879cc19799afa8353d5aa4174eda29ef68b55",
+      "bytes": 4609,
+      "records": 5,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    },
+    {
+      "path": "release-comparison/0.8.0-gzip-arp.pcap",
+      "sha256": "6f370fb339d2ac9e346ae123565b4a4121e6627ac18f74b8ae5b08e6fe358c70",
+      "bytes": 4667,
+      "records": 6,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    },
+    {
+      "path": "release-comparison/0.8.0-gzip.pcap",
+      "sha256": "bbc1fd80e82b12230cc920d92d3529242915e313d6fc497c0b4de775e61180f7",
+      "bytes": 4609,
+      "records": 5,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    },
+    {
+      "path": "release-comparison/current-gzip-arp.pcap",
+      "sha256": "2e6c06ea53d41e04c1270c52b661d125859ad4909d4dba891d266f224c835060",
+      "bytes": 4667,
+      "records": 6,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    },
+    {
+      "path": "release-comparison/current-gzip.pcap",
+      "sha256": "99737759d89382897d180a1c998c8a6086ced96783461e24dd51b8f40709c904",
+      "bytes": 4609,
+      "records": 5,
+      "content": "Synthetic documentation-address TCP handshake, literal GET /download, deterministic 4096-byte random gzip body; optional fixed ARP. No authentication or TLS material."
+    }
+  ]
+}

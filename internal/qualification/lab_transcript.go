@@ -44,6 +44,9 @@ type labCounts struct {
 }
 
 func validateLabTranscript(run LabRun, base string) error {
+	if run.Suite == "stateless" {
+		return validateStatelessTranscript(run, base)
+	}
 	files := make(map[string]Evidence, len(run.Evidence))
 	for _, e := range run.Evidence {
 		if _, exists := files[e.Path]; exists {

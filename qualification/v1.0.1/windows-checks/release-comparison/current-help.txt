@@ -1,0 +1,37 @@
+livewire 1.0.1 - reproduce a network problem from a capture
+
+Play a recorded exchange through fresh application connections:
+  livewire live issue.pcap -t 192.168.1.50
+  livewire reproduce issue.pcap -t 192.168.1.50
+
+It asks for anything else it needs, with the likely answer pre-selected, and
+reports matching checked responses, differences, or an incomplete/unverified exchange.
+
+To be precise about what is replayed, inspect, select, preview, then run:
+  livewire check issue.pcap -details
+  livewire live issue.pcap -session tcp-0 -dry-run
+  livewire live issue.pcap -session tcp-0 -t 192.168.1.50
+
+Stateless packet replay (captured bytes and timing; no TCP/TLS session or reply checking):
+  livewire replay -in issue.pcap -i <connection>
+
+Everyday commands:
+  check       inspect a capture without sending traffic
+  live        play application requests through fresh live connections
+  reproduce   replay a recorded exchange and report whether it behaved the same
+  capture     record traffic from an interface
+  ifaces      list network connections
+  web         open the local browser dashboard
+
+Not sure the machine is ready? livewire doctor checks drivers and interfaces without sending.
+No -mode choice is needed. Advanced overrides remain available with -all-flags.
+Compatibility: live -in with secure inputs uses fresh sessions; otherwise it retains historical TCP controls.
+
+Help topics:
+  livewire help examples       copy-paste common workflows
+  livewire help troubleshoot   recover from common problems
+  livewire help protocols      see automatic drivers and safe fallbacks
+  livewire help diagnose       collect reproducible support evidence
+  livewire help reliability    choose TCP fidelity and repeatable replay controls
+  livewire help commands       list every command
+  livewire help <command>      explain one command and its options

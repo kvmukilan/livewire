@@ -1,0 +1,11 @@
+{
+  "command": [
+    "C:\\Users\\kvmuk\\AppData\\Local\\Python\\pythoncore-3.14-64\\python.exe",
+    "-B",
+    "coverage/audit-v101-packet.py"
+  ],
+  "exitCode": 0,
+  "finished": "2026-09-29T22:36:18.782685+00:00",
+  "logSha256": "f9b04fd35399dc8bb475bfd46677c065292a4c5b50094e05bc133d905ea82203",
+  "started": "2026-09-29T22:35:41.589682+00:00"
+}

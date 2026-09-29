@@ -1,0 +1,40 @@
+{
+  "observedAt": "2026-09-29T20:48:11.850174+00:00",
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "commit": "99600ceae7c179eb758895cf6657d646ae1fe466",
+  "toolchain": "go version go1.26.7 linux/amd64",
+  "scan": "govulncheck v1.7.0 -show verbose ./...",
+  "id": "GO-2026-5932",
+  "module": "golang.org/x/crypto",
+  "moduleVersion": "v0.56.0",
+  "primaryEntryURL": "https://vuln.go.dev/ID/GO-2026-5932.json",
+  "primaryPageURL": "https://pkg.go.dev/vuln/GO-2026-5932",
+  "affectedPackages": [
+    "golang.org/x/crypto/openpgp",
+    "golang.org/x/crypto/openpgp/armor",
+    "golang.org/x/crypto/openpgp/clearsign",
+    "golang.org/x/crypto/openpgp/elgamal",
+    "golang.org/x/crypto/openpgp/errors",
+    "golang.org/x/crypto/openpgp/packet",
+    "golang.org/x/crypto/openpgp/s2k"
+  ],
+  "affectedPackagesInDependencyClosure": [],
+  "importedCryptoPackages": [
+    "golang.org/x/crypto/blowfish",
+    "golang.org/x/crypto/chacha20",
+    "golang.org/x/crypto/chacha20poly1305",
+    "golang.org/x/crypto/cryptobyte",
+    "golang.org/x/crypto/cryptobyte/asn1",
+    "golang.org/x/crypto/curve25519",
+    "golang.org/x/crypto/internal/alias",
+    "golang.org/x/crypto/internal/poly1305",
+    "golang.org/x/crypto/ssh",
+    "golang.org/x/crypto/ssh/internal/bcrypt_pbkdf"
+  ],
+  "calledVulnerabilities": 0,
+  "importedPackageVulnerabilities": 0,
+  "requiredModuleVulnerabilities": 1,
+  "releaseBlockerFromThisFinding": false,
+  "reason": "The advisory affects only the unused OpenPGP package family. Frozen Linux source imports other x/crypto packages for SSH and cryptographic primitives; no affected package occurs in its dependency closure, so no affected symbol can be reached through those imports. The official entry has no fixed version; updating the required module cannot remove this advisory while it still ships OpenPGP.",
+  "scope": "Read-only Linux source-mode scan and dependency closure under Go1.26.7. This is not a claim about unknown vulnerabilities or other unsupported build configurations."
+}

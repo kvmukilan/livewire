@@ -187,7 +187,9 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 			}
 			reportPath := filepath.Join(attemptDir, "report.json")
 			outputPath := filepath.Join(attemptDir, "output.txt")
-			args := []string{o.Command, s.fixture.Capture, "-mode", "application", "-n", fmt.Sprint(o.Repeat), "-gap", "0s", "-strict-exit", "-report", reportPath}
+			// Exercise the public front-door defaults; an explicit mode would hide
+			// routing regressions in the workflow these labs qualify.
+			args := []string{o.Command, s.fixture.Capture, "-n", fmt.Sprint(o.Repeat), "-gap", "0s", "-strict-exit", "-report", reportPath}
 			args = append(args, s.fixture.Args...)
 			event := runEvent{Case: name, Round: round, Command: o.Command, Repeat: o.Repeat, Started: time.Now().UTC(), Before: s.fixture.Snapshot(), CLIReport: relative(o.Output, reportPath), Output: relative(o.Output, outputPath)}
 			processCtx, cancel := context.WithTimeout(ctx, o.ProcessTimeout)
