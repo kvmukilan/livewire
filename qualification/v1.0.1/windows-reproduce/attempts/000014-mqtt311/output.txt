@@ -1,0 +1,19 @@
+Replay intent: application; 18 selected packet(s), 0 explicitly excluded.
+Loaded fixture.pcap: 1 session(s), 0 raw frame(s).
+
+Profile: timing — functional replay with captured packet gaps and cross-flow overlap
+Replaying against 127.0.0.1 on "" ...
+Running 3 attempts, 0s apart. Each attempt opens a fresh connection.
+Attempt 1 of 3: SAME AS THE RECORDING
+Attempt 2 of 3: SAME AS THE RECORDING
+Attempt 3 of 3: SAME AS THE RECORDING
+
+A shareable report was saved to C:\Users\kvmuk\livewire\coverage\v1.0.1-soak\windows-reproduce\attempts\000014-mqtt311\report.json — send this back so we can see what happened.
+
+================================
+OVERALL: SAME AS THE RECORDING
+  same as the recording   3 of 3
+
+The checked responses matched the recording on all 3 attempts.
+This establishes response equivalence within the selected verification scope. Use an explicit fault expectation to test a reset or response timeout.
+================================

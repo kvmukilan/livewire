@@ -1,0 +1,55 @@
+{
+  "blockingFindings": [],
+  "profile": "software-lab",
+  "schemaVersion": 1,
+  "softwareLab": {
+    "checks": [
+      {
+        "path": "v1.0.0/windows-checks/checks.json",
+        "sha256": "a5d483f058b3094108418a76a2d643e01f633f2ebc205f18a28139c836575951"
+      },
+      {
+        "path": "v1.0.0/linux-checks/checks.json",
+        "sha256": "1794054d99a3b0d05441fa8b7bae3fd1e81613b321fb89ff57e7c2cda41cda96"
+      }
+    ],
+    "humanPilotQualified": false,
+    "limitations": [
+      "Software-lab qualification only; no physical NIC/device or uncoached human-pilot qualification.",
+      "Windows application checks use independent loopback peers; Windows Npcap physical-driver fault behavior is unqualified.",
+      "Linux application and packet checks run on WSL2 software networking; packet peers use owned namespaces and virtual Ethernet.",
+      "Linux arm64 is cross-built and has no runtime qualification in this profile.",
+      "MQTT enhanced authentication, unsupported DNP3 authentication/object/link-control forms, HTTP/2 and HTTP/3 remain unsupported.",
+      "Fault observations and compared responses do not establish an industrial-device crash or other field fault without target-side evidence."
+    ],
+    "physicalQualified": false,
+    "runs": [
+      {
+        "path": "v1.0.0/windows-live/report.json",
+        "sha256": "ab710e8780d49343c3625e3e7b9f24c920855d23936e4e9d9ec03cbf1f840fe8"
+      },
+      {
+        "path": "v1.0.0/windows-reproduce/report.json",
+        "sha256": "6a3bd478a9fdd3b8edc43bfaedbebb4a06f25d798f28602804fb8c5d470b343b"
+      },
+      {
+        "path": "v1.0.0/linux-live/report.json",
+        "sha256": "e47dd8a6cab94ebb558a6bacbddaeb1f16a7bec8b85290877ef63623cc993c55"
+      },
+      {
+        "path": "v1.0.0/linux-reproduce/report.json",
+        "sha256": "5c36c3692478a0884f2415820955cb5b4dbf75693cd73bf501273ffb667bf9d3"
+      },
+      {
+        "path": "v1.0.0/linux-packet/live.run.json",
+        "sha256": "e686802ba5ad8fe82a2f5afe88f878b4a0a61a6f7dd64107a059c3f1e0ee323c"
+      },
+      {
+        "path": "v1.0.0/linux-packet/reproduce.run.json",
+        "sha256": "2fcbc0bb3098c25a351de95a231e77ce13b29a8083812c74b815edcbea25afd7"
+      }
+    ]
+  },
+  "sourceDigest": "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+  "version": "1.0.0"
+}

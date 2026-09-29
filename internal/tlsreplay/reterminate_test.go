@@ -211,7 +211,7 @@ func TestReTerminateUsesAdapterForDynamicResponseLength(t *testing.T) {
 
 func TestReTerminateUsesHTTPHeadExchangeContext(t *testing.T) {
 	cert := selfSigned(t)
-	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}, NextProtos: []string{"h2", "http/1.1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,9 +240,10 @@ func TestReTerminateUsesHTTPHeadExchangeContext(t *testing.T) {
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(cert.Leaf)
+	clientConfig := &tls.Config{RootCAs: roots, ServerName: "localhost", NextProtos: []string{"h2", "h3", "http/1.1"}}
 	started := time.Now()
 	res, err := ReTerminate(ReTermConfig{
-		Address: ln.Addr().String(), TLSConfig: &tls.Config{RootCAs: roots, ServerName: "localhost"},
+		Address: ln.Addr().String(), TLSConfig: clientConfig,
 		Script: []AppMessage{
 			{Role: FromClient, Data: request},
 			{Role: FromServer, Data: response, Expected: expected, Peers: peers},
@@ -251,6 +252,12 @@ func TestReTerminateUsesHTTPHeadExchangeContext(t *testing.T) {
 	})
 	if err != nil || res.Mismatches != 0 {
 		t.Fatalf("HEAD retermination result=%+v err=%v", res, err)
+	}
+	if res.HandshakeState.NegotiatedProtocol != "http/1.1" {
+		t.Fatalf("HTTP/1 adapter negotiated unsupported ALPN %q", res.HandshakeState.NegotiatedProtocol)
+	}
+	if strings.Join(clientConfig.NextProtos, ",") != "h2,h3,http/1.1" {
+		t.Fatal("replay changed the caller's reusable TLS configuration")
 	}
 	if time.Since(started) >= 180*time.Millisecond {
 		t.Fatal("HEAD response incorrectly waited for a Content-Length body or connection close")

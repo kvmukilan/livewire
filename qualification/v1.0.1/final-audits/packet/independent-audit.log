@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "binarySha256": "6ccae4417361d344f5ba47080106da27f8ea42a44d9518addc25df97a1ba93d1",
+  "runs": [
+    {
+      "path": "linux-packet/live.run.json",
+      "sha256": "ce5f72014c27b75d9e5fcdb8eb1cb5743bfe9056586656cbbc04ad46fea253fe",
+      "caseCount": 7,
+      "processes": 1533,
+      "iterations": 4599,
+      "minimumSuccessfulCaseSpanSeconds": 7207.812803,
+      "failures": 0,
+      "cleanupVerified": true
+    },
+    {
+      "path": "linux-packet/reproduce.run.json",
+      "sha256": "318ff4f62a088d4deff27cfafd4acf7f6fa243ef0881c6441493d524bc0a9ce9",
+      "caseCount": 7,
+      "processes": 1533,
+      "iterations": 4599,
+      "minimumSuccessfulCaseSpanSeconds": 7201.211253,
+      "failures": 0,
+      "cleanupVerified": true
+    },
+    {
+      "path": "linux-stateless/replay.run.json",
+      "sha256": "65fb8a569a91975f598d78f14736d3746ec4224f9d02d9913c5980452c7ad914",
+      "caseCount": 1,
+      "processes": 349,
+      "iterations": 1047,
+      "minimumSuccessfulCaseSpanSeconds": 7202.830003,
+      "failures": 0,
+      "cleanupVerified": true
+    }
+  ],
+  "deduplicatedEvidenceFilesIncludingReports": 20156,
+  "deduplicatedEvidenceBytesIncludingReports": 97641771,
+  "ownedNamespacesAbsent": [
+    "lwc-10fe35de58",
+    "lwc-86c37e09df",
+    "lws-10fe35de58",
+    "lws-86c37e09df"
+  ]
+}

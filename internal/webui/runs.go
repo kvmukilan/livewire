@@ -274,13 +274,25 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		if runs.Repeats() {
 			j.progress("attempt", "", fmt.Sprintf("attempt %d of %d", i+1, runs.Times))
 		}
-		round := orchestration.ExecutePlan(runContext, trace, plan, func(runCtx context.Context, k int, entry replay.PlanEntry, session *replay.Session, started time.Time) webSessionResult {
-			result := runWebEntry(runCtx, j, entry, session, sessions, trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
-			if runs.Repeats() {
-				result.Attempt = i + 1
+		var round []webSessionResult
+		if profile == replay.ProfileWire {
+			executed := planexec.Execute(planexec.Config{
+				Context: runContext, Trace: trace, Plan: plan, Registry: registry, Iface: req.Iface,
+				Progress: func(entry replay.PlanEntry, stage, message string) { j.progress(stage, entry.SessionID, message) },
+			})
+			for _, result := range executed {
+				round = append(round, webResult(result))
 			}
-			return result
-		})
+		} else {
+			round = orchestration.ExecutePlan(runContext, trace, plan, func(runCtx context.Context, k int, entry replay.PlanEntry, session *replay.Session, started time.Time) webSessionResult {
+				return runWebEntry(runCtx, j, entry, session, sessions, trace.Raw, flows, registry, target, att, profile, verify, verifyEngine, started)
+			})
+		}
+		if runs.Repeats() {
+			for k := range round {
+				round[k].Attempt = i + 1
+			}
+		}
 		var tally iterate.Tally
 		for _, r := range round {
 			for _, record := range r.Evidence {
@@ -303,16 +315,17 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 	}
 
 	per := runs.Run(j.ctx, attempt)
-	summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
 	reportName := base + ".run.json"
 	evidenceArtifact := ""
-	if count, err := stream.Commit(); err != nil {
-		j.log("evidence: " + err.Error())
+	count, evidenceErr := commitWebEvidence(stream, results, per)
+	if evidenceErr != nil {
+		j.log(evidenceErr.Error())
 		ok = false
 	} else if count > 0 {
 		j.artifact(evidenceName)
 		evidenceArtifact = evidenceName
 	}
+	summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
 
 	doc := map[string]any{
 		"tool": "livewire", "version": s.version, "when": time.Now().UTC(), "plan": plan,
@@ -321,11 +334,18 @@ func (s *Server) runAdaptiveJob(j *job, path string, req adaptiveRunReq) {
 		"target": target.String(), "interface": req.Iface, "variables": runvars.Redacted(req.Variables),
 		"results": results, "evidence": evidenceArtifact, "mode": inspection.Mode, "selectedPackets": inspection.SelectedPackets, "excludedPackets": inspection.ExcludedPackets, "outcome": summary,
 	}
+	if evidenceErr != nil {
+		doc["error"] = evidenceErr.Error()
+	}
 	if runs.Repeats() {
 		doc["attempts"] = summary.Attempts
 		doc["outcome"] = summary
-		doc["transformations"] = []string{
-			"repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections",
+		if profile == replay.ProfileWire {
+			doc["transformations"] = []string{"each wire attempt preserved captured frame bytes and order; no live session adaptation was performed"}
+		} else {
+			doc["transformations"] = []string{
+				"repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections",
+			}
 		}
 	}
 	if err := writeRedactedJSON(filepath.Join(s.dir, reportName), doc, req.Variables); err != nil {

@@ -31,6 +31,7 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 
 ```sh
 livewire check issue.pcap                      # what is in the capture, can it be replayed
+livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
 livewire reproduce issue.pcap -t 192.168.1.50  # replay it against your device
 livewire web                                   # the same workflow in a browser
 ```
@@ -39,12 +40,28 @@ livewire web                                   # the same workflow in a browser
 pre-selected, and reports matching checked responses, differences, or an
 incomplete/unverified exchange. It saves a shareable report next to the capture.
 
+`live` and `reproduce` use fresh application sessions by default; no extra mode
+choice is needed. The OS maintains TCP state and supported adapters update
+application state from live responses. For stateless packet injection, use
+`livewire replay -in issue.pcap -i <connection>`: it sends captured bytes in
+capture order without establishing TCP/TLS sessions or checking replies.
+
+For a TLS capture, use
+`livewire live tls.pcap -keylog sslkeys.log -t device.example:443`.
+The matching key log recovers the original requests; Livewire sends them over
+a new certificate-verified TLS connection. A capture containing only encrypted
+records cannot reveal those requests without matching decryption material.
+Private CAs use `-ca device-ca.pem`; `-server-name` sets the verified server name
+when connecting by IP. `live -in` with explicit secure inputs such as `-keylog`
+also uses fresh sessions. Without secure inputs, historical `live -in` retains
+its original TCP simulation/packet controls.
+
 When you need to be precise about what is replayed:
 
 ```sh
 livewire check issue.pcap -details                                        # list the sessions
-livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run   # preview, send nothing
-livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50
+livewire reproduce issue.pcap -session tcp-0 -dry-run   # preview, send nothing
+livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50
 livewire reproduce issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
 livewire compare issue.pcap issue.actual.pcap                             # where did it diverge
 ```
@@ -78,6 +95,6 @@ available throughout 1.x.
 | [docs/RELEASE_AUDIT.md](docs/RELEASE_AUDIT.md) | what the current release candidate has and has not been checked against |
 | [SECURITY.md](SECURITY.md) | handling captures, credentials, and reports |
 | [CHANGELOG.md](CHANGELOG.md) | what changed in each release |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | building, testing, and releasing from source |
+| [CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) | building, testing, and releasing from source |
 
 Livewire is licensed under the [MIT License](LICENSE).

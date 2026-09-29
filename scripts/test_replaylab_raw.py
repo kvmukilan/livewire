@@ -1,11 +1,14 @@
 """Artifact integrity checks; these do not require packet privileges."""
 import json
+import struct
+import signal
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
 
-from replaylab_raw import Lab, collect_evidence, evidence_ref
+from replaylab_raw import Lab, collect_evidence, decode_pcap, evidence_ref, ethernet_frames, main, sha, stateless_fixture, verify_stateless_report, verify_wire_capture, verify_wire_report, wire_fixture
 
 
 class EvidenceTests(unittest.TestCase):
@@ -16,7 +19,7 @@ class EvidenceTests(unittest.TestCase):
                      "live-udp-00001.independent.pcap", "live-udp-00001.actual.pcap",
                      "live-udp-00001.report.json", "live-udp-00001.cli.log",
                      "live-udp-00001.tcpdump.log", "live-udp-00001.firewall.txt"]
-            for name in names + ["live.run.json", "reproduce.run.json"]:
+            for name in names + ["live.run.json", "reproduce.run.json", "replay.run.json"]:
                 (folder / name).write_text("synthetic evidence", encoding="utf-8")
             refs = collect_evidence(folder, {})
             self.assertEqual({r["path"] for r in refs}, set(names))
@@ -55,6 +58,86 @@ class EvidenceTests(unittest.TestCase):
             self.assertTrue(report["interrupted"])
             self.assertIn(ref, report["evidence"])
             self.assertIn("evidence-error", lab.transcript.read_text())
+
+
+class StatelessTests(unittest.TestCase):
+    def test_wire_interleaved_sessions_reject_session_grouping_and_tie_reordering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture, capture = Path(directory) / "wire.pcap", Path(directory) / "observed.pcap"
+            frames = wire_fixture(fixture)
+            self.assertEqual(len(frames), 80)
+            rows = decode_pcap(fixture)
+            self.assertEqual(len({(p["proto"], p["sport"], p["dport"]) for p in rows}), 40)
+            self.assertEqual({p["proto"] for p in rows}, {6, 17})
+            report = {"version": "1.0.1", "attempts": 3, "selectedPackets": 80, "captureDigest": "sha256:" + sha(fixture), "outcome": {"status": "wire"}, "sessions": [{"attempt": attempt, "sessionId": "flow-%d" % session, "completed": True, "verified": False, "matched": False, "status": "wire", "mode": "wire", "sent": 2, "packetCount": 2} for attempt in range(1, 4) for session in range(40)]}
+            verify_wire_report(report, fixture, 3, "1.0.1")
+            for key, value in (("completed", False), ("verified", True), ("matched", True), ("sent", 1), ("attempt", 1)):
+                changed = json.loads(json.dumps(report))
+                changed["sessions"][-1][key] = value
+                with self.subTest(report=key), self.assertRaises(ValueError):
+                    verify_wire_report(changed, fixture, 3, "1.0.1")
+            def observed(items):
+                data = fixture.read_bytes()[:24]
+                for frame in items:
+                    data += struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame
+                capture.write_bytes(data)
+            observed(frames * 3)
+            self.assertEqual(verify_wire_capture(fixture, capture, 3), 240)
+            grouped = [frame for pair in zip(frames[:40], frames[40:]) for frame in pair]
+            for items in (grouped * 3, [frames[1], frames[0]] + frames[2:] + frames * 2, frames * 3 + frames[:1], (frames * 3)[:-1]):
+                observed(items)
+                with self.assertRaisesRegex(ValueError, "bytes/order/count"):
+                    verify_wire_capture(fixture, capture, 3)
+
+    def test_sigterm_runs_cleanup_and_records_interruption(self):
+        lab = Mock()
+        lab.cleanup.return_value = True
+        lab.setup.side_effect = lambda: signal.raise_signal(signal.SIGTERM)
+        previous = signal.getsignal(signal.SIGTERM)
+        with patch("sys.argv", ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", "1.0.1", "--command", "replay"]), patch("replaylab_raw.os.geteuid", return_value=0, create=True), patch("replaylab_raw.Lab", return_value=lab):
+            with self.assertRaises(KeyboardInterrupt): main()
+        lab.cleanup.assert_called_once_with()
+        lab.finish.assert_called_once_with(True, True)
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
+
+    def test_exact_mixed_frames_and_unverified_report_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            fixture, capture = folder / "mixed.pcap", folder / "observed.pcap"
+            expected = stateless_fixture(fixture)
+            self.assertEqual(ethernet_frames(fixture), expected)
+            self.assertEqual(len(expected), 7)
+            def write_frames(frames):
+                data = fixture.read_bytes()[:24]
+                for frame in frames:
+                    data += struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame
+                capture.write_bytes(data)
+            report = {"tool": "livewire", "version": "1.0.1", "mode": "wire", "status": "wire", "completed": True, "verified": False, "passes": 3, "framesPerPass": 7, "framesSent": 21, "captureDigest": "sha256:" + sha(fixture)}
+            write_frames(expected * 3)
+            self.assertEqual(verify_stateless_report(report, fixture, capture, 3, "1.0.1"), 21)
+            for mutation in ("missing", "extra", "order", "bytes"):
+                with self.subTest(mutation=mutation):
+                    frames = expected * 3
+                    if mutation == "missing": frames.pop()
+                    elif mutation == "extra": frames.append(expected[0])
+                    elif mutation == "order": frames[0], frames[1] = frames[1], frames[0]
+                    else: frames[0] = frames[0][:-1] + bytes([frames[0][-1] ^ 1])
+                    write_frames(frames)
+                    with self.assertRaisesRegex(ValueError, "bytes/order/count"):
+                        verify_stateless_report(report, fixture, capture, 3, "1.0.1")
+            write_frames(expected * 3)
+            for key, value in (("verified", True), ("completed", False), ("framesSent", 20), ("passes", 2), ("status", "matched"), ("captureDigest", "sha256:wrong"), ("version", "1.0.0")):
+                with self.subTest(field=key), self.assertRaisesRegex(ValueError, "report differs"):
+                    verify_stateless_report(dict(report, **{key: value}), fixture, capture, 3, "1.0.1")
+
+    def test_truncated_or_non_ethernet_observation_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory) / "mixed.pcap"
+            stateless_fixture(fixture)
+            original = fixture.read_bytes()
+            for data in (original[:20], original[:-1], original + b"x", original[:20] + struct.pack("<I", 101) + original[24:]):
+                fixture.write_bytes(data)
+                with self.assertRaises(ValueError): ethernet_frames(fixture)
 
 
 if __name__ == "__main__":

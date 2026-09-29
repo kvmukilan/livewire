@@ -79,7 +79,7 @@ func compareReleases(ctx context.Context, args []string) error {
 	}
 	if exe == "" {
 		exe = filepath.Join(work, "livewire"+exeSuffix())
-		if err := sh(ctx, "go", "build", "-o", exe, "./cmd/livewire"); err != nil {
+		if err := sh(ctx, "go", "build", "-buildvcs=false", "-o", exe, "./cmd/livewire"); err != nil {
 			return err
 		}
 	}

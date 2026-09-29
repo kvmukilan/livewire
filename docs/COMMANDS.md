@@ -13,10 +13,12 @@ Run `livewire help <command>` for the same information at the terminal, and
 Replay a recorded exchange against your device and report, in plain language,
 whether it behaved the same. This is the command to hand to someone else. It
 inspects selected sessions before it opens an interface or connection and uses
-the replay intent you chose. Omitted modes retain automatic script compatibility.
+fresh application sessions by default. No `-mode` flag or mode-selection prompt
+is needed. `live` uses the same execution contract. The separate `replay`
+command is stateless packet injection.
 
 ```sh
-livewire reproduce issue.pcap -mode application -t 192.168.1.50
+livewire reproduce issue.pcap -t 192.168.1.50
 ```
 
 For ordinary TCP, UDP, and ICMP supply the device IP; the destination port comes
@@ -29,7 +31,8 @@ exact flag to add.
 | Capture contains | Automatic route |
 |---|---|
 | HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
-| ordinary TCP, UDP, or ICMP without an adapter | stateful transport driver |
+| UDP or ICMP | live datagram/echo driver with reply checking |
+| ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
 | TLS with `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
 | explicit or implicit FTPS with `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
@@ -44,7 +47,7 @@ accepted so existing scripts do not change meaning.
 
 | Option | Meaning |
 |---|---|
-| `-mode <intent>` | application, transport, wire, or auto |
+| `-mode <intent>` | advanced compatibility override: application (default), transport, wire, or auto |
 | `-session <id>` | select an exchange from `check -details`; repeatable |
 | `-dry-run` | inspect selection, requirements, target, and output paths without sending |
 | `-in <file>` | the capture, if you prefer it to a bare argument |
@@ -92,7 +95,7 @@ Durable resume cannot restore a socket or the target's application state. See
 To reproduce an expected timeout rather than require matching responses:
 
 ```sh
-livewire reproduce issue.pcap -mode application -t 192.168.1.50 \
+livewire reproduce issue.pcap -t 192.168.1.50 \
   -response-timeout 5s -expect-fault timeout
 ```
 
@@ -115,19 +118,20 @@ the [protocol details](RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 ### `live`
 
-Use the same automatic protocol handling through the advanced entry point:
+Play captured application requests through fresh live connections:
 
 ```sh
 livewire live issue.pcap -t 192.168.1.50
 livewire live tls.pcap -keylog sslkeys.log -t device.example:443
-livewire live issue.pcap -wire -i eth0   # explicit raw injection only
+livewire replay -in issue.pcap -i eth0  # separate stateless packet replay
 ```
 
-The positional form intentionally uses the same orchestrator as `reproduce`, so
-a TLS capture cannot accidentally enter the old TCP packet engine. The
-historical `live -in <file>` syntax is still accepted exactly as before for
-scripts that need its dry-run, flow-selection, sequence-rewrite, or raw-L4
-controls. See [Legacy `live -in` mode](#legacy-live--in-mode).
+The positional form uses the same fresh-session orchestrator as `reproduce`.
+`live -in <file>` with explicit secure inputs such as `-keylog`, `-ca`, or SSH
+credentials also uses that route. Mixing secure inputs with legacy-only
+controls is rejected before loading the capture or sending. Without secure
+inputs, historical `live -in` keeps its dry-run, flow-selection, sequence-rewrite
+and raw-L4 controls. See [Legacy `live -in` mode](#legacy-live--in-mode).
 
 ## Supporting commands
 
@@ -145,7 +149,7 @@ livewire check -in issue.pcap -json assessment.json
 
 | Option | Meaning |
 |---|---|
-| `-mode <intent>` | application, transport, wire, or auto |
+| `-mode <intent>` | advanced compatibility override: application (default), transport, wire, or auto |
 | `-session <id>` | select an exchange from `check -details`; repeatable |
 | `-dry-run` | inspect selection, requirements, target, and output paths without sending |
 | `-in <file>` | the capture, if you prefer it to a bare argument |
@@ -507,7 +511,7 @@ behaved the same. An intermittent fault is named as such, rather than reported a
 a single pass or failure:
 
 ```sh
-livewire reproduce issue.pcap -mode application -t 192.168.1.50 -i eth0 -n 5
+livewire reproduce issue.pcap -t 192.168.1.50 -i eth0 -n 5
 ```
 
 ```

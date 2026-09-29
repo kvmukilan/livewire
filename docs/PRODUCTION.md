@@ -20,8 +20,8 @@ livewire doctor
 livewire doctor -json -out-dir .
 livewire ifaces
 livewire check issue.pcap -details
-livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run
-livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50 -report application.json
+livewire reproduce issue.pcap -session tcp-0 -dry-run
+livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50 -report application.json
 livewire bundle -report application.json -o application-support.zip
 ```
 
@@ -50,9 +50,10 @@ livewire lab -in issue.pcap -client-iface eth1 -server-iface eth2 -topology topo
 livewire bundle -report dut.json -evidence dut.pcapng -o dut-support.zip
 ```
 
-Automatic inspection remains useful. Interactive replay asks for intent;
-scripts omitting `-mode` retain compatibility. Never use a different execution
-mode merely to hide a blocker. Resolve missing security inputs or select the
+Automatic inspection remains useful. `live` and `reproduce` use fresh application
+sessions without a mode prompt. Advanced `-mode auto` retains v1.0.0 transport
+selection for unrecognized TCP. Never choose a different execution path merely
+to hide a blocker. Resolve missing security inputs or select the
 intended exchange. `livewire help troubleshoot` contains further recovery steps.
 
 ## Diagnostics and reports
@@ -132,9 +133,9 @@ for later device qualification; an omitted profile also means `physical`.
 ```sh
 go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
-go run ./scripts/qualify init qualification/stable.json
+go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.0.0 -artifacts dist/v1.0.0 qualification/stable.json
+go run ./scripts/qualify validate -version 1.0.1 -artifacts dist/v1.0.1 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -159,7 +160,7 @@ and recovery, not an exit-zero replay. Never disable a real interface or fill
 a real disk outside the dedicated test host/volume.
 
 On each platform, repeat the selected supported workflow for at least two hours.
-Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -mode application -t 192.168.1.50`
+Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -t 192.168.1.50`
 on the selected lab host. Every attempt has separate transcripts; report-path
 arguments may contain `{attempt}` for unique filenames. The harness stops on
 an unexpected exit and leaves behavior/cleanup qualification pending review.

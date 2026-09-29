@@ -1,0 +1,17 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-count=1",
+    "./cmd/livewire",
+    "./internal/tlsreplay",
+    "./internal/secureexec",
+    "./internal/replayintent"
+  ],
+  "started": "2026-09-29T20:40:34.306545Z",
+  "finished": "2026-09-29T20:40:38.217254Z",
+  "exitCode": 0,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "sourceDigestAfter": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "platform": "linux-amd64"
+}

@@ -78,6 +78,12 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 	if cfg.TLSConfig == nil {
 		return nil, fmt.Errorf("tlsreplay: nil TLSConfig; a fresh client handshake is required")
 	}
+	if cfg.Adapter != nil && cfg.Adapter.Name() == "http/1" {
+		// Some HTTP endpoints require ALPN even for HTTP/1.1. Offer only the
+		// protocol this adapter implements, without changing the caller's config.
+		cfg.TLSConfig = cfg.TLSConfig.Clone()
+		cfg.TLSConfig.NextProtos = []string{"http/1.1"}
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}

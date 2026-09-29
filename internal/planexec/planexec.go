@@ -16,7 +16,6 @@ import (
 	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/livereplay"
 	"github.com/kvmukilan/livewire/internal/orchestration"
-	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/runstate"
 )
@@ -43,6 +42,7 @@ type Config struct {
 	Verify          replay.VerifyMode
 	TCPConfig       func(*engine.Flow, *replay.Session) livereplay.Config
 	Progress        func(replay.PlanEntry, string, string)
+	openWireSender  func(string) (backend.PacketBackend, error)
 }
 
 func Execute(cfg Config) []Result {
@@ -50,13 +50,17 @@ func Execute(cfg Config) []Result {
 	if cfg.Trace == nil {
 		return configurationFailures(cfg.Plan, "replay trace is missing")
 	}
+	if cfg.Plan.Profile == replay.ProfileWire {
+		return executeWirePlan(cfg, time.Time{})
+	}
 	return orchestration.ExecutePlan(cfg.Context, cfg.Trace, cfg.Plan, func(_ context.Context, _ int, entry replay.PlanEntry, session *replay.Session, started time.Time) Result {
 		return runEntry(cfg, entry, session, started)
 	})
 }
 
 // ExecuteEntry is for a front end that already owns the plan scheduler and its
-// shared start instant. It uses the same dispatch as Execute.
+// shared start instant. Full wire plans must use Execute to preserve packet
+// order across sessions.
 func ExecuteEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, started time.Time) Result {
 	if cfg.Trace == nil {
 		return Result{Entry: entry, Session: session, Err: errors.New("replay trace is missing")}
@@ -82,6 +86,9 @@ func normalize(cfg Config) Config {
 	if cfg.Progress == nil {
 		cfg.Progress = func(replay.PlanEntry, string, string) {}
 	}
+	if cfg.openWireSender == nil {
+		cfg.openWireSender = backend.OpenSender
+	}
 	return cfg
 }
 
@@ -102,12 +109,13 @@ func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, start
 		return result
 	}
 	if entry.Mode == replay.ModeWire {
-		events := cfg.Trace.Raw
-		if session != nil {
-			events = session.Events
+		cfg.Plan.Entries = []replay.PlanEntry{entry}
+		results := executeWirePlan(cfg, started)
+		if len(results) == 0 {
+			result.Err = errors.New("wire entry is excluded from replay")
+			return result
 		}
-		result.Transport, result.Err = runWireEvents(cfg, entry, events, started)
-		return result
+		return results[0]
 	}
 	if session == nil {
 		result.Err = fmt.Errorf("session %s is missing from trace", entry.SessionID)
@@ -228,69 +236,6 @@ func runFTP(cfg Config, entry replay.PlanEntry, control *replay.Session) (result
 		Variables: cfg.Variables, Timeout: 30 * time.Second, Verify: cfg.Verify,
 		Progress: func(line string) { cfg.Progress(entry, "ftp", line) },
 	})
-}
-
-func runWireEvents(cfg Config, entry replay.PlanEntry, events []replay.Event, started time.Time) (result replay.TransportResult, retErr error) {
-	result = replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeWire, Fidelity: replay.FidelityWire}
-	ctx, saved, err := replay.BeginSession(cfg.Context, entry.SessionID, false)
-	if err != nil {
-		return result, err
-	}
-	if saved != nil {
-		result.Completed = saved.Completed
-		result.Sent = saved.Sent
-		return result, nil
-	}
-	defer func() {
-		retErr = errors.Join(retErr, replay.FinishSession(ctx, runstate.Result{Completed: result.Completed && retErr == nil, Sent: result.Sent}))
-		if retErr != nil {
-			result.Completed = false
-			result.Error = retErr.Error()
-		}
-	}()
-	cfg.Context = ctx
-	if err := replay.RecordOperation(ctx, "intent", 0); err != nil {
-		return result, err
-	}
-	sender, err := backend.OpenSender(cfg.Iface)
-	if err != nil {
-		result.Error = err.Error()
-		return result, err
-	}
-	defer func() {
-		if err := sender.Close(); err != nil {
-			retErr = errors.Join(retErr, fmt.Errorf("close wire backend: %w", err))
-			result.Completed = false
-			result.Error = retErr.Error()
-		}
-	}()
-	for _, event := range events {
-		if event.Record == nil {
-			result.Error = "wire event has no capture record"
-			return result, errors.New(result.Error)
-		}
-		if !waitOffset(cfg.Context, started, event.At) {
-			result.Error = "cancelled"
-			return result, cfg.Context.Err()
-		}
-		if err := sender.Send(event.Record.Data); err != nil {
-			result.Error = err.Error()
-			return result, err
-		}
-		frame := append([]byte(nil), event.Record.Data...)
-		record := pcapio.Record{Time: sender.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: sender.LinkType()}
-		if sink := replay.Execution(ctx).Evidence; sink != nil {
-			if err := sink(record); err != nil {
-				return result, err
-			}
-		} else {
-			result.Evidence = append(result.Evidence, record)
-		}
-		result.Sent++
-	}
-	result.Completed = true
-	cfg.Progress(entry, "wire", fmt.Sprintf("wire replay sent %d frame(s); no live adaptation claimed", result.Sent))
-	return result, nil
 }
 
 func findFlow(flows []*engine.Flow, session *replay.Session) *engine.Flow {

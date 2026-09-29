@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "cover"
+  ],
+  "started": "2026-09-29T20:38:42.871232Z",
+  "finished": "2026-09-29T20:41:44.332523Z",
+  "exitCode": 0,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "sourceDigestAfter": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "platform": "windows-amd64"
+}
