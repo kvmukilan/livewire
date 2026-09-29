@@ -164,12 +164,8 @@ type reproduceOptions struct {
 	specified map[string]bool
 }
 
-// parseReproduceFlags declares the command line, parses it, and applies the
+// parseCaptureReplayFlags declares the command line, parses it, and applies the
 // checks that need nothing but the flags themselves.
-func parseReproduceFlags(args []string) (reproduceOptions, error) {
-	return parseCaptureReplayFlags("reproduce", args)
-}
-
 func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, error) {
 	var o reproduceOptions
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
