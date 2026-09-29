@@ -123,7 +123,7 @@ func TestVerdictText(t *testing.T) {
 	same := livereplay.Result{Outcome: engine.Outcome{Phase: engine.PhaseClosed}, Verified: true, Matched: true}
 	var b bytes.Buffer
 	fprintVerdict(&b, "", same)
-	if !strings.Contains(b.String(), "SAME AS THE RECORDING") {
+	if !strings.Contains(b.String(), "MATCHED THE CHECKED RESPONSES") {
 		t.Fatalf("clean match should read SAME, got:\n%s", b.String())
 	}
 

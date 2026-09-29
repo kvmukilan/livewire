@@ -1,0 +1,36 @@
+package main
+
+import (
+ "context"
+ "encoding/json"
+ "errors"
+ "fmt"
+ "net"
+ "os"
+ "time"
+
+ "github.com/kvmukilan/livewire/internal/adapters"
+ "github.com/kvmukilan/livewire/internal/replay"
+)
+
+var stop = errors.New("diagnostic: stop before reading")
+type deadlineProbe struct { net.Conn; target time.Time; requested time.Time }
+func (c *deadlineProbe) SetReadDeadline(deadline time.Time) error { c.requested=deadline; return stop }
+
+func main() {
+ started:=time.Now()
+ checked:=0
+ for _, gap:=range []time.Duration{100*time.Nanosecond,200*time.Nanosecond,500*time.Nanosecond,time.Microsecond,2*time.Microsecond,5*time.Microsecond} {
+  for attempt:=0; attempt<20000; attempt++ {
+   var reader replay.MessageReader
+   conn:=&deadlineProbe{target:time.Now().Add(gap)}
+   err:=reader.WaitUntil(context.Background(),conn,adapters.MQTT{},nil,nil,nil,conn.target,time.Second)
+   checked++
+   if !conn.requested.IsZero() && conn.requested.Sub(conn.target)>5*time.Millisecond {
+    _=json.NewEncoder(os.Stdout).Encode(map[string]any{"reproduced":true,"attempts":checked,"targetGapNs":gap.Nanoseconds(),"requestedReadDeadlineBeyondTargetNs":conn.requested.Sub(conn.target).Nanoseconds(),"elapsedMs":time.Since(started).Milliseconds(),"error":fmt.Sprint(err)})
+    return
+   }
+  }
+ }
+ _=json.NewEncoder(os.Stdout).Encode(map[string]any{"reproduced":false,"attempts":checked,"elapsedMs":time.Since(started).Milliseconds()})
+}

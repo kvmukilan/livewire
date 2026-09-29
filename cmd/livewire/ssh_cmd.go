@@ -75,14 +75,18 @@ func runSSHReplayArgs(args []string) error {
 		return fmt.Errorf("when -expect is used, provide exactly one for each -cmd")
 	}
 	expects = multiFlag(normalizeSSHExpects(expects))
+	if *pass == "" && *keyPath == "" {
+		*pass = os.Getenv(sshPasswordEnv)
+	}
 	if (*pass == "") == (*keyPath == "") {
-		return fmt.Errorf("provide exactly one of -pass or -key")
+		return fmt.Errorf("provide exactly one of -pass, -key, or the %s environment variable", sshPasswordEnv)
 	}
 
-	records, _, err := loadRecords(inPath)
+	capture, digest, err := loadCaptureSnapshot(inPath)
 	if err != nil {
 		return err
 	}
+	records := capture.Records
 	trace := replay.ExtractTrace(records, replay.ExtractOptions{})
 	trace, err = replayintent.Select(trace, selectedSessions, nil)
 	if err != nil {
@@ -113,10 +117,6 @@ func runSSHReplayArgs(args []string) error {
 		return err
 	}
 	*reportPath = resolvedReport
-	digest, err := sha256File(inPath)
-	if err != nil {
-		return fmt.Errorf("capture digest: %w", err)
-	}
 
 	auth := sshreplay.Auth{User: *user, Password: *pass}
 	if *pass == "" && *keyPath != "" {
@@ -159,6 +159,9 @@ func runSSHReplayArgs(args []string) error {
 	report.Outcome.ProtocolVersion = "SSHv2"
 	report.Outcome.Requests = len(commandsList)
 	report.Outcome.Verified = len(expects) > 0
+	for _, expectation := range expects {
+		report.Outcome.Verified = report.Outcome.Verified && strings.TrimSpace(expectation) != ""
+	}
 	if pinnedHostKey == nil {
 		report.Limitations = append(report.Limitations, "SSH host key was observed but not pinned; use -host-key to verify peer identity")
 	}
@@ -179,7 +182,7 @@ func runSSHReplayArgs(args []string) error {
 		for i, output := range res.Outputs {
 			sum := sha256.Sum256(output)
 			matched := false
-			if len(expects) > 0 {
+			if len(expects) > 0 && strings.TrimSpace(expects[i]) != "" {
 				matched = bytes.Contains(output, []byte(expects[i]))
 			}
 			report.Outcome.Commands = append(report.Outcome.Commands, commandEvidence{Index: i, OutputBytes: len(output), OutputSHA256: fmt.Sprintf("sha256:%x", sum), Matched: matched})
@@ -193,6 +196,7 @@ func runSSHReplayArgs(args []string) error {
 	} else {
 		report.Outcome.Completed = true
 	}
+	report.Outcome.Finalize(ctx, runErr)
 	if err := report.write(*reportPath); err != nil {
 		if runErr != nil {
 			return fmt.Errorf("%w (also could not write SSH report: %v)", runErr, err)

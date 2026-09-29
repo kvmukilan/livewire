@@ -16,6 +16,26 @@ import (
 
 type lifecycleBackend struct{ closes int }
 
+type failedCloseBackend struct{ lifecycleBackend }
+
+func (b *failedCloseBackend) Close() error {
+	b.closes++
+	return errors.New("interface removed during cleanup")
+}
+
+func TestBackendFailureIsReportedAndGuardStillReleased(t *testing.T) {
+	b, g := &failedCloseBackend{}, &lifecycleGuard{}
+	deps := lifecycleDependencies(&b.lifecycleBackend, g, func(context.Context) error { return errors.New("device disconnected") })
+	deps.openLive = func(backend.LiveConfig) (*backend.LiveBackend, error) {
+		return &backend.LiveBackend{Backend: b, LocalIP: netip.MustParseAddr("198.51.100.10")}, nil
+	}
+	_, err := runContextWithDependencies(context.Background(), lifecycleConfig(), nil, deps)
+	if err == nil {
+		t.Fatal("backend failure was swallowed")
+	}
+	assertLifecycleReleased(t, &b.lifecycleBackend, g)
+}
+
 func (*lifecycleBackend) Send([]byte) error                             { return nil }
 func (*lifecycleBackend) Recv([]byte, time.Duration) (int, bool, error) { return 0, false, nil }
 func (*lifecycleBackend) Now() time.Time                                { return time.Now() }
@@ -104,7 +124,7 @@ func TestRunContextVerificationOffNeverClaimsMatch(t *testing.T) {
 		wantMatch  bool
 	}{
 		{name: "off", verify: engine.VerifyOff},
-		{name: "strict-clean", verify: engine.VerifyStrict, wantVerify: true, wantMatch: true},
+		{name: "strict-without-response-evidence", verify: engine.VerifyStrict},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := lifecycleConfig()

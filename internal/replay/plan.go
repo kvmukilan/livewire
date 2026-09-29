@@ -27,7 +27,7 @@ func BuildPlan(t *Trace, profile Profile, registry *Registry) ReplayPlan {
 		if groupMembers[s.ID] {
 			continue
 		}
-		e := PlanEntry{SessionID: s.ID, Transport: s.Transport, PacketIndexes: packetIndexes(s.Events), Warnings: append([]string(nil), s.Warnings...), Blockers: append([]string(nil), s.Blockers...)}
+		e := PlanEntry{SessionID: s.ID, Fingerprint: s.Fingerprint(), Transport: s.Transport, PacketIndexes: packetIndexes(s.Events), Warnings: append([]string(nil), s.Warnings...), Blockers: append([]string(nil), s.Blockers...)}
 		if item, ok := groups[s.ID]; ok && (profile == ProfileFunctional || profile == ProfileTiming) {
 			e.Adapter = item.Adapter
 			e.Driver = item.Adapter + "-coordinator"
@@ -66,7 +66,14 @@ func BuildPlan(t *Trace, profile Profile, registry *Registry) ReplayPlan {
 		}
 		if a, score := registry.Best(*s); a != nil && score > 0 && (profile == ProfileFunctional || profile == ProfileTiming) && !multicastSession(s) && !unsolicitedOneSided(s) {
 			e.Adapter, e.Driver, e.Mode, e.Fidelity = a.Name(), semanticDriver(s.Transport), ModeSemantic, FidelitySemantic
+			if provider, ok := a.(CapabilityProvider); ok {
+				caps := provider.Capabilities()
+				e.Capabilities = &caps
+			}
 			e.Transformations = []string{"application messages decoded and dynamic fields prepared by " + a.Name()}
+			if s.Transport == TransportTCP {
+				e.Warnings = append(e.Warnings, "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior")
+			}
 		} else if profile == ProfileWire || !statefulTransport(s.Transport) || multicastSession(s) || unsolicitedOneSided(s) || fragmentedNeedsWire(s, profile) {
 			e.Driver, e.Mode, e.Fidelity = "frame-injector", ModeWire, FidelityWire
 			e.Transformations = []string{"frames emitted without live protocol adaptation"}
@@ -91,6 +98,13 @@ func BuildPlan(t *Trace, profile Profile, registry *Registry) ReplayPlan {
 				e.Fidelity = FidelityTransport
 			}
 			e.Transformations = []string{"addresses and checksums retargeted", "live replies correlated at the transport layer"}
+			if s.Transport == TransportTCP {
+				if profile == ProfileTransport {
+					e.Warnings = append(e.Warnings, "transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation")
+				} else {
+					e.Warnings = append(e.Warnings, "stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled")
+				}
+			}
 		}
 		p.Entries = append(p.Entries, e)
 	}

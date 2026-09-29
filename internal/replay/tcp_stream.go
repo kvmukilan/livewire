@@ -124,13 +124,21 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 	}
 	byDirection := map[Direction][]tcpPayloadSegment{}
 	fallback := map[Direction][]byte{}
+	starts := map[Direction]uint32{}
+	ends := map[Direction]uint32{}
 	sequenced, unsequenced := 0, 0
 	for _, event := range s.Events {
-		if len(event.Payload) == 0 {
+		if len(event.Payload) == 0 && (event.Record == nil || len(event.Record.Data) == 0) {
 			continue
+		}
+		if event.Direction != ClientToServer && event.Direction != ServerToClient {
+			return nil, nil, fmt.Errorf("packet %d: TCP direction is unknown", event.PacketIndex)
 		}
 		if event.Record == nil || len(event.Record.Data) == 0 {
 			unsequenced++
+			if len(fallback[event.Direction])+len(event.Payload) > maxTCPApplicationStream {
+				return nil, nil, fmt.Errorf("%s TCP application stream exceeds %d bytes", event.Direction, maxTCPApplicationStream)
+			}
 			fallback[event.Direction] = append(fallback[event.Direction], event.Payload...)
 			continue
 		}
@@ -141,6 +149,20 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 		sequence := packet.Seq().Uint32()
 		if packet.HasFlags(wire.FlagSYN) {
 			sequence++
+			if start, ok := starts[event.Direction]; ok && start != sequence {
+				return nil, nil, fmt.Errorf("%s TCP session has conflicting SYN sequences at packet %d", event.Direction, event.PacketIndex)
+			}
+			starts[event.Direction] = sequence
+		}
+		if packet.HasFlags(wire.FlagFIN) {
+			end := sequence + uint32(len(event.Payload))
+			if previous, ok := ends[event.Direction]; ok && previous != end {
+				return nil, nil, fmt.Errorf("%s TCP session has conflicting FIN sequences at packet %d", event.Direction, event.PacketIndex)
+			}
+			ends[event.Direction] = end
+		}
+		if len(event.Payload) == 0 {
+			continue
 		}
 		byDirection[event.Direction] = append(byDirection[event.Direction], tcpPayloadSegment{
 			direction: event.Direction,
@@ -151,7 +173,7 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 		})
 		sequenced++
 	}
-	if sequenced == 0 {
+	if sequenced == 0 && unsequenced > 0 {
 		return nil, fallback, nil
 	}
 	if unsequenced > 0 {
@@ -162,6 +184,11 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 	for _, direction := range []Direction{ClientToServer, ServerToClient} {
 		segments := byDirection[direction]
 		if len(segments) == 0 {
+			if start, ok := starts[direction]; ok {
+				if end, ok := ends[direction]; ok && start != end {
+					return nil, nil, fmt.Errorf("%s TCP stream gap between SYN and FIN: missing %d byte(s)", direction, uint32(end-start))
+				}
+			}
 			result[direction] = tcpStreamAssembly{}
 			continue
 		}
@@ -178,6 +205,13 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 			return segments[i].packet < segments[j].packet
 		})
 		base := segments[0].offset
+		if start, ok := starts[direction]; ok && anchor+uint32(base) != start {
+			gap := int64(int32(anchor + uint32(base) - start))
+			if gap > 0 {
+				return nil, nil, fmt.Errorf("%s TCP stream gap after SYN: missing %d byte(s)", direction, gap)
+			}
+			return nil, nil, fmt.Errorf("%s TCP payload precedes captured SYN sequence", direction)
+		}
 		cursor := base
 		stream := make([]byte, 0)
 		for _, segment := range segments {
@@ -204,6 +238,13 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 			}
 			stream = append(stream, segment.data...)
 			cursor += int64(len(segment.data))
+		}
+		if end, ok := ends[direction]; ok && anchor+uint32(cursor) != end {
+			gap := int64(int32(end - (anchor + uint32(cursor))))
+			if gap > 0 {
+				return nil, nil, fmt.Errorf("%s TCP stream gap before FIN: missing %d byte(s)", direction, gap)
+			}
+			return nil, nil, fmt.Errorf("%s TCP payload extends beyond captured FIN sequence", direction)
 		}
 		for i := range segments {
 			segments[i].offset -= base

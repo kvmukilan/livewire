@@ -8,6 +8,33 @@ import (
 )
 
 func BuildTLSAdapterScript(messages []tlsreplay.AppMessage, adapter replay.Adapter, state *replay.RuntimeState) ([]tlsreplay.AppMessage, error) {
+	if _, ok := adapter.(replay.ConversationNormalizer); ok {
+		var turns []replay.ConversationTurn
+		for _, msg := range messages {
+			if !msg.HasCaptureTime {
+				return nil, fmt.Errorf("decrypted record has no capture timeline")
+			}
+			dir := replay.ClientToServer
+			if msg.Role == tlsreplay.FromServer {
+				dir = replay.ServerToClient
+			}
+			turns = append(turns, replay.ConversationTurn{Direction: dir, Payload: msg.Data, At: msg.CapturedAt})
+		}
+		normalized, err := replay.NormalizeConversation(adapter, turns)
+		if err != nil {
+			return nil, fmt.Errorf("inner %s conversation: %w", adapter.Name(), err)
+		}
+		// Normalizers may remove control frames or combine fragmented messages.
+		// Use their logical completion timeline, not the original byte offsets.
+		messages = nil
+		for i, turn := range normalized {
+			role := tlsreplay.FromClient
+			if turn.Direction == replay.ServerToClient {
+				role = tlsreplay.FromServer
+			}
+			messages = append(messages, tlsreplay.AppMessage{Role: role, Data: turn.Payload, CapturedAt: turn.At, CapturedPacket: i, HasCaptureTime: true})
+		}
+	}
 	var clientStream, serverStream []byte
 	for _, msg := range messages {
 		if msg.Role == tlsreplay.FromClient {
@@ -23,13 +50,6 @@ func BuildTLSAdapterScript(messages []tlsreplay.AppMessage, adapter replay.Adapt
 	serverMessages, err := replay.DecodeWithContext(adapter, replay.ServerToClient, serverStream, clientMessages)
 	if err != nil {
 		return nil, fmt.Errorf("inner %s server stream: %w", adapter.Name(), err)
-	}
-	prepared := make([][]byte, len(clientMessages))
-	for i, msg := range clientMessages {
-		prepared[i], err = adapter.Prepare(replay.ClientToServer, msg, state)
-		if err != nil {
-			return nil, fmt.Errorf("inner %s prepare message %d: %w", adapter.Name(), i, err)
-		}
 	}
 	clientPoints, err := ApplicationMessageCapturePoints(messages, tlsreplay.FromClient, clientMessages)
 	if err != nil {
@@ -62,7 +82,8 @@ func BuildTLSAdapterScript(messages []tlsreplay.AppMessage, adapter replay.Adapt
 	for i := 0; i < len(items); {
 		item := items[i]
 		if item.role == tlsreplay.FromClient {
-			script = append(script, tlsreplay.AppMessage{Role: tlsreplay.FromClient, Data: prepared[item.index], CapturedAt: item.point.At, CapturedPacket: item.point.PacketIndex, HasCaptureTime: true})
+			request := clientMessages[item.index]
+			script = append(script, tlsreplay.AppMessage{Role: tlsreplay.FromClient, Data: request.Raw, Request: &request, CapturedAt: item.point.At, CapturedPacket: item.point.PacketIndex, HasCaptureTime: true})
 			pendingPeers = append(pendingPeers, clientMessages[item.index])
 			i++
 			continue

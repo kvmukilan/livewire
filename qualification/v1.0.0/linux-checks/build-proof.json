@@ -1,0 +1,25 @@
+{
+    "commit":  "26a90c8f419046cda70da850ab5f5481aa1bd5c1",
+    "sourceDigest":  "f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122",
+    "toolchain":  "go1.26.7",
+    "checkedAt":  "2026-09-28T21:22:50.7597817Z",
+    "cleanBuild":  "coverage/v1-pacing-build/dist-check/v1.0.0",
+    "independentBuild":  "coverage/v1-pacing-candidate/v1.0.0",
+    "artifacts":  [
+                      {
+                          "sha256":  "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3",
+                          "name":  "livewire-1.0.0-linux-amd64",
+                          "independentSha256":  "640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3"
+                      },
+                      {
+                          "sha256":  "f2ff9fce340242ce4f202a7cf7056ba0eac873fa9869bf1f65132850331a39fd",
+                          "name":  "livewire-1.0.0-linux-arm64",
+                          "independentSha256":  "f2ff9fce340242ce4f202a7cf7056ba0eac873fa9869bf1f65132850331a39fd"
+                      },
+                      {
+                          "sha256":  "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91",
+                          "name":  "livewire-1.0.0-windows-amd64.exe",
+                          "independentSha256":  "cd49568186a36f26f4a48d9fd12568bbd9d6ee62a745d116d8b1291f4b19ba91"
+                      }
+                  ]
+}

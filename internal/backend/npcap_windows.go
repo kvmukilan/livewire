@@ -190,6 +190,7 @@ func (n *Npcap) Close() error {
 type PcapDevice struct {
 	Name        string // \Device\NPF_{GUID} — pass this to -iface
 	Description string
+	Flags       uint32 // PCAP_IF_* flags; inspected without opening the device
 }
 
 // ListPcapDevices enumerates Npcap devices via pcap_findalldevs. The friendly
@@ -212,7 +213,8 @@ func ListPcapDevices() ([]PcapDevice, error) {
 	for d := alldevs; d != nil; {
 		namePtr := *(*unsafe.Pointer)(unsafe.Add(d, 8))
 		descPtr := *(*unsafe.Pointer)(unsafe.Add(d, 16))
-		out = append(out, PcapDevice{Name: cstr(namePtr), Description: cstr(descPtr)})
+		flags := *(*uint32)(unsafe.Add(d, 32))
+		out = append(out, PcapDevice{Name: cstr(namePtr), Description: cstr(descPtr), Flags: flags})
 		d = *(*unsafe.Pointer)(d) // next
 	}
 	return out, nil

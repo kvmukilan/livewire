@@ -1,0 +1,20 @@
+COMMAND: Get-FileHash -Algorithm SHA256 release Linux executable
+EXIT: 0
+"640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3"
+COMMAND: go run ./scripts/qualify init <audit-prefix>.source.json (source snapshot only)
+EXIT: 0
+""
+COMMAND: Get-FileHash SHA256 for every unique LabRun.Evidence path; inspect every per-process firewall snapshot
+EXIT: 0
+{"references":35636,"uniqueFiles":17818,"allHashesMatched":true,"firewallSnapshots":2968,"allFirewallSnapshotsClean":true}
+COMMAND: wsl -d kali-linux -u root -- ip netns list
+EXIT: 0
+""
+COMMAND: wsl -d kali-linux -u root -- ip -j link show (retain interface names only)
+EXIT: 0
+[redacted: unrelated host interface-name inventory; see provenance.json]
+COMMAND: wsl -d kali-linux -u root -- ps -eo pid=,args= (retain owned-process matches only)
+EXIT: 0
+COMMAND: LIVEWIRE_PACKET_LAB_SMOKE=<run-dir> go test ./internal/qualification -run TestRecordedPacketLabTranscript -count=1 -v
+EXIT: 0
+"=== RUN   TestRecordedPacketLabTranscript\r\n=== RUN   TestRecordedPacketLabTranscript/live\r\n    lab_packet_test.go:139: validated live: 7 cases, 17818 hashed artifacts\r\n=== RUN   TestRecordedPacketLabTranscript/reproduce\r\n    lab_packet_test.go:139: validated reproduce: 7 cases, 17818 hashed artifacts\r\n--- PASS: TestRecordedPacketLabTranscript (69.19s)\r\n    --- PASS: TestRecordedPacketLabTranscript/live (45.09s)\r\n    --- PASS: TestRecordedPacketLabTranscript/reproduce (24.10s)\r\nPASS\r\nok  \tgithub.com/kvmukilan/livewire/internal/qualification\t69.482s\r\n"

@@ -129,8 +129,8 @@ func TestIntentPolicyAndPacketAccounting(t *testing.T) {
 func TestInvalidOptionsAndTruncatedCapture(t *testing.T) {
 	secure := exchange(443, 41000, []byte{0x16, 3, 3, 0, 4, 1, 0, 0, 0}, nil)
 	timing, err := Inspect(secure, Options{Mode: "application", Profile: "timing"}, nil)
-	if err != nil || timing.Readiness.Supported || !strings.Contains(timing.Readiness.Blocker, "functional profile") {
-		t.Fatalf("secure preview promises unsupported timing: %v %+v", err, timing)
+	if err != nil || !timing.Readiness.Supported || timing.Plan.Profile != replay.ProfileTiming {
+		t.Fatalf("TLS application timing preview: %v %+v", err, timing)
 	}
 	for _, opts := range []Options{{Mode: "guess"}, {Profile: "unknown"}, {Mode: "application", Profile: "wire"}, {Mode: "transport", Profile: "wire"}, {Sessions: []string{"tcp-99"}}, {KeyLog: []byte("CLIENT_RANDOM invalid invalid\n")}} {
 		if _, err := Inspect(nil, opts, nil); err == nil {

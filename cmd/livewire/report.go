@@ -15,6 +15,8 @@ import (
 
 // flowResult is one flow's outcome in a replay report.
 type flowResult struct {
+	replay.VerificationEvidence
+	Status string `json:"status,omitempty"`
 	// Attempt is the 1-based iteration this result came from, omitted for a
 	// single run so a one-shot report is byte-for-byte what it always was.
 	Attempt              int      `json:"attempt,omitempty"`
@@ -89,10 +91,16 @@ func (r *replayReport) recordIterations(s iterate.Summary) {
 }
 
 type sessionResult struct {
+	Fault *faultObservation `json:"faultObservation,omitempty"`
+	replay.VerificationEvidence
+	Status string `json:"status,omitempty"`
 	// Attempt is the 1-based iteration this result came from, omitted for a
 	// single run.
-	Attempt     int                 `json:"attempt,omitempty"`
-	SessionID   string              `json:"sessionId"`
+	Attempt   int    `json:"attempt,omitempty"`
+	SessionID string `json:"sessionId"`
+	// Fingerprint names the exchange by content so a reader can find the same
+	// session in a trimmed or merged copy of the capture.
+	Fingerprint string              `json:"fingerprint,omitempty"`
 	Protocol    replay.Transport    `json:"protocol"`
 	Driver      string              `json:"driver"`
 	Adapter     string              `json:"adapter,omitempty"`
@@ -106,9 +114,12 @@ type sessionResult struct {
 	Sent        int                 `json:"sent"`
 	Received    int                 `json:"received"`
 	Differences []replay.Difference `json:"differences,omitempty"`
-	Warnings    []string            `json:"warnings,omitempty"`
-	Blockers    []string            `json:"blockers,omitempty"`
-	Error       string              `json:"error,omitempty"`
+	// Timing compares the live reply times with the recording; absent when
+	// the driver measured no request/response turn.
+	Timing   *replay.SessionTiming `json:"timing,omitempty"`
+	Warnings []string              `json:"warnings,omitempty"`
+	Blockers []string              `json:"blockers,omitempty"`
+	Error    string                `json:"error,omitempty"`
 }
 
 func newReplayReport(o liveOpts) *replayReport {
@@ -136,11 +147,12 @@ func newReplayReport(o liveOpts) *replayReport {
 func (r *replayReport) addPlanned(p plannedResult, target string) {
 	sr := sessionResult{
 		Attempt:   r.attempt,
-		SessionID: p.Entry.SessionID, Protocol: p.Entry.Transport, Driver: p.Entry.Driver, Adapter: p.Entry.Adapter,
+		SessionID: p.Entry.SessionID, Fingerprint: p.Entry.Fingerprint, Protocol: p.Entry.Transport, Driver: p.Entry.Driver, Adapter: p.Entry.Adapter,
 		Mode: p.Entry.Mode, Fidelity: p.Entry.Fidelity, Target: target,
 		PacketCount: len(p.Entry.PacketIndexes), Warnings: p.Entry.Warnings, Blockers: p.Entry.Blockers,
 	}
 	if p.Entry.Transport == replay.TransportTCP && p.Entry.Mode == replay.ModeStateful {
+		sr.VerificationEvidence = replay.VerificationEvidence{Scope: "response bytes", Expected: p.TCP.Outcome.ExpectedResponseBytes, Observed: p.TCP.Outcome.ObservedResponseBytes, Compared: p.TCP.Outcome.ComparedResponseBytes}
 		sr.Completed = p.TCP.Outcome.Succeeded()
 		sr.Verified = p.TCP.Verified
 		sr.Matched = p.TCP.Matched
@@ -149,6 +161,8 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 			sr.Differences = append(sr.Differences, replay.Difference{Field: "tcp-response", Actual: d.Detail, Structural: d.Structural})
 		}
 	} else if p.Entry.Mode == replay.ModeCoordinated && p.Entry.Adapter == "ftp" {
+		sr.Scope = "FTP replies and transfers"
+		sr.Observed = p.FTP.Replies
 		sr.Completed = p.FTP.Completed
 		sr.Verified = p.FTP.Verified
 		sr.Matched = p.FTP.Verified && p.FTP.Completed && len(p.FTP.Differences) == 0
@@ -158,14 +172,19 @@ func (r *replayReport) addPlanned(p plannedResult, target string) {
 		sr.Sent, sr.Received = p.FTP.Commands, p.FTP.Replies
 		sr.Differences = append(sr.Differences, p.FTP.Differences...)
 	} else {
+		sr.VerificationEvidence = p.Transport.VerificationEvidence
 		sr.Completed, sr.Matched = p.Transport.Completed, p.Transport.Matched
 		sr.Verified = p.Transport.Verified
 		sr.Sent, sr.Received = p.Transport.Sent, p.Transport.Received
 		sr.Differences = append(sr.Differences, p.Transport.Differences...)
+		sr.Timing = p.Transport.Timing
 	}
 	if p.Err != nil {
 		sr.Error = p.Err.Error()
+		sr.Completed, sr.Matched = false, false
 	}
+	sr.Status = replay.ResultStatus(sr.Completed, sr.Verified, sr.Matched, p.Entry.Mode == replay.ModeWire, p.Err)
+	sr.ReasonCode = replay.FailureReason(sr.Completed, sr.Verified, sr.Matched, p.Err)
 	r.Sessions = append(r.Sessions, sr)
 }
 
@@ -176,6 +195,7 @@ func (r *replayReport) add(idx int, f *engine.Flow, target, mode string, res liv
 		Flow:    idx, Client: f.Client.String(), Server: f.Server.String(),
 		Target: target, Mode: mode,
 	}
+	fr.VerificationEvidence = replay.VerificationEvidence{Scope: "response bytes", Expected: res.Outcome.ExpectedResponseBytes, Observed: res.Outcome.ObservedResponseBytes, Compared: res.Outcome.ComparedResponseBytes}
 	for _, cp := range f.Packets {
 		if cp.Dir == engine.C2S {
 			fr.CapturedClientFrames++
@@ -191,8 +211,8 @@ func (r *replayReport) add(idx int, f *engine.Flow, target, mode string, res liv
 		fr.StimulusCompleted = out.Succeeded()
 		fr.Sent = out.Sent
 		fr.Retransmits = out.Retransmits
-		fr.Verified = r.Verify != "off"
-		fr.RepliesMatched = fr.Verified && out.RepliesMatched()
+		fr.Verified = res.Verified
+		fr.RepliesMatched = res.Matched && fr.Verified && fr.StimulusCompleted
 		for _, m := range out.Mismatches {
 			fr.Divergences = append(fr.Divergences, m.Detail)
 		}
@@ -202,6 +222,8 @@ func (r *replayReport) add(idx int, f *engine.Flow, target, mode string, res liv
 			fr.Diagnosis = diagnose(out, mode)
 		}
 	}
+	fr.Status = replay.ResultStatus(fr.StimulusCompleted, fr.Verified, fr.RepliesMatched, false, err)
+	fr.ReasonCode = replay.FailureReason(fr.StimulusCompleted, fr.Verified, fr.RepliesMatched, err)
 	r.Flows = append(r.Flows, fr)
 }
 

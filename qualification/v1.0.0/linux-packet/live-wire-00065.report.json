@@ -1,0 +1,163 @@
+{
+  "actualCapture": "/mnt/c/Users/kvmuk/livewire/coverage/v1-soak/linux-packet-pacing/wire.actual-129.pcap",
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": false,
+  "attempts": 3,
+  "captureDigest": "sha256:04d4a60c63a1484058750dccb7c612696b0ca8f407348aa96343dd78222cacbc",
+  "flows": null,
+  "iface": "vc582687e082",
+  "intent": "wire",
+  "limitations": [
+    "udp-0: wire replay does not claim live adaptation or response equivalence"
+  ],
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 0,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 0,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 0,
+      "sameAsRecording": 0,
+      "unverified": 0,
+      "wireOnly": 3
+    },
+    "status": "wire",
+    "unverified": 0,
+    "verdict": "wireOnly",
+    "wireOnly": 3
+  },
+  "paced": true,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "non-tcp-traffic",
+        "detail": "1 non-TCP packet(s) classified into UDP, ICMP, or explicit wire lanes",
+        "severity": "info"
+      },
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 1,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 0,
+    "udpSessions": 1
+  },
+  "profile": "wire",
+  "rawL4": true,
+  "replayPlan": {
+    "entries": [
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "38b26cc14758",
+        "mode": "wire",
+        "packetIndexes": [
+          0
+        ],
+        "sessionId": "udp-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      }
+    ],
+    "packets": 1,
+    "profile": "wire"
+  },
+  "selectedPackets": 1,
+  "sessions": [
+    {
+      "attempt": 1,
+      "comparedResponses": 0,
+      "completed": true,
+      "driver": "frame-injector",
+      "expectedResponses": 0,
+      "fidelity": "wire",
+      "fingerprint": "38b26cc14758",
+      "matched": false,
+      "mode": "wire",
+      "observedResponses": 0,
+      "packetCount": 1,
+      "protocol": "udp",
+      "reasonCode": "insufficient_verification_evidence",
+      "received": 0,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "wire",
+      "target": "captured destinations",
+      "verified": false
+    },
+    {
+      "attempt": 2,
+      "comparedResponses": 0,
+      "completed": true,
+      "driver": "frame-injector",
+      "expectedResponses": 0,
+      "fidelity": "wire",
+      "fingerprint": "38b26cc14758",
+      "matched": false,
+      "mode": "wire",
+      "observedResponses": 0,
+      "packetCount": 1,
+      "protocol": "udp",
+      "reasonCode": "insufficient_verification_evidence",
+      "received": 0,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "wire",
+      "target": "captured destinations",
+      "verified": false
+    },
+    {
+      "attempt": 3,
+      "comparedResponses": 0,
+      "completed": true,
+      "driver": "frame-injector",
+      "expectedResponses": 0,
+      "fidelity": "wire",
+      "fingerprint": "38b26cc14758",
+      "matched": false,
+      "mode": "wire",
+      "observedResponses": 0,
+      "packetCount": 1,
+      "protocol": "udp",
+      "reasonCode": "insufficient_verification_evidence",
+      "received": 0,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "wire",
+      "target": "captured destinations",
+      "verified": false
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "off",
+  "version": "1.0.0",
+  "when": "2026-09-29T03:30:57+05:30"
+}

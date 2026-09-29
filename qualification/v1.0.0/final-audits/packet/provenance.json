@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-09-28T23:32:29.146423+00:00",
+  "scope": "Additional post-run observations. Authoritative release validation remains the reports and transcripts referenced by the qualification manifest. Raw captures and unrelated host inventory remain private.",
+  "privateOriginals": [
+    {
+      "path": "coverage/v1-soak/linux-packet-pacing.audit.json",
+      "sha256": "66e787ddb7376d6f802a37a8226fa08a8be512060901bb97f5dcc393da549817"
+    },
+    {
+      "path": "coverage/v1-soak/linux-packet-pacing.audit.txt",
+      "sha256": "a6735866ada82909736eaa45d035cc773a69ceae8e4d4fe35fef95a9082cec7b"
+    }
+  ],
+  "redaction": {
+    "removedFields": [
+      {
+        "jsonPointer": "/commands/4/result",
+        "removedEntryCount": 7,
+        "reason": "Unrelated host interface names. None was an owned lab interface."
+      }
+    ],
+    "textRedactions": [
+      {
+        "lineNumber": 15,
+        "command": "wsl -d kali-linux -u root -- ip -j link show (retain interface names only)",
+        "removedEntryCount": 7,
+        "replacement": "[redacted: unrelated host interface-name inventory; see provenance.json]"
+      }
+    ],
+    "verification": "Restoring the one removed JSON field yields the original parsed object exactly. Restoring the one replaced text line yields the original text after only UTF-8 BOM removal and CRLF-to-LF normalization. No audit outcomes, commands, exit codes, pins, timestamps, counts, or owned-resource identities changed."
+  },
+  "retainedFiles": [
+    {
+      "path": "packet-final-audit.redacted.json",
+      "sha256": "6fba72457bf02f537db5e61804f70abda95a788d71c48e9bd3d98064bb1fbf0f",
+      "sourcePath": "coverage/v1-soak/linux-packet-pacing.audit.json",
+      "sourceSha256": "66e787ddb7376d6f802a37a8226fa08a8be512060901bb97f5dcc393da549817",
+      "method": "Parse JSON, deep-copy it, remove only /commands/4/result, serialize with two-space indentation and a final newline."
+    },
+    {
+      "path": "packet-final-audit.redacted.txt",
+      "sha256": "9bc4dc46d8b280a0c8d4746c1542e9562f77e654165cf68c972d7fa39b150e2d",
+      "sourcePath": "coverage/v1-soak/linux-packet-pacing.audit.txt",
+      "sourceSha256": "a6735866ada82909736eaa45d035cc773a69ceae8e4d4fe35fef95a9082cec7b",
+      "method": "Remove UTF-8 BOM, convert CRLF to LF, and replace only the unrelated interface-inventory result line with an explicit redaction marker; preserve all other characters."
+    },
+    {
+      "path": "packet-final-audit.validator.log",
+      "sha256": "3d99c9791fc2e3622d9d03712da37c384826b30b6e0b6bb47f3442f9fd8e83fc",
+      "sourcePath": "coverage/v1-soak/linux-packet-pacing.audit.validator.log",
+      "sourceSha256": "79d3d8a46205116fbaeac7f03aeed8e024a781a11b1dc750c503d117a9dd10ec",
+      "method": "Normalized copy: remove UTF-8 BOM, convert CRLF to LF, and remove one excess trailing blank line while retaining one final newline; all other characters unchanged."
+    },
+    {
+      "path": "packet-final-audit.ps1.txt",
+      "sha256": "f1f75524687ba0dd4165a030347d43959b0ea9d86efb74d5fb46ae3d924c3076",
+      "sourcePath": "coverage/v1-soak/linux-packet-pacing.audit.ps1",
+      "sourceSha256": "f1f75524687ba0dd4165a030347d43959b0ea9d86efb74d5fb46ae3d924c3076",
+      "method": "exact byte copy of retained auditor, renamed to .ps1.txt"
+    }
+  ],
+  "privacyReview": {
+    "privateKeys": false,
+    "credentials": false,
+    "cookieContents": false,
+    "unrelatedProcessDetails": false,
+    "unrelatedInterfaceInventory": false,
+    "unrelatedAddressInventory": false,
+    "rawCapturesIncluded": false,
+    "historicalPrivateFilesystemPathsRetained": true,
+    "ownedLabResourceIdentitiesRetained": true
+  },
+  "auditSourceCaveat": "The retained auditor requires the private original run directories and release binary. Its final console-display pipeline received a display-only [pscustomobject] cast after the recorded audit completed; validation logic and saved audit JSON/text/log were unchanged. It collects local interface names when run, so raw output requires privacy review before publication.",
+  "finalizedAt": "2026-09-28T23:53:22.451554+00:00",
+  "normalization": {
+    "encoding": "UTF-8 without BOM",
+    "lineEndings": "LF",
+    "normalizedCopies": [
+      "packet-final-audit.redacted.txt",
+      "packet-final-audit.validator.log"
+    ],
+    "method": "Remove the UTF-8 BOM and convert CRLF line endings to LF. Remove one excess trailing blank line from the validator log, retaining one final newline. Preserve all remaining characters, except the single documented interface-inventory line redaction. Other bundle files were already UTF-8 without BOM and LF.",
+    "reason": "Public checksum-covered text must survive Git text normalization with identical bytes.",
+    "validatorLogRemovedTrailingBlankLines": 1
+  }
+}

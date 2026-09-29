@@ -1,0 +1,66 @@
+{
+  "kind": "excluded-diagnostic",
+  "excludedFromPassingQualification": true,
+  "files": [
+    {
+      "path": "report.attempt-1.json",
+      "sha256": "b146f16a92bbf1e9a5cc960223d6ce65a453e372e6dcb23ef4828f5bc48ae252",
+      "source": "coverage/v1-soak/linux-live-final/attempts/000033-mqtt311-tls/report.attempt-1.json",
+      "sourceSHA256": "b146f16a92bbf1e9a5cc960223d6ce65a453e372e6dcb23ef4828f5bc48ae252"
+    },
+    {
+      "path": "report.attempt-2.json",
+      "sha256": "e22ede77c67bdd0859f9bfeb50c578f56e15fe7324728f9acd1d6d86e6179391",
+      "source": "coverage/v1-soak/linux-live-final/attempts/000033-mqtt311-tls/report.attempt-2.json",
+      "sourceSHA256": "e22ede77c67bdd0859f9bfeb50c578f56e15fe7324728f9acd1d6d86e6179391"
+    },
+    {
+      "path": "report.attempt-3.json",
+      "sha256": "5d7e61a1d900b8a68861f32e7a3ec0ac38715c6afcba2b1e80955df2ade81886",
+      "source": "coverage/v1-soak/linux-live-final/attempts/000033-mqtt311-tls/report.attempt-3.json",
+      "sourceSHA256": "5d7e61a1d900b8a68861f32e7a3ec0ac38715c6afcba2b1e80955df2ade81886"
+    },
+    {
+      "path": "output.txt",
+      "sha256": "6ac8a3b4e8d7475896163020b021b757571c1e181222468632acd1b7b1f32e12",
+      "source": "coverage/v1-soak/linux-live-final/attempts/000033-mqtt311-tls/output.txt",
+      "sourceSHA256": "6ac8a3b4e8d7475896163020b021b757571c1e181222468632acd1b7b1f32e12"
+    },
+    {
+      "path": "peer-transcript-excerpt.jsonl",
+      "sha256": "c1b7319ea069ddd887bc9c3633425bb15e823ef13b3f83235ead0b44f4cf2b16"
+    },
+    {
+      "path": "deadline-probe.go.txt",
+      "sha256": "16b60bfa22440c0a10b9e1335d988c7b4356a99c71a0babdaa17aea3543fbf93",
+      "source": "coverage/v1-soak/diagnose-pacing.go",
+      "sourceSHA256": "16b60bfa22440c0a10b9e1335d988c7b4356a99c71a0babdaa17aea3543fbf93"
+    },
+    {
+      "path": "deadline-probe-linux.json",
+      "sha256": "aaef33a39bdd5d28cf6c6ebd1c928b07de65063d418959a544a98043d264eeac",
+      "source": "coverage/v1-soak/diagnose-pacing-linux.json",
+      "sourceSHA256": "aaef33a39bdd5d28cf6c6ebd1c928b07de65063d418959a544a98043d264eeac"
+    },
+    {
+      "path": "deadline-probe-linux-fixed.json",
+      "sha256": "74179cd1fc987304df7a5678f462e2de4f137577005e21087d443ba33b6a01f4",
+      "source": "coverage/v1-soak/diagnose-pacing-linux-fixed.json",
+      "sourceSHA256": "74179cd1fc987304df7a5678f462e2de4f137577005e21087d443ba33b6a01f4"
+    },
+    {
+      "path": "deadline-probe-windows-fixed.json",
+      "sha256": "0ff5e74842e9b17806373d8f049183950bbe8c206d84a012480620baddc92324",
+      "source": "coverage/v1-soak/diagnose-pacing-windows-fixed.json",
+      "sourceSHA256": "7bc88817898b6c5f1105d527b0bd5fd8655d21ce9bcd376106331883f35e7dbf"
+    },
+    {
+      "path": "diagnostic-identity.json",
+      "sha256": "69d0e357b6635275a39442740781b7746612d25b9982241339e0f7e98e9828d7"
+    },
+    {
+      "path": "README.md",
+      "sha256": "8b09c3d360f0eddf2ead745fedb9a44799508e57797755869b7f60367d2e51f2"
+    }
+  ]
+}

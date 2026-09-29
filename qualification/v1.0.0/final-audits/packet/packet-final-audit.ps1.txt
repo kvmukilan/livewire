@@ -1,0 +1,107 @@
+$ErrorActionPreference = 'Stop'
+$auditRoot = (Get-Location).Path
+$auditBase = Join-Path $auditRoot 'coverage/v1-soak/linux-packet-pacing'
+$auditPrefix = Join-Path $auditRoot 'coverage/v1-soak/linux-packet-pacing.audit'
+if (Test-Path -LiteralPath "$auditPrefix.json") { throw 'Existing audit preserved; choose a fresh audit prefix before rerunning' }
+$expectedSource = 'f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122'
+$expectedBinary = '640faff8b4c37474cc92f87b52e6a519cc08ea4040abfda32d12f0bbe4c8f7b3'
+$binaryPath = Join-Path $auditRoot 'coverage/v1-pacing-build/dist-check/v1.0.0/livewire-1.0.0-linux-amd64'
+$requiredCases = @('dns-udp','udp','icmp4','icmp6','stateful-tcp','transport-tcp','wire')
+$audit = [ordered]@{schemaVersion=1;kind='independent-packet-soak-audit';checkedAt=[DateTimeOffset]::UtcNow.ToString('o');passed=$false;scope='Linux owned network namespace/veth software peers; no physical NIC or DUT qualification';sourceDigest=$expectedSource;binarySHA256=$expectedBinary;reports=@();commands=@();errors=@()}
+$auditLines = [System.Collections.Generic.List[string]]::new()
+function Add-AuditCommand([string]$Command, [int]$Code, $Result) {
+ $script:audit.commands += [ordered]@{command=$Command;exitCode=$Code;result=$Result}
+ $script:auditLines.Add(('COMMAND: ' + $Command))
+ $script:auditLines.Add(('EXIT: ' + $Code))
+ $script:auditLines.Add(($Result | ConvertTo-Json -Depth 8 -Compress))
+ if ($Code -ne 0) { throw "Audit command failed: $Command (exit $Code)" }
+}
+try {
+ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $binaryPath).Hash.ToLowerInvariant() -ne $expectedBinary) { throw 'Release binary differs from the frozen pin' }
+ Add-AuditCommand 'Get-FileHash -Algorithm SHA256 release Linux executable' 0 $expectedBinary
+ $stdoutPath = Join-Path $auditRoot 'coverage/v1-soak/linux-packet-pacing.stdout.log'
+ $audit.producerStdout = [ordered]@{path=$stdoutPath;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $stdoutPath).Hash.ToLowerInvariant()}
+ $snapshot = "$auditPrefix.source.json"
+ $snapshotOutput = (& go run ./scripts/qualify init $snapshot 2>&1 | Out-String)
+ $snapshotExit = $LASTEXITCODE
+ Add-AuditCommand 'go run ./scripts/qualify init <audit-prefix>.source.json (source snapshot only)' $snapshotExit $snapshotOutput
+ $currentSource = (Get-Content -Raw -LiteralPath $snapshot | ConvertFrom-Json).sourceDigest
+ if ($currentSource -ne $expectedSource) { throw "Current source differs from frozen digest: $currentSource" }
+ $audit.currentSourceDigest = $currentSource
+ $allArtifacts = @{}
+ $references = 0
+ foreach ($command in @('live','reproduce')) {
+  $reportPath = Join-Path $auditBase "$command.run.json"
+  $report = Get-Content -Raw -LiteralPath $reportPath | ConvertFrom-Json
+  if ($report.command -ne $command -or $report.suite -ne 'packet' -or $report.platform -ne 'linux-amd64' -or $report.version -ne '1.0.0') { throw 'Unexpected report identity' }
+  if ($report.sourceDigest -ne $expectedSource -or $report.binarySha256 -ne $expectedBinary) { throw 'Report source/binary pin mismatch' }
+  if ($report.interrupted -or -not $report.cleanupVerified) { throw 'Run interrupted or cleanup unverified' }
+  if (@($report.cases).Count -ne $requiredCases.Count -or @(Compare-Object $requiredCases @($report.cases.name)).Count) { throw 'Packet case set differs from required matrix' }
+  $caseProof = @()
+  foreach ($case in $report.cases) {
+   $span = ([DateTimeOffset]$case.lastAt - [DateTimeOffset]$case.firstAt).TotalSeconds
+   if ($span -lt 7200 -or $case.failures -ne 0 -or $case.passes -lt 3 -or -not $case.cleanupVerified -or $case.repeatedProcessPasses -ne $case.passes) { throw "Case duration/pass/cleanup failure: $command/$($case.name)" }
+   if ($case.requestsObserved -lt 3*$case.passes -or ($case.name -notin @('wire','transport-tcp') -and $case.responsesVerified -lt 3*$case.passes)) { throw "Missing repeated traffic observations: $command/$($case.name)" }
+   $caseProof += [ordered]@{name=$case.name;passes=$case.passes;failures=$case.failures;spanSeconds=$span;firstAt=$case.firstAt;lastAt=$case.lastAt;requestsObserved=$case.requestsObserved;responsesVerified=$case.responsesVerified;repeatedProcessPasses=$case.repeatedProcessPasses;cleanupVerified=$case.cleanupVerified}
+  }
+  foreach ($entry in $report.evidence) {
+   $references++
+   if ($allArtifacts.ContainsKey($entry.path) -and $allArtifacts[$entry.path] -ne $entry.sha256) { throw "Conflicting artifact binding: $($entry.path)" }
+   $allArtifacts[$entry.path] = $entry.sha256
+  }
+  $audit.reports += [ordered]@{path=$reportPath;sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $reportPath).Hash.ToLowerInvariant();command=$command;started=$report.started;finished=$report.finished;interrupted=$report.interrupted;cleanupVerified=$report.cleanupVerified;evidenceCount=@($report.evidence).Count;cases=$caseProof}
+ }
+ foreach ($name in $allArtifacts.Keys) {
+  $path = [IO.Path]::GetFullPath((Join-Path $auditBase $name))
+  if (-not $path.StartsWith($auditBase + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Artifact escapes run directory: $name" }
+  if ((Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant() -ne $allArtifacts[$name]) { throw "Artifact changed: $name" }
+ }
+ $firewalls = @($allArtifacts.Keys | Where-Object { $_.EndsWith('.firewall.txt') })
+ foreach ($name in $firewalls) {
+  if ((Get-Content -Raw -LiteralPath (Join-Path $auditBase $name)) -match '(?i)livewire|--tcp-flags') { throw "Owned TCP guard remains in firewall snapshot: $name" }
+ }
+ $processPasses = ($audit.reports.cases.passes | Measure-Object -Sum).Sum
+ if ($firewalls.Count -ne $processPasses) { throw 'Firewall snapshot count differs from successful CLI process count' }
+ $audit.artifacts = [ordered]@{references=$references;uniqueFiles=$allArtifacts.Count;allHashesMatched=$true;firewallSnapshots=$firewalls.Count;allFirewallSnapshotsClean=$true}
+ Add-AuditCommand 'Get-FileHash SHA256 for every unique LabRun.Evidence path; inspect every per-process firewall snapshot' 0 $audit.artifacts
+ $setup = Get-Content -LiteralPath (Join-Path $auditBase 'events.jsonl') -First 1 | ConvertFrom-Json
+ $ownedNamespaces = @($setup.clientNamespace,$setup.serverNamespace)
+ $token = $setup.clientNamespace.Substring(4)
+ $ownedInterfaces = @("vc$token","vs$token")
+ $namespaceOutput = (& wsl -d kali-linux -u root -- ip netns list | Out-String)
+ $namespaceExit = $LASTEXITCODE
+ Add-AuditCommand 'wsl -d kali-linux -u root -- ip netns list' $namespaceExit $namespaceOutput
+ foreach ($name in $ownedNamespaces) { if ($namespaceOutput -match [regex]::Escape($name)) { throw "Owned namespace remains: $name" } }
+ $linkOutput = (& wsl -d kali-linux -u root -- ip -j link show | Out-String)
+ $linkExit = $LASTEXITCODE
+ $linkNames = @((ConvertFrom-Json $linkOutput).ifname)
+ Add-AuditCommand 'wsl -d kali-linux -u root -- ip -j link show (retain interface names only)' $linkExit $linkNames
+ foreach ($name in $ownedInterfaces) { if ($name -in $linkNames) { throw "Owned interface remains: $name" } }
+ $processOutput = @(& wsl -d kali-linux -u root -- ps -eo pid=,args=)
+ $processExit = $LASTEXITCODE
+ $ownedProcesses = @($processOutput | Where-Object { $_ -match 'v1-soak/linux-packet-pacing(?:/| |$)' -or $_ -match [regex]::Escape($ownedNamespaces[0]) -or $_ -match [regex]::Escape($ownedNamespaces[1]) })
+ Add-AuditCommand 'wsl -d kali-linux -u root -- ps -eo pid=,args= (retain owned-process matches only)' $processExit $ownedProcesses
+ if ($ownedProcesses.Count) { throw 'Owned packet lab process remains' }
+ $audit.cleanup = [ordered]@{ownedNamespaces=$ownedNamespaces;ownedInterfaces=$ownedInterfaces;namespacesAbsent=$true;interfacesAbsent=$true;ownedProcessesAbsent=$true;firewallSnapshotsClean=$true}
+ $oldPacketSmoke = [Environment]::GetEnvironmentVariable('LIVEWIRE_PACKET_LAB_SMOKE','Process')
+ try {
+  $env:LIVEWIRE_PACKET_LAB_SMOKE = $auditBase
+  $validatorOutput = (& go test ./internal/qualification -run TestRecordedPacketLabTranscript -count=1 -v 2>&1 | Out-String)
+  $validatorExit = $LASTEXITCODE
+ } finally {
+  [Environment]::SetEnvironmentVariable('LIVEWIRE_PACKET_LAB_SMOKE',$oldPacketSmoke,'Process')
+ }
+ $validatorOutput | Set-Content -LiteralPath "$auditPrefix.validator.log" -Encoding UTF8
+ Add-AuditCommand 'LIVEWIRE_PACKET_LAB_SMOKE=<run-dir> go test ./internal/qualification -run TestRecordedPacketLabTranscript -count=1 -v' $validatorExit $validatorOutput
+ $audit.validatorLog = [ordered]@{path="$auditPrefix.validator.log";sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath "$auditPrefix.validator.log").Hash.ToLowerInvariant()}
+ $audit.passed = $true
+} catch {
+ $audit.errors += $_.Exception.Message
+ $auditLines.Add(('FAILED: ' + $_.Exception.Message))
+} finally {
+ $audit.finishedAt = [DateTimeOffset]::UtcNow.ToString('o')
+ $audit | ConvertTo-Json -Depth 14 | Set-Content -LiteralPath "$auditPrefix.json" -Encoding UTF8
+ $auditLines | Set-Content -LiteralPath "$auditPrefix.txt" -Encoding UTF8
+}
+if (-not $audit.passed) { throw ('Packet soak audit failed: ' + ($audit.errors -join '; ')) }
+[pscustomobject]$audit | Select-Object passed,sourceDigest,binarySHA256,artifacts,cleanup | ConvertTo-Json -Depth 6

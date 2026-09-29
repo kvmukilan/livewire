@@ -14,11 +14,14 @@ import (
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/hoststack"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/runstate"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
 
 // Config parameterises one live replay.
 type Config struct {
+	SessionID  string
 	Flow       *engine.Flow
 	Iface      string
 	TargetIP   netip.Addr
@@ -82,27 +85,36 @@ type evidenceBackend struct {
 	backend.PacketBackend
 	link   wire.LinkType
 	frames []pcapio.Record
+	sink   func(pcapio.Record) error
+	bytes  int
 }
 
-func (e *evidenceBackend) record(frame []byte) {
+func (e *evidenceBackend) record(frame []byte) error {
+	if e.sink != nil {
+		return e.sink(pcapio.Record{Time: e.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: e.link})
+	}
+	if e.bytes+len(frame) > 64<<20 {
+		return fmt.Errorf("in-memory packet evidence exceeds 64 MiB; configure a streaming evidence sink")
+	}
 	b := append([]byte(nil), frame...)
 	e.frames = append(e.frames, pcapio.Record{
 		Time: e.Now(), CapLen: len(b), OrigLen: len(b), Data: b, LinkType: e.link,
 	})
+	e.bytes += len(frame)
+	return nil
 }
 
 func (e *evidenceBackend) Send(frame []byte) error {
 	if err := e.PacketBackend.Send(frame); err != nil {
 		return err
 	}
-	e.record(frame)
-	return nil
+	return e.record(frame)
 }
 
 func (e *evidenceBackend) Recv(buf []byte, timeout time.Duration) (int, bool, error) {
 	n, ok, err := e.PacketBackend.Recv(buf, timeout)
 	if err == nil && ok {
-		e.record(buf[:n])
+		err = e.record(buf[:n])
 	}
 	return n, ok, err
 }
@@ -114,11 +126,48 @@ func Run(cfg Config, log func(string)) (Result, error) {
 }
 
 // RunContext executes a replay with cancellation propagated into the engine.
-func RunContext(ctx context.Context, cfg Config, log func(string)) (Result, error) {
+func RunContext(ctx context.Context, cfg Config, log func(string)) (res Result, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	id := cfg.SessionID
+	if id == "" && cfg.Flow != nil {
+		id = fmt.Sprintf("tcp:%s:%s:%d", cfg.Flow.Client, cfg.Flow.Server, cfg.Flow.CapClientISN.Uint32())
+	}
+	var saved *runstate.Result
+	ctx, saved, err = replay.BeginSession(ctx, id, false)
+	if err != nil {
+		return res, err
+	}
+	if saved != nil {
+		res.Outcome.Phase = engine.PhaseClosed
+		res.Outcome.Sent = saved.Sent
+		res.Verified = saved.Verified
+		res.Matched = saved.Matched
+		return res, nil
+	}
+	defer func() {
+		err = errors.Join(err, replay.FinishSession(ctx, runstate.Result{Completed: res.Outcome.Succeeded() && err == nil, Verified: res.Verified, Matched: res.Matched, Sent: res.Outcome.Sent}))
+		if err != nil {
+			res.Matched = false
+			res.Outcome.Aborted = true
+			res.Outcome.Reason = err.Error()
+		}
+	}()
+	if err = replay.RecordOperation(ctx, "intent", 0); err != nil {
+		return res, err
+	}
 	return runContextWithDependencies(ctx, cfg, log, defaultRunDependencies())
 }
 
 func runContextWithDependencies(ctx context.Context, cfg Config, log func(string), deps runDependencies) (result Result, retErr error) {
+	defer func() {
+		if retErr != nil {
+			result.Matched = false
+			result.Outcome.Aborted = true
+			result.Outcome.Reason = retErr.Error()
+		}
+	}()
 	if log == nil {
 		log = func(string) {}
 	}
@@ -158,7 +207,15 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 
 	var res Result
 	if !cfg.NoGuard {
-		guard, gerr := deps.armGuard(hoststack.Rule{TargetIP: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: localPort})
+		rule := hoststack.Rule{TargetIP: cfg.TargetIP, TargetPort: cfg.TargetPort, LocalPort: localPort}
+		exec := replay.Execution(ctx)
+		if exec.Journal != nil {
+			rule.Owner = exec.Journal.Owner()
+			if err := exec.Journal.ResourceIntent(exec.SessionKey, runstate.Resource{Target: cfg.TargetIP.String(), TargetPort: cfg.TargetPort, LocalPort: localPort, Owner: rule.Owner}); err != nil {
+				return res, err
+			}
+		}
+		guard, gerr := deps.armGuard(rule)
 		if gerr != nil {
 			return Result{}, fmt.Errorf("host-RST suppression failed (%w); retry with the guard disabled to bypass "+
 				"(the host kernel may then reset the connection)", gerr)
@@ -166,6 +223,8 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 		defer func() {
 			if err := guard.Release(); err != nil {
 				retErr = errors.Join(retErr, fmt.Errorf("release host-RST suppression: %w", err))
+			} else if exec.Journal != nil {
+				retErr = errors.Join(retErr, exec.Journal.ResourceReleased(exec.SessionKey))
 			}
 		}()
 		log("host-RST suppression armed: " + guard.Describe())
@@ -175,7 +234,7 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 	}
 
 	var wireBackend backend.PacketBackend = backend.NewMACRewriter(lb.Backend, lb.LocalMAC, lb.NextHopMAC)
-	evidence := &evidenceBackend{PacketBackend: wireBackend, link: wireBackend.LinkType()}
+	evidence := &evidenceBackend{PacketBackend: wireBackend, link: wireBackend.LinkType(), sink: replay.Execution(ctx).Evidence}
 	var b backend.PacketBackend = backend.NewTupleRewriter(evidence, backend.TupleRewrite{
 		CapturedClient: backend.TupleEndpoint{IP: f.Client.Addr, Port: f.Client.Port},
 		CapturedServer: backend.TupleEndpoint{IP: f.Server.Addr, Port: f.Server.Port},
@@ -200,14 +259,14 @@ func runContextWithDependencies(ctx context.Context, cfg Config, log func(string
 	}
 	out, learnedServerISN, err := deps.drive(ctx, f, engine.Options{Seed: cfg.Seed},
 		engine.ConvConfig{Verify: cfg.Verify, Adaptive: cfg.Adaptive, Pace: cfg.Pace, RawL4: cfg.RawL4}, b)
-	if err != nil {
-		return Result{}, err
-	}
 	res.Outcome = out
 	res.LearnedServerISN = learnedServerISN
 	res.Evidence = evidence.frames
-	res.Verified = cfg.Verify != engine.VerifyOff
-	res.Matched = res.Verified && out.RepliesMatched()
+	res.Verified = cfg.Verify != engine.VerifyOff && out.ComparedResponseBytes > 0
+	res.Matched = res.Verified && out.RepliesMatched() && out.Succeeded() && err == nil
+	if err != nil {
+		return res, err
+	}
 
 	for _, line := range out.Log {
 		log("  " + line)

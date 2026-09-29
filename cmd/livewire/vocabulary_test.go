@@ -280,7 +280,7 @@ func TestBinarySurface(t *testing.T) {
 				t.Errorf("front door should not list the advanced command %q:\n%s", name, out)
 			}
 		}
-		for _, topic := range []string{"help examples", "help troubleshoot", "help protocols", "help diagnose", "help commands", "help <command>"} {
+		for _, topic := range []string{"help examples", "help troubleshoot", "help protocols", "help diagnose", "help reliability", "help commands", "help <command>"} {
 			if !strings.Contains(out, topic) {
 				t.Errorf("help hub is missing topic %q:\n%s", topic, out)
 			}
@@ -295,7 +295,7 @@ func TestBinarySurface(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("successful help must not look like a PowerShell error; stderr was:\n%s", stderr)
 		}
-		if !strings.Contains(stdout, "Inspect, choose your replay intent, preview, then run:") {
+		if !strings.Contains(stdout, "Reproduce a recorded exchange on your device:") {
 			t.Errorf("stdout did not contain the help hub:\n%s", stdout)
 		}
 	})
@@ -305,10 +305,11 @@ func TestBinarySurface(t *testing.T) {
 			topic string
 			want  []string
 		}{
-			{topic: "examples", want: []string{"-n 5", "-keylog", "--wire"}},
+			{topic: "examples", want: []string{"-n 5", "-keylog", "-wire"}},
 			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
-			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "--wire"}},
+			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "-wire"}},
 			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
+			{topic: "reliability", want: []string{"-mode application", "-mode transport", "-strict-exit", "-run-timeout", "-resume", "cannot restore", "fault recurred"}},
 			{topic: "commands", want: []string{"Primary commands:", "Advanced commands:", "tls-replay"}},
 		}
 		for _, tc := range cases {

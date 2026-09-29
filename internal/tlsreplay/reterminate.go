@@ -28,6 +28,7 @@ const (
 type AppMessage struct {
 	Role           AppRole
 	Data           []byte
+	Request        *replay.Message
 	Expected       []replay.Message
 	Peers          []replay.Message
 	CapturedAt     time.Duration
@@ -37,10 +38,14 @@ type AppMessage struct {
 
 // ReTermConfig drives a re-termination.
 type ReTermConfig struct {
-	Address   string      // host:port of the live device
-	TLSConfig *tls.Config // client config (SNI/ALPN/roots) for the fresh handshake
-	Script    []AppMessage
-	Timeout   time.Duration // per-connection deadline; 0 disables
+	SessionID       string
+	Address         string      // host:port of the live device
+	TLSConfig       *tls.Config // client config (SNI/ALPN/roots) for the fresh handshake
+	Script          []AppMessage
+	Timeout         time.Duration // per-connection deadline; 0 disables
+	ExchangeTimeout time.Duration // individual request/response budget; defaults to Timeout, or 30s
+	Profile         replay.Profile
+	Start           time.Time
 	// Verify requires each server response to byte-match the captured one;
 	// otherwise responses are just recorded for diffing.
 	Verify     bool
@@ -51,6 +56,8 @@ type ReTermConfig struct {
 
 // ReTermResult reports the outcome.
 type ReTermResult struct {
+	Requests int // captured application messages successfully written
+	replay.VerificationEvidence
 	HandshakeState tls.ConnectionState
 	Responses      [][]byte // actual server responses, in script order
 	Mismatches     int      // count of FromServer messages that differed (Verify mode)
@@ -74,6 +81,35 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	exchangeTimeout := cfg.ExchangeTimeout
+	if exchangeTimeout <= 0 {
+		exchangeTimeout = cfg.Timeout
+	}
+	if exchangeTimeout <= 0 {
+		exchangeTimeout = 30 * time.Second
+	}
+	var futureResponses []replay.Message
+	for i, message := range cfg.Script {
+		if cfg.Profile == replay.ProfileTiming && !message.HasCaptureTime {
+			return nil, fmt.Errorf("tlsreplay: timing profile requires capture chronology for message %d", i)
+		}
+		if cfg.Adapter != nil && message.Role == FromServer {
+			expected := message.Expected
+			if len(expected) == 0 {
+				var err error
+				expected, err = replay.DecodeWithContext(cfg.Adapter, replay.ServerToClient, message.Data, message.Peers)
+				if err != nil {
+					return nil, fmt.Errorf("tlsreplay: capture response %d framing: %w", i, err)
+				}
+			}
+			futureResponses = append(futureResponses, expected...)
+		}
+	}
+	if cfg.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
+	}
 	d := &net.Dialer{Timeout: cfg.Timeout}
 	raw, err := d.DialContext(ctx, "tcp", cfg.Address)
 	if err != nil {
@@ -82,7 +118,12 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 	conn := tls.Client(raw, cfg.TLSConfig)
 	defer func() {
 		if err := conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			if res != nil {
+				res.Cleanup = "failed"
+			}
 			retErr = errors.Join(retErr, fmt.Errorf("tlsreplay: close fresh connection: %w", err))
+		} else if res != nil {
+			res.Cleanup = "complete"
 		}
 	}()
 	cancelWatchDone := make(chan struct{})
@@ -113,25 +154,120 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 	if err := conn.HandshakeContext(ctx); err != nil {
 		return nil, fmt.Errorf("tlsreplay: fresh handshake to %s failed: %w", cfg.Address, replayContextError(ctx, err))
 	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		return nil, fmt.Errorf("tlsreplay: clear handshake deadline: %w", err)
+	}
 
 	res = &ReTermResult{HandshakeState: conn.ConnectionState()}
-	if cfg.State == nil {
-		cfg.State = &replay.RuntimeState{Variables: map[string]string{}, Learned: map[string][]byte{}}
+	res.Scope = "application messages"
+	if cfg.Adapter == nil {
+		res.Scope = "opaque plaintext captured-length chunks"
 	}
+	defer func() {
+		res.Transformations = append(res.Transformations, cfg.State.Transformations...)
+		if retErr != nil {
+			res.ReasonCode = "execution_failed"
+		}
+	}()
+	if cfg.State == nil {
+		cfg.State = replay.NewRuntimeState(nil)
+	}
+	if cfg.State.Protocol == nil {
+		cfg.State.Protocol = map[string]any{}
+	}
+	if cfg.State.Phase == "" {
+		cfg.State.Phase = replay.SessionActive
+	}
+	cfg.State.Protocol["http.scheme"] = "https"
+	var reader replay.MessageReader
+	scenario := replay.Execution(ctx).Scenario
+	cfg.State.Protocol["scenario"] = scenario
+	cfg.State.Protocol["scenario.session"] = cfg.SessionID
+	defer scenario.End(cfg.SessionID)
+	requestOrdinal, responseOrdinal := 0, 0
+	started := cfg.Start
+	if started.IsZero() {
+		started = time.Now()
+	}
+	var pendingPeers []replay.Message
 	for i, msg := range cfg.Script {
+		if cfg.Profile == replay.ProfileTiming {
+			target := started.Add(msg.CapturedAt)
+			if cfg.Adapter != nil {
+				if err := reader.WaitUntil(ctx, conn, cfg.Adapter, futureResponses, pendingPeers, cfg.State, target, exchangeTimeout); err != nil {
+					return res, fmt.Errorf("tlsreplay: waiting for message %d: %w", i, replayContextError(ctx, err))
+				}
+			} else if err := waitUntil(ctx, target); err != nil {
+				return res, err
+			}
+		}
 		switch msg.Role {
 		case FromClient:
-			if _, err := conn.Write(msg.Data); err != nil {
+			requestOrdinal++
+			if err := scenario.Before(ctx, cfg.SessionID, requestOrdinal, cfg.State); err != nil {
+				return res, err
+			}
+			data := msg.Data
+			if msg.Request != nil && cfg.Adapter != nil {
+				data, err = cfg.Adapter.Prepare(replay.ClientToServer, *msg.Request, cfg.State)
+				if err != nil {
+					return res, err
+				}
+			}
+			if msg.Request != nil && cfg.Adapter != nil {
+				liveMessages, decodeErr := replay.DecodeWithContext(cfg.Adapter, replay.ClientToServer, data, nil)
+				if decodeErr != nil || len(liveMessages) != 1 {
+					return res, fmt.Errorf("prepared request has invalid framing")
+				}
+				if err := replay.Observe(cfg.Adapter, replay.ClientToServer, *msg.Request, liveMessages[0], cfg.State); err != nil {
+					return res, err
+				}
+			}
+			if err := replay.RecordOperation(ctx, "intent", requestOrdinal); err != nil {
+				return res, err
+			}
+			if err := replay.WriteStateContext(ctx, conn, data, cfg.State, exchangeTimeout); err != nil {
 				return res, fmt.Errorf("tlsreplay: writing client message %d: %w", i, replayContextError(ctx, err))
 			}
+			res.Requests++
+			if msg.Request != nil {
+				pendingPeers = append(pendingPeers, *msg.Request)
+			}
 		case FromServer:
-			got, err := readLiveResponse(conn, msg.Data, msg.Expected, msg.Peers, cfg.Adapter, cfg.Timeout)
+			messageCount := 1
+			var got []byte
+			var liveMessages []replay.Message
+			var err error
+			if cfg.Adapter != nil {
+				expected := msg.Expected
+				if len(expected) == 0 {
+					expected, err = replay.DecodeWithContext(cfg.Adapter, replay.ServerToClient, msg.Data, msg.Peers)
+				}
+				if err == nil {
+					messageCount = len(expected)
+					res.Expected += messageCount
+					liveMessages, err = reader.ReadExchange(ctx, conn, cfg.Adapter, expected, msg.Peers, cfg.State, exchangeTimeout)
+					res.Observed += len(liveMessages)
+					for _, m := range liveMessages {
+						got = append(got, m.Raw...)
+					}
+				}
+			} else {
+				res.Expected++
+				got, err = readLiveResponse(conn, msg.Data, msg.Expected, msg.Peers, nil, exchangeTimeout)
+				if err == nil && len(got) > 0 {
+					res.Observed++
+				}
+			}
 			if err != nil {
 				return res, fmt.Errorf("tlsreplay: reading server message %d: %w", i, replayContextError(ctx, err))
 			}
 			res.Responses = append(res.Responses, got)
+			if cfg.VerifyMode != replay.VerifyOff && cfg.Adapter != nil || cfg.Verify {
+				res.Compared += messageCount
+			}
 			if cfg.Adapter != nil {
-				diffs, err := compareAdapterResponse(cfg.Adapter, msg.Data, msg.Expected, msg.Peers, got, cfg.State, cfg.VerifyMode)
+				diffs, err := compareAdapterMessages(cfg.Adapter, msg.Data, msg.Expected, msg.Peers, liveMessages, cfg.State, cfg.VerifyMode)
 				if err != nil {
 					return res, fmt.Errorf("tlsreplay: inner response %d: %w", i, err)
 				}
@@ -139,12 +275,39 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 					res.Mismatches++
 					res.Differences = append(res.Differences, diffs...)
 				}
+				for _, m := range liveMessages {
+					if replay.ConsumePeers(cfg.Adapter, replay.ServerToClient, []replay.Message{m}, 1) > 0 {
+						responseOrdinal++
+						if e := scenario.After(cfg.SessionID, responseOrdinal, cfg.Adapter, m); e != nil {
+							return res, e
+						}
+					}
+				}
+				pendingPeers = pendingPeers[replay.ConsumePeers(cfg.Adapter, replay.ServerToClient, liveMessages, len(pendingPeers)):]
+				futureResponses = futureResponses[messageCount:]
 			} else if cfg.Verify && !bytes.Equal(got, msg.Data) {
 				res.Mismatches++
+			}
+			if err := replay.RecordOperation(ctx, "ack", responseOrdinal); err != nil {
+				return res, err
 			}
 		}
 	}
 	return res, nil
+}
+
+func waitUntil(ctx context.Context, target time.Time) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	timer := time.NewTimer(time.Until(target))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func replayContextError(ctx context.Context, fallback error) error {
@@ -156,8 +319,16 @@ func replayContextError(ctx context.Context, fallback error) error {
 
 func readLiveResponse(conn net.Conn, expected []byte, expectedMessages, peers []replay.Message, adapter replay.Adapter, timeout time.Duration) ([]byte, error) {
 	if adapter == nil {
+		if timeout > 0 {
+			if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+				return nil, err
+			}
+		}
 		got := make([]byte, len(expected))
 		_, err := io.ReadFull(conn, got)
+		if err != nil {
+			err = &replay.ResponseReadError{Err: err}
+		}
 		return got, err
 	}
 	if len(expectedMessages) == 0 {
@@ -217,7 +388,7 @@ func readLiveResponse(conn net.Conn, expected []byte, expectedMessages, peers []
 	}
 }
 
-func compareAdapterResponse(adapter replay.Adapter, expectedRaw []byte, expected, peers []replay.Message, actualRaw []byte, state *replay.RuntimeState, mode replay.VerifyMode) ([]replay.Difference, error) {
+func compareAdapterMessages(adapter replay.Adapter, expectedRaw []byte, expected, peers, actual []replay.Message, state *replay.RuntimeState, mode replay.VerifyMode) ([]replay.Difference, error) {
 	if len(expected) == 0 {
 		var err error
 		expected, err = replay.DecodeWithContext(adapter, replay.ServerToClient, expectedRaw, peers)
@@ -225,23 +396,34 @@ func compareAdapterResponse(adapter replay.Adapter, expectedRaw []byte, expected
 			return nil, err
 		}
 	}
-	actual, err := replay.DecodeWithContext(adapter, replay.ServerToClient, actualRaw, peers)
+	actual, err := replay.AlignResponses(adapter, expected, actual, state)
 	if err != nil {
 		return nil, err
 	}
 	if len(expected) != len(actual) {
 		return []replay.Difference{{Field: "message-count", Expected: fmt.Sprint(len(expected)), Actual: fmt.Sprint(len(actual)), Structural: true}}, nil
 	}
-	expected, err = replay.NormalizeExpectedMessages(adapter, replay.ServerToClient, expected, state)
+	normalizedExpected, err := replay.NormalizeExpectedMessages(adapter, replay.ServerToClient, expected, state)
 	if err != nil {
 		return nil, err
 	}
 	var out []replay.Difference
 	for i := range expected {
-		if match := adapter.Correlate(expected[i], actual[i], state); !match.Matched {
-			out = append(out, replay.Difference{Field: "correlation", Expected: match.Key, Actual: match.Reason, Structural: true})
+		if match := adapter.Correlate(normalizedExpected[i], actual[i], state); !match.Matched {
+			return out, fmt.Errorf("inner response correlation failed: %s", match.Reason)
+		} else if err := replay.Observe(adapter, replay.ServerToClient, expected[i], actual[i], state); err != nil {
+			return out, err
 		}
-		out = append(out, adapter.Compare(expected[i], actual[i], mode)...)
+		ordinal, _ := state.Protocol["responseOrdinal"].(int)
+		if replay.ConsumePeers(adapter, replay.ServerToClient, actual[i:i+1], 1) > 0 {
+			ordinal++
+			if state.Protocol != nil {
+				state.Protocol["responseOrdinal"] = ordinal
+			}
+		}
+		scenario, _ := state.Protocol["scenario"].(*replay.ScenarioRuntime)
+		session, _ := state.Protocol["scenario.session"].(string)
+		out = append(out, scenario.Compare(session, ordinal, adapter, normalizedExpected[i], actual[i], mode)...)
 	}
 	return out, nil
 }

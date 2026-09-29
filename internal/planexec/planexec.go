@@ -18,6 +18,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/orchestration"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/runstate"
 )
 
 type Result struct {
@@ -30,17 +31,18 @@ type Result struct {
 }
 
 type Config struct {
-	Context   context.Context
-	Trace     *replay.Trace
-	Plan      replay.ReplayPlan
-	Registry  *replay.Registry
-	Flows     []*engine.Flow
-	Iface     string
-	TargetIP  netip.Addr
-	Variables map[string]string
-	Verify    replay.VerifyMode
-	TCPConfig func(*engine.Flow, *replay.Session) livereplay.Config
-	Progress  func(replay.PlanEntry, string, string)
+	ExchangeTimeout time.Duration
+	Context         context.Context
+	Trace           *replay.Trace
+	Plan            replay.ReplayPlan
+	Registry        *replay.Registry
+	Flows           []*engine.Flow
+	Iface           string
+	TargetIP        netip.Addr
+	Variables       map[string]string
+	Verify          replay.VerifyMode
+	TCPConfig       func(*engine.Flow, *replay.Session) livereplay.Config
+	Progress        func(replay.PlanEntry, string, string)
 }
 
 func Execute(cfg Config) []Result {
@@ -85,6 +87,10 @@ func normalize(cfg Config) Config {
 
 func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, started time.Time) Result {
 	result := Result{Entry: entry, Session: session}
+	if err := cfg.Context.Err(); err != nil {
+		result.Err = err
+		return result
+	}
 	if entry.Mode == replay.ModeBlocked {
 		reason := "session has no safe replay driver"
 		if len(entry.Blockers) > 0 {
@@ -128,6 +134,7 @@ func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, start
 		result.Transport, result.Err = replay.RunTCPSemanticContext(cfg.Context, replay.TCPSemanticConfig{
 			Session: session, TargetIP: cfg.TargetIP, TargetPort: session.Server.Port, Adapter: adapter,
 			Profile: cfg.Plan.Profile, Verify: cfg.Verify, Variables: cfg.Variables, Start: started,
+			Timeout:  cfg.ExchangeTimeout,
 			Progress: func(p replay.ProgressEvent) { cfg.Progress(entry, p.Stage, p.Message) },
 		})
 		return result
@@ -144,6 +151,7 @@ func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, start
 		result.Transport, result.Err = replay.RunTransportContext(cfg.Context, replay.TransportRunConfig{
 			Session: session, Iface: cfg.Iface, TargetIP: cfg.TargetIP, TargetPort: session.Server.Port,
 			Profile: cfg.Plan.Profile, Verify: cfg.Verify, Adapter: adapter, Variables: cfg.Variables, Start: started,
+			Timeout:  cfg.ExchangeTimeout,
 			Progress: func(p replay.ProgressEvent) { cfg.Progress(entry, p.Stage, p.Message) },
 		})
 		return result
@@ -162,6 +170,7 @@ func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, start
 		return result
 	}
 	config := cfg.TCPConfig(flow, session)
+	config.SessionID = session.ID
 	config.Pace = cfg.Plan.Profile == replay.ProfileTiming || cfg.Plan.Profile == replay.ProfileTransport
 	config.RawL4 = cfg.Plan.Profile == replay.ProfileTransport
 	if config.Pace && !waitOffset(cfg.Context, started, sessionOffset(session)) {
@@ -172,7 +181,28 @@ func runEntry(cfg Config, entry replay.PlanEntry, session *replay.Session, start
 	return result
 }
 
-func runFTP(cfg Config, entry replay.PlanEntry, control *replay.Session) (ftpreplay.Result, error) {
+func runFTP(cfg Config, entry replay.PlanEntry, control *replay.Session) (result ftpreplay.Result, retErr error) {
+	ctx, saved, err := replay.BeginSession(cfg.Context, control.ID, false)
+	if err != nil {
+		return result, err
+	}
+	if saved != nil {
+		result.Completed = saved.Completed
+		result.Verified = saved.Verified
+		result.Commands = saved.Sent
+		result.Replies = saved.Received
+		if !saved.Matched {
+			result.Differences = []replay.Difference{{Field: "previous-result", Actual: "previous exchange did not match", Structural: true}}
+		}
+		return result, nil
+	}
+	defer func() {
+		retErr = errors.Join(retErr, replay.FinishSession(ctx, runstate.Result{Completed: result.Completed && retErr == nil, Verified: result.Verified, Matched: result.Completed && result.Verified && len(result.Differences) == 0 && retErr == nil, Sent: result.Commands, Received: result.Replies}))
+		if retErr != nil {
+			result.Completed = false
+		}
+	}()
+	cfg.Context = ctx
 	script, err := ftpreplay.BuildScript(control, nil)
 	if err != nil {
 		return ftpreplay.Result{}, err
@@ -190,6 +220,9 @@ func runFTP(cfg Config, entry replay.PlanEntry, control *replay.Session) (ftprep
 		data = append(data, related)
 	}
 	address := netip.AddrPortFrom(cfg.TargetIP, control.Server.Port).String()
+	if err := replay.RecordOperation(ctx, "intent", 0); err != nil {
+		return result, err
+	}
 	return ftpreplay.RunContext(cfg.Context, ftpreplay.Config{
 		Control: control, Data: data, Address: address, Script: script,
 		Variables: cfg.Variables, Timeout: 30 * time.Second, Verify: cfg.Verify,
@@ -199,6 +232,26 @@ func runFTP(cfg Config, entry replay.PlanEntry, control *replay.Session) (ftprep
 
 func runWireEvents(cfg Config, entry replay.PlanEntry, events []replay.Event, started time.Time) (result replay.TransportResult, retErr error) {
 	result = replay.TransportResult{SessionID: entry.SessionID, Mode: replay.ModeWire, Fidelity: replay.FidelityWire}
+	ctx, saved, err := replay.BeginSession(cfg.Context, entry.SessionID, false)
+	if err != nil {
+		return result, err
+	}
+	if saved != nil {
+		result.Completed = saved.Completed
+		result.Sent = saved.Sent
+		return result, nil
+	}
+	defer func() {
+		retErr = errors.Join(retErr, replay.FinishSession(ctx, runstate.Result{Completed: result.Completed && retErr == nil, Sent: result.Sent}))
+		if retErr != nil {
+			result.Completed = false
+			result.Error = retErr.Error()
+		}
+	}()
+	cfg.Context = ctx
+	if err := replay.RecordOperation(ctx, "intent", 0); err != nil {
+		return result, err
+	}
 	sender, err := backend.OpenSender(cfg.Iface)
 	if err != nil {
 		result.Error = err.Error()
@@ -225,7 +278,14 @@ func runWireEvents(cfg Config, entry replay.PlanEntry, events []replay.Event, st
 			return result, err
 		}
 		frame := append([]byte(nil), event.Record.Data...)
-		result.Evidence = append(result.Evidence, pcapio.Record{Time: sender.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: sender.LinkType()})
+		record := pcapio.Record{Time: sender.Now(), CapLen: len(frame), OrigLen: len(frame), Data: frame, LinkType: sender.LinkType()}
+		if sink := replay.Execution(ctx).Evidence; sink != nil {
+			if err := sink(record); err != nil {
+				return result, err
+			}
+		} else {
+			result.Evidence = append(result.Evidence, record)
+		}
 		result.Sent++
 	}
 	result.Completed = true
@@ -236,7 +296,15 @@ func runWireEvents(cfg Config, entry replay.PlanEntry, events []replay.Event, st
 func findFlow(flows []*engine.Flow, session *replay.Session) *engine.Flow {
 	for _, flow := range flows {
 		if flow.Client.Addr == session.Client.IP && flow.Client.Port == session.Client.Port && flow.Server.Addr == session.Server.IP && flow.Server.Port == session.Server.Port {
-			return flow
+			if len(session.Events) == 0 {
+				return flow
+			}
+			// Distinguish successive connections that reuse the same four-tuple.
+			for _, packet := range flow.Packets {
+				if packet.Index == session.Events[0].PacketIndex {
+					return flow
+				}
+			}
 		}
 	}
 	return nil

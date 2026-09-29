@@ -24,6 +24,13 @@ func TestTCPPayloadStreamsSequenceAware(t *testing.T) {
 		{name: "SYN consumes sequence", segments: []tcpStreamTestSegment{{100, wire.FlagSYN, "a"}, {102, 0, "b"}}, want: "ab"},
 		{name: "gap", segments: []tcpStreamTestSegment{{100, 0, "abcd"}, {105, 0, "f"}}, wantErr: "missing 1 byte"},
 		{name: "conflicting retransmission", segments: []tcpStreamTestSegment{{100, 0, "abcd"}, {102, 0, "XX"}}, wantErr: "conflicting overlap"},
+		{name: "missing prefix after SYN", segments: []tcpStreamTestSegment{{100, wire.FlagSYN, ""}, {103, 0, "cd"}}, wantErr: "after SYN: missing 2 byte"},
+		{name: "missing suffix before FIN", segments: []tcpStreamTestSegment{{100, 0, "ab"}, {104, wire.FlagFIN, ""}}, wantErr: "before FIN: missing 2 byte"},
+		{name: "missing entire stream", segments: []tcpStreamTestSegment{{100, wire.FlagSYN, ""}, {105, wire.FlagFIN, ""}}, wantErr: "between SYN and FIN: missing 4 byte"},
+		{name: "data beyond FIN", segments: []tcpStreamTestSegment{{100, 0, "abcd"}, {102, wire.FlagFIN, ""}}, wantErr: "beyond captured FIN"},
+		{name: "complete SYN through FIN", segments: []tcpStreamTestSegment{{100, wire.FlagSYN, ""}, {101, 0, "ab"}, {103, wire.FlagFIN, ""}}, want: "ab"},
+		{name: "FIN with payload and retransmission", segments: []tcpStreamTestSegment{{100, wire.FlagSYN, ""}, {101, wire.FlagFIN, "ab"}, {101, wire.FlagFIN, "ab"}}, want: "ab"},
+		{name: "SYN and FIN across wrap", segments: []tcpStreamTestSegment{{0xfffffffe, wire.FlagSYN, ""}, {0xffffffff, 0, "ab"}, {1, wire.FlagFIN, ""}}, want: "ab"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,6 +49,17 @@ func TestTCPPayloadStreamsSequenceAware(t *testing.T) {
 				t.Fatalf("client=%q server=%q, want client=%q", client, server, tt.want)
 			}
 		})
+	}
+}
+
+func TestSemanticTurnsPreservesClientHalfClose(t *testing.T) {
+	session := tcpStreamTestSession([]tcpStreamTestSegment{{100, wire.FlagSYN, ""}, {101, 0, "ping"}, {105, wire.FlagFIN, ""}, {105, wire.FlagFIN, ""}})
+	turns, err := semanticTurns(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 1 || string(turns[0].data) != "ping" || !turns[0].closeWrite {
+		t.Fatalf("client FIN lost or duplicated: %+v", turns)
 	}
 }
 

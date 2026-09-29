@@ -43,24 +43,11 @@ func resolveMAC6(ifname string, target netip.Addr, timeout time.Duration) (net.H
 	defer syscall.Close(fd)
 	sll := syscall.SockaddrLinklayer{Protocol: htons(ethIPv6), Ifindex: ifi.Index, Halen: 6}
 	copy(sll.Addr[:6], dstMAC)
-	if err := syscall.Sendto(fd, frame, 0, &sll); err != nil {
-		return nil, fmt.Errorf("backend: ndp sendto: %w", err)
+	mac, err := resolveNeighborSocket(fd, &sll, frame, timeout, func(frame []byte) (net.HardwareAddr, bool) { return parseNA(frame, target) })
+	if err != nil {
+		return nil, fmt.Errorf("backend: NDP resolving %s on %s: %w", target, ifname, err)
 	}
-
-	tv := syscall.NsecToTimeval(timeout.Nanoseconds())
-	_ = syscall.SetsockoptTimeval(fd, syscall.SOL_SOCKET, syscall.SO_RCVTIMEO, &tv)
-	buf := make([]byte, 256)
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		n, _, rerr := syscall.Recvfrom(fd, buf, 0)
-		if rerr != nil {
-			return nil, fmt.Errorf("backend: ndp recv: %w", rerr)
-		}
-		if mac, ok := parseNA(buf[:n], target); ok {
-			return mac, nil
-		}
-	}
-	return nil, fmt.Errorf("backend: NDP timed out resolving %s on %s", target, ifname)
+	return mac, nil
 }
 
 // linkLocalV6 returns the interface's fe80:: address, the required NS source.

@@ -11,7 +11,36 @@ env:
 permissions:
   contents: read
 
+# Release binaries are never committed. A tag's dist/v<version>/ holds only
+# SHA256SUMS and the SBOM. This workflow rebuilds every artifact, proves the
+# rebuilt checksum manifest is byte-identical to the committed one, and only
+# then publishes the rebuilt files.
 jobs:
+  qualification:
+    name: Release qualification evidence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.7"
+          cache: true
+      - name: Require qualification for stable tags
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+            echo "Release candidate: field qualification remains pending."
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            go run ./scripts/qualify validate -version "$version" -artifacts "dist/v$version" qualification/stable.json
+          else
+            echo "Unsupported release tag" >&2
+            exit 1
+          fi
+
   compatibility:
     name: Release compatibility - Go ${{ matrix.go }}
     runs-on: ubuntu-latest
@@ -26,10 +55,8 @@ jobs:
           go-version: ${{ matrix.go }}
           check-latest: true
           cache: true
-      - run: node --test scripts/dashboard.test.cjs
       - run: go mod verify
-      - run: go test -count=1 ./...
-      - run: go vet ./...
+      - run: go run ./scripts/task build vet test dashboard corpus
 
   quality:
     name: Release security, race, fuzz, and coverage gates
@@ -40,49 +67,13 @@ jobs:
         with:
           go-version: "1.26.7"
           cache: true
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
-      - run: go run honnef.co/go/tools/cmd/staticcheck@v0.7.0 ./...
-      - run: go run github.com/securego/gosec/v2/cmd/gosec@v2.28.0 -severity high -confidence high -exclude-generated ./...
-      - name: Race, shuffle, and repeat
-        run: |
-          go test -race -count=1 ./...
-          go test -shuffle=on -count=3 ./...
-          go test -shuffle=on -count=20 ./internal/webui
-      - name: Fuzz smoke
-        run: |
-          go test ./internal/adapters -run='^$' -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/adapters -run='^$' -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/lab -run='^$' -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/tlsreplay -run='^$' -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/replay -run='^$' -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
-          go test ./internal/ipreasm -run='^$' -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
-      - name: Coverage floors
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p coverage
-          go test -coverprofile=coverage/aggregate.out ./...
-          go test -coverprofile=coverage/pcapio.out ./internal/pcapio
-          go test -coverprofile=coverage/webui.out ./internal/webui
-          go test -coverprofile=coverage/cmd.out ./cmd/livewire
-          go test -coverprofile=coverage/backend.out ./internal/backend
-          check_floor() {
-            local profile="$1" floor="$2" label="$3" actual
-            actual="$(go tool cover -func="$profile" | awk '/^total:/ {gsub(/%/, "", $3); print $3}')"
-            printf '%s coverage: %s%% (required %s%%)\n' "$label" "$actual" "$floor"
-            awk -v actual="$actual" -v floor="$floor" 'BEGIN { exit !(actual + 0 >= floor + 0) }'
-          }
-          check_floor coverage/aggregate.out 60 aggregate
-          check_floor coverage/pcapio.out 85 pcapio
-          check_floor coverage/webui.out 60 webui
-          check_floor coverage/cmd.out 30 cmd/livewire
-          check_floor coverage/backend.out 20 backend
+      - run: go run ./scripts/task lint race shuffle fuzz cover
+      - run: python3 -m unittest discover -s scripts -p test_replaylab_raw.py
 
   release:
     name: Verify and publish release
     runs-on: windows-latest
-    needs: [compatibility, quality]
+    needs: [compatibility, quality, qualification]
     permissions:
       contents: write
       id-token: write
@@ -108,52 +99,43 @@ jobs:
 
       - name: Verify source
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          node --test scripts/dashboard.test.cjs
-          if ($LASTEXITCODE -ne 0) { throw "Dashboard tests failed" }
           go mod verify
           if ($LASTEXITCODE -ne 0) { throw "Module verification failed" }
-          go test -count=1 ./...
-          if ($LASTEXITCODE -ne 0) { throw "Windows tests failed" }
-          go vet ./...
-          if ($LASTEXITCODE -ne 0) { throw "Vet failed" }
-          go build -o livewire.exe ./cmd/livewire
-          if ($LASTEXITCODE -ne 0) { throw "Comparison build failed" }
-          python scripts/compare-releases.py --output "$env:RUNNER_TEMP/release-comparison"
+          go run ./scripts/task test dashboard vet
+          if ($LASTEXITCODE -ne 0) { throw "Windows verification failed" }
+          go run ./scripts/task compare-releases -output "$env:RUNNER_TEMP/release-comparison"
           if ($LASTEXITCODE -ne 0) { throw "Published replay regression failed" }
 
       - name: Regenerate release artifacts
         shell: pwsh
         run: ./scripts/release.ps1 -Version "${{ steps.version.outputs.version }}" -OutputRoot "dist-verify"
 
-      - name: Byte-compare committed artifacts
+      - name: Prove the rebuild matches the committed manifest
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          $expected = (Resolve-Path "dist/v$version").Path
-          $actual = (Resolve-Path "dist-verify/v$version").Path
-          $expectedFiles = Get-ChildItem $expected -File | Sort-Object Name
-          $actualFiles = Get-ChildItem $actual -File | Sort-Object Name
-          $names = Compare-Object $expectedFiles.Name $actualFiles.Name
-          if ($names) { throw "Artifact name mismatch: $($names | Out-String)" }
-          $mismatches = @()
-          foreach ($file in $expectedFiles) {
-            $rebuilt = Join-Path $actual $file.Name
-            $want = (Get-FileHash $file.FullName -Algorithm SHA256).Hash
-            $got = (Get-FileHash $rebuilt -Algorithm SHA256).Hash
-            if ($want -ne $got) {
-              $mismatches += "$($file.Name): committed=$want regenerated=$got"
-            }
+          $committed = Get-Content "dist/v$version/SHA256SUMS" -Raw
+          $rebuilt = Get-Content "dist-verify/v$version/SHA256SUMS" -Raw
+          if ($committed -ne $rebuilt) {
+            throw "Rebuilt artifacts differ from the committed checksum manifest:`n--- committed ---`n$committed`n--- rebuilt ---`n$rebuilt"
           }
-          if ($mismatches) {
-            throw "Non-reproducible artifacts:`n$($mismatches -join "`n")"
+          $committedBom = Get-Content "dist/v$version/livewire-$version.cdx.json" -Raw
+          $rebuiltBom = Get-Content "dist-verify/v$version/livewire-$version.cdx.json" -Raw
+          if ($committedBom -ne $rebuiltBom) { throw "Rebuilt SBOM differs from the committed SBOM" }
+          foreach ($line in Get-Content "dist-verify/v$version/SHA256SUMS") {
+            if ($line -notmatch '^(?<hash>[0-9a-f]{64})  (?<name>.+)$') { throw "Malformed checksum line: $line" }
+            $actual = (Get-FileHash "dist-verify/v$version/$($Matches.name)" -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $Matches.hash) { throw "Rebuilt file does not match its own manifest: $($Matches.name)" }
           }
 
       - name: Validate SBOM and ZIP
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          $dir = "dist/v$version"
+          $dir = "dist-verify/v$version"
           $bom = Get-Content "$dir/livewire-$version.cdx.json" -Raw | ConvertFrom-Json
           if ($bom.bomFormat -ne "CycloneDX" -or $bom.specVersion -ne "1.6" -or -not $bom.components) {
             throw "CycloneDX SBOM validation failed"
@@ -175,19 +157,19 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: livewire-${{ steps.version.outputs.version }}
-          path: dist/v${{ steps.version.outputs.version }}/*
+          path: dist-verify/v${{ steps.version.outputs.version }}/*
           if-no-files-found: error
 
       - name: Attest release artifacts
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
-            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-amd64
-            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-arm64
-            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.exe
-            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.zip
-            dist/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}.cdx.json
-            dist/v${{ steps.version.outputs.version }}/SHA256SUMS
+            dist-verify/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-amd64
+            dist-verify/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-linux-arm64
+            dist-verify/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.exe
+            dist-verify/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}-windows-amd64.zip
+            dist-verify/v${{ steps.version.outputs.version }}/livewire-${{ steps.version.outputs.version }}.cdx.json
+            dist-verify/v${{ steps.version.outputs.version }}/SHA256SUMS
 
       - name: Publish GitHub release
         shell: pwsh
@@ -195,7 +177,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          $assets = Get-ChildItem "dist/v$version" -File | Sort-Object Name | ForEach-Object FullName
+          $assets = Get-ChildItem "dist-verify/v$version" -File | Sort-Object Name | ForEach-Object FullName
           $releaseOptions = @()
           if ($version -match '-rc\.') { $releaseOptions = @('--prerelease', '--latest=false') }
           gh release create "${{ github.ref_name }}" @assets --verify-tag --title "Livewire ${{ github.ref_name }}" --notes-file release-notes.md @releaseOptions
@@ -211,8 +193,11 @@ jobs:
           New-Item -ItemType Directory -Path $download | Out-Null
           gh release download "${{ github.ref_name }}" --dir $download
           $published = Get-ChildItem $download -File | Sort-Object Name
-          $committed = Get-ChildItem "dist/v$version" -File | Sort-Object Name
-          if (Compare-Object $committed.Name $published.Name) { throw "Published asset list differs from committed assets" }
+          $rebuilt = Get-ChildItem "dist-verify/v$version" -File | Sort-Object Name
+          if (Compare-Object $rebuilt.Name $published.Name) { throw "Published asset list differs from rebuilt assets" }
+          $committed = Get-Content "dist/v$version/SHA256SUMS" -Raw
+          $downloaded = Get-Content (Join-Path $download "SHA256SUMS") -Raw
+          if ($committed -ne $downloaded) { throw "Published checksum manifest differs from the committed one" }
           foreach ($line in Get-Content (Join-Path $download "SHA256SUMS")) {
             if ($line -notmatch '^(?<hash>[0-9a-f]{64})  (?<name>.+)$') { throw "Malformed checksum line: $line" }
             $actual = (Get-FileHash (Join-Path $download $Matches.name) -Algorithm SHA256).Hash.ToLowerInvariant()

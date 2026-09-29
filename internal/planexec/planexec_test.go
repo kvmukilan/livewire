@@ -42,3 +42,18 @@ func TestBlockedEntryWithoutReasonCannotPanic(t *testing.T) {
 		t.Fatal("blocked entry without a reason was accepted")
 	}
 }
+
+func TestFindFlowDistinguishesConnectionIncarnations(t *testing.T) {
+	client, server := netip.MustParseAddr("192.0.2.10"), netip.MustParseAddr("192.0.2.20")
+	first := &engine.Flow{Client: flow.Endpoint{Addr: client, Port: 41000}, Server: flow.Endpoint{Addr: server, Port: 80}, Packets: []engine.CapturedPacket{{Index: 0}, {Index: 1}}}
+	second := *first
+	second.Packets = []engine.CapturedPacket{{Index: 10}, {Index: 11}}
+	session := &replay.Session{Client: replay.Endpoint{IP: client, Port: 41000}, Server: replay.Endpoint{IP: server, Port: 80}, Events: []replay.Event{{PacketIndex: 10}}}
+	if got := findFlow([]*engine.Flow{first, &second}, session); got != &second {
+		t.Fatal("reused tuple selected the old connection")
+	}
+	session.Events[0].PacketIndex = 20
+	if got := findFlow([]*engine.Flow{first, &second}, session); got != nil {
+		t.Fatal("absent connection reused old stream")
+	}
+}

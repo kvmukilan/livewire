@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "description": "Synthetic captures and loopback peers generated in the named Go tests; no customer credentials or physical-target traffic.",
+  "cases": [
+    {"behavior":"gzip HTTP and selected exchange with ARP exclusion", "package":"./cmd/livewire", "test":"TestGzipHTTPReplaysWithExplicitApplicationIntent"},
+    {"behavior":"CLI input replacement and evidence identity", "package":"./cmd/livewire", "test":"TestCLIReportUsesOriginalSnapshotDuringReplay"},
+    {"behavior":"verified TLS and capture identity", "package":"./cmd/livewire", "test":"TestUnifiedReproduceReterminatesVerifiedTLS"},
+    {"behavior":"opaque payloads and explicit intent", "package":"./internal/replayintent", "test":"TestIntentPolicyAndPacketAccounting"},
+    {"behavior":"truncated captures", "package":"./internal/replayintent", "test":"TestInvalidOptionsAndTruncatedCapture"},
+    {"behavior":"FTP credentials and coordinated passive data", "package":"./internal/ftpreplay", "test":"TestPassiveFTPReplayCoordinatesDataAndCredentials"},
+    {"behavior":"FTPS protected data", "package":"./internal/ftpreplay", "test":"TestProtectedPassiveDataConnection"},
+    {"behavior":"FTP cancellation during receive", "package":"./internal/ftpreplay", "test":"TestFTPCancellationReleasesBlockedControlRead"},
+    {"behavior":"FTP data cancellation and deadline", "package":"./internal/ftpreplay", "test":"TestFTPDataReadCancellationAndDeadline"},
+    {"behavior":"SSH pinned identity and partial expectations", "package":"./internal/secureexec", "test":"TestSSHPreparedReplayVerifiesPinnedPeerAndOutcome"},
+    {"behavior":"SSH channel open deadline", "package":"./internal/sshreplay", "test":"TestSSHBoundsChannelOpenAfterSuccessfulHandshake"},
+    {"behavior":"UDP send and comparison", "package":"./internal/replay", "test":"TestRunUDPWithBackend"},
+    {"behavior":"ICMP echo comparison", "package":"./internal/replay", "test":"TestRunICMPEchoWithBackend"},
+    {"behavior":"packet interface and RST guard cleanup", "package":"./internal/livereplay", "test":"TestRunContextReleasesBackendAndGuardOnSuccessErrorAndCancellation"},
+    {"behavior":"artifact collision", "package":"./internal/securefile", "test":"TestWriteFileAtomicNeverReplacesExistingTarget"},
+    {"behavior":"cancelled repetitions preserve completed attempts", "package":"./internal/iterate", "test":"TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch"}
+  ]
+}

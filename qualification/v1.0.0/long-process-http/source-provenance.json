@@ -1,0 +1,24 @@
+{
+  "harnessSource": "coverage/long-http-cookie.py",
+  "harnessSourceSHA256": "9a969e0c16be42ecfed9b0bcef2258bb4d6e221035d19da7fc816091c1edf608",
+  "harnessModifiedAt": "2026-09-28T21:23:25.284449+00:00",
+  "helperSource": "coverage/package-v1-qualification.py",
+  "helperSourceSHA256": "5294389d57d8539cc2deaf2f920e0113ce77e71e672feffbad585e4dda6e09f4",
+  "extractedUnchangedFunctions": [
+    "need",
+    "no_links",
+    "source_digest"
+  ],
+  "omitted": "Packaging CLI, constants and evidence-copy/manifest functions; the harness imports only source_digest.",
+  "normalization": "UTF-8 without BOM and LF line endings.",
+  "files": [
+    {
+      "path": "harness.py.txt",
+      "sha256": "9a969e0c16be42ecfed9b0bcef2258bb4d6e221035d19da7fc816091c1edf608"
+    },
+    {
+      "path": "source-digest-helper.py.txt",
+      "sha256": "5ef5850824bd210d1153498bfeb6ef38e2a74d8e7bcabd015db8867b7d602972"
+    }
+  ]
+}
