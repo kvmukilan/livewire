@@ -4,13 +4,15 @@
 package stateless
 
 import (
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/pcapio"
 )
 
-// Pace selects a replay rate. The modes are mutually exclusive; they are checked
-// in priority order TopSpeed > PPS > Mbps > Multiplier, matching tcpreplay.
+// Pace selects one replay rate. Zero-valued rates are unset; no rate preserves
+// capture timing. Multiple selected rates are rejected instead of ignored.
 type Pace struct {
 	TopSpeed   bool    // send as fast as possible (no inter-packet delay)
 	PPS        float64 // fixed packets per second
@@ -18,44 +20,81 @@ type Pace struct {
 	Multiplier float64 // scale the capture's own inter-packet gaps (1 = realtime, 2 = 2x faster)
 }
 
-// Schedule returns the cumulative send offset from t=0 for each record. Offsets
-// are monotonically non-decreasing so the caller can sleep to each in turn.
+// Schedule returns cumulative send offsets, or nil for an invalid schedule.
+// Call CheckedSchedule when the caller needs an explanation of invalid input.
 func Schedule(recs []*pcapio.Record, p Pace) []time.Duration {
+	out, _ := CheckedSchedule(recs, p)
+	return out
+}
+
+// CheckedSchedule returns monotonically non-decreasing offsets in capture
+// record order. Invalid rates and offsets outside time.Duration are rejected.
+func CheckedSchedule(recs []*pcapio.Record, p Pace) ([]time.Duration, error) {
+	selected := 0
+	if p.TopSpeed {
+		selected++
+	}
+	for _, rate := range []struct {
+		name  string
+		value float64
+	}{{"pps", p.PPS}, {"mbps", p.Mbps}, {"multiplier", p.Multiplier}} {
+		if math.IsNaN(rate.value) || math.IsInf(rate.value, 0) || rate.value < 0 {
+			return nil, fmt.Errorf("-%s must be finite and greater than zero when selected", rate.name)
+		}
+		if rate.value > 0 {
+			selected++
+		}
+	}
+	if selected > 1 {
+		return nil, fmt.Errorf("choose only one replay rate: -topspeed, -pps, -mbps, or -multiplier")
+	}
 	out := make([]time.Duration, len(recs))
 	if len(recs) == 0 {
-		return out
+		return out, nil
 	}
-	switch {
-	case p.TopSpeed:
-		// all zero: back-to-back
-	case p.PPS > 0:
-		step := time.Duration(float64(time.Second) / p.PPS)
-		for i := range recs {
-			out[i] = time.Duration(i) * step
+	if recs[0] == nil {
+		return nil, fmt.Errorf("capture record 0 is missing")
+	}
+	base := recs[0].Time
+	var priorBytes float64
+	for i, rec := range recs {
+		if rec == nil {
+			return nil, fmt.Errorf("capture record %d is missing", i)
 		}
-	case p.Mbps > 0:
-		bitsPerSec := p.Mbps * 1e6
-		var acc time.Duration
-		for i := range recs {
-			out[i] = acc
-			bits := float64(len(recs[i].Data) * 8)
-			acc += time.Duration(bits / bitsPerSec * float64(time.Second))
-		}
-	default:
-		mult := p.Multiplier
-		if mult <= 0 {
-			mult = 1
-		}
-		base := recs[0].Time
-		for i := range recs {
-			gap := recs[i].Time.Sub(base)
-			if gap < 0 {
-				gap = 0 // out-of-order timestamps never rewind the schedule
+		var ns float64
+		switch {
+		case p.TopSpeed:
+			// All zero: back-to-back.
+		case p.PPS > 0:
+			ns = float64(i) * float64(time.Second) / p.PPS
+		case p.Mbps > 0:
+			ns = priorBytes * 8 * 1000 / p.Mbps
+		default:
+			gap := rec.Time.Sub(base)
+			if gap > 0 && base.Add(gap).Before(rec.Time) {
+				return nil, fmt.Errorf("capture timestamp at record %d exceeds supported duration", i)
 			}
-			out[i] = time.Duration(float64(gap) / mult)
+			if gap < 0 {
+				gap = 0
+			}
+			mult := p.Multiplier
+			if mult == 0 {
+				mult = 1
+			}
+			ns = float64(gap) / mult
 		}
+		// The float representation of MaxInt64 rounds up to 1<<63; equality
+		// would overflow when converted to a signed duration too.
+		if math.IsNaN(ns) || math.IsInf(ns, 0) || ns >= float64(math.MaxInt64) {
+			return nil, fmt.Errorf("replay offset at record %d exceeds supported duration; increase the replay rate", i)
+		}
+		out[i] = time.Duration(ns)
+		if i > 0 && out[i] < out[i-1] {
+			out[i] = out[i-1]
+		}
+		priorBytes += float64(len(rec.Data))
 	}
-	return out
+	return out, nil
 }
 
 // TotalDuration is the offset of the last scheduled packet.

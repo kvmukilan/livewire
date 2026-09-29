@@ -34,19 +34,59 @@ func isTerminal(f *os.File) bool {
 }
 
 // cmdLive has a positional primary mode and an exact compatibility mode. A
-// positional capture uses the same protocol-aware orchestration as reproduce;
+// positional capture uses the same fresh-session orchestration as reproduce;
 // the historical `live -in ...` form keeps its original TCP dry-run/on-wire
-// behavior and flags unchanged.
+// behavior unless explicit secure-session inputs select the common route.
 func cmdLive(args []string) error {
 	for _, arg := range args {
 		if arg == "-in" || arg == "--in" || strings.HasPrefix(arg, "-in=") || strings.HasPrefix(arg, "--in=") {
 			return cmdLiveLegacy(args)
 		}
 	}
-	if len(args) == 0 || len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "-all-flags") {
-		return cmdLiveLegacy(args)
+	return cmdCaptureReplay("live", args)
+}
+
+// secureLiveInput recognizes flag tokens, not flag values. Consult the actual
+// legacy declarations so existing filenames or values beginning with a secure
+// flag name cannot switch a previously valid invocation to network replay.
+func secureLiveInput(legacy *flag.FlagSet, args []string) (secure, conflict string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" || !isFlagArg(arg) {
+			break // Match the legacy parser's treatment of trailing arguments.
+		}
+		name, value, assigned := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		switch name {
+		case "keylog", "ca", "server-name", "user", "pass", "key", "host-key", "cmd", "expect", "insecure-skip-verify":
+			if secure == "" {
+				secure = name
+			}
+		case "live", "seed", "o", "out", "flow", "v", "tui", "all", "verify", "adaptive", "pace", "raw-l4", "sequential":
+			if conflict == "" {
+				conflict = name
+			}
+		}
+		boolean := false
+		if f := legacy.Lookup(name); f != nil {
+			b, ok := f.Value.(interface{ IsBoolFlag() bool })
+			boolean = ok && b.IsBoolFlag()
+		} else {
+			// Additional common-route booleans have no following value. All
+			// other new flags consume a value; the common parser validates it.
+			switch name {
+			case "insecure-skip-verify", "under-load", "exact-tcp", "details", "strict", "wire", "h", "help":
+				boolean = true
+			}
+		}
+		if !assigned && !boolean && i+1 < len(args) {
+			i++
+			value = args[i]
+		}
+		if name == "mode" && (value == "rewrite" || value == "peer" || value == "both") && conflict == "" {
+			conflict = "mode " + value
+		}
 	}
-	return cmdReproduce(args)
+	return secure, conflict
 }
 
 func cmdLiveLegacy(args []string) (retErr error) {
@@ -87,13 +127,19 @@ func cmdLiveLegacy(args []string) (retErr error) {
 	report := fs.String("report", "", "write a JSON replay report (per-flow result, reply divergences, and likely-cause diagnosis) to this file")
 	actualOut := fs.String("actual-out", "", "actual packet evidence output for on-wire replay")
 	allFlagsOn := registerAllFlags(fs)
+	if secure, conflict := secureLiveInput(fs, args); secure != "" {
+		if conflict != "" {
+			return fmt.Errorf("-%s selects fresh secure-session replay and cannot be combined with legacy -%s; use live <capture> with secure options, or omit secure inputs for the legacy TCP engine", secure, conflict)
+		}
+		return cmdCaptureReplay("live", args)
+	}
 	fs.Usage = func() {
 		fmt.Println("usage:")
 		fmt.Println("  primary:  livewire live <capture.pcap> [options]")
 		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-o rewritten.pcap] [-v]")
 		fmt.Println("  on-wire:  livewire live -in <file> -live -i <connection> [-t ip[:port]] [-n 5]")
-		fmt.Println("\nThe positional form auto-selects plaintext, transport, TLS, FTPS, or SSH handling.")
-		fmt.Println("The -in form is the legacy stateful TCP engine and retains its prior behavior.")
+		fmt.Println("\nThe positional form uses fresh application sessions, including TLS, FTPS, or SSH.")
+		fmt.Println("The -in form retains legacy behavior unless secure inputs such as -keylog are supplied.")
 		fmt.Println("For positional secure/wire options, run: livewire live <capture> -all-flags")
 		printFlags(fs, flagIn, flagLive, flagIface, flagTarget, flagCount, flagOut, "all", "mode", "flow", "report", "v")
 	}
@@ -104,7 +150,7 @@ func cmdLiveLegacy(args []string) (retErr error) {
 		return err
 	}
 	if execution.scenarioPath != "" {
-		return fmt.Errorf("-scenario requires application replay; use live <capture> -mode application")
+		return fmt.Errorf("-scenario requires application replay; use live <capture>")
 	}
 	if handleAllFlags(fs, *allFlagsOn, liveAliases) {
 		return errAllFlags

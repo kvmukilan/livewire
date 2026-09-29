@@ -1,6 +1,6 @@
 # Contributing
 
-Livewire is one Go module with no cgo. Go 1.26.7 or newer builds it. Release
+Livewire has one application Go module with no cgo. Go 1.26.7 or newer builds it. Release
 artifacts are built with Go 1.26.7, and CI also tests the current 1.27.x.
 
 ## Build and test
@@ -24,7 +24,7 @@ everything else needs only Go.
 | `internal/` | the engine, protocol adapters, replay planner, drivers, and the embedded dashboard |
 | `scripts/` | the task runner, release packaging, and qualification tooling |
 | `docs/` | operator documentation; the README stays short |
-| `qualification/` | the regression corpus and the stable-release evidence manifest |
+| `qualification/` | regression corpus and retained release evidence; a data-only module keeps Go package discovery out of artifact directories |
 | `dist/v*/` | only the checksum manifest and SBOM of each published release |
 
 ## Conventions
@@ -33,8 +33,8 @@ everything else needs only Go.
   `-details`. Older spellings stay accepted as aliases. A deprecated alias
   warns on use and names the flag to use instead; it is removed only in a major
   release.
-- Never change an explicitly selected replay mode, never transmit captured
-  ciphertext, and never report a match a driver did not verify.
+- Never change an explicitly selected replay mode, never reuse captured
+  ciphertext as a fresh secure session, and never report a match a driver did not verify.
 - Reports are additive. New fields may appear; existing fields keep their
   meaning, and a single-run report keeps its shape.
 - Secrets never reach logs, reports, evidence metadata, or support bundles.
@@ -57,5 +57,7 @@ Releases are cut from a tag. Before tagging:
    the rebuilt files to the Releases page, and attests them.
 
 A stable tag (no `-rc` suffix) additionally requires `qualification/stable.json`
-to validate against recorded field evidence. `docs/PRODUCTION.md` describes
-that procedure.
+to validate against source-bound evidence for its declared profile. Version 1
+uses the software-lab profile; physical-device qualification stays separate.
+Run qualification tools from the repository root. `docs/PRODUCTION.md` describes
+the procedure. The public Vercel site is planned in [WEBSITE_PLAN.md](docs/WEBSITE_PLAN.md).

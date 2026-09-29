@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kvmukilan/livewire/internal/buildinfo"
 	"github.com/kvmukilan/livewire/internal/replaylab"
 )
 
@@ -19,7 +20,7 @@ func main() {
 	flag.StringVar(&o.Binary, "binary", "", "actual livewire binary to exercise")
 	flag.StringVar(&o.SourceRoot, "source-root", ".", "source root bound into evidence")
 	flag.StringVar(&o.Output, "out", "", "new private evidence directory")
-	flag.StringVar(&o.Version, "version", "1.0.0", "expected binary version")
+	flag.StringVar(&o.Version, "version", buildinfo.Version, "expected binary version")
 	flag.StringVar(&o.Command, "command", "reproduce", "front door: live or reproduce")
 	flag.StringVar(&o.Environment, "environment", "", "software-lab environment description")
 	flag.DurationVar(&o.Duration, "duration", 2*time.Hour, "minimum span of successful checks for every case")

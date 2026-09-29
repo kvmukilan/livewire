@@ -38,7 +38,13 @@ import (
 // because a fault that shows up one time in five is the common field case and a
 // single replay cannot tell the difference between "fixed" and "intermittent".
 func cmdReproduce(args []string) (retErr error) {
-	o, err := parseReproduceFlags(args)
+	return cmdCaptureReplay("reproduce", args)
+}
+
+// cmdCaptureReplay gives live and reproduce the same fresh-session execution
+// contract while retaining their own help and diagnostics.
+func cmdCaptureReplay(command string, args []string) (retErr error) {
+	o, err := parseCaptureReplayFlags(command, args)
 	if err != nil {
 		return err
 	}
@@ -161,11 +167,19 @@ type reproduceOptions struct {
 // parseReproduceFlags declares the command line, parses it, and applies the
 // checks that need nothing but the flags themselves.
 func parseReproduceFlags(args []string) (reproduceOptions, error) {
+	return parseCaptureReplayFlags("reproduce", args)
+}
+
+func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, error) {
 	var o reproduceOptions
-	fs := flag.NewFlagSet("reproduce", flag.ContinueOnError)
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	o.executionFlags.register(fs)
 	var pcapFlag string
-	fs.StringVar(&pcapFlag, flagIn, "", "the capture file we sent you")
+	inputHelp := "input capture file (or use its positional path)"
+	if command == "live" {
+		inputHelp = "legacy TCP controls unless explicit secure inputs are supplied; prefer a positional capture"
+	}
+	fs.StringVar(&pcapFlag, flagIn, "", inputHelp)
 	fs.StringVar(&o.iface, flagIface, "", "network connection for packet-based replay (asks when required)")
 	fs.StringVar(&o.iface, "on", "", "alias for -i")
 	fs.StringVar(&o.iface, "iface", "", "alias for -i")
@@ -180,7 +194,7 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	fs.BoolVar(&o.details, flagDetails, false, "show the expert tables: capture assessment, replay plan, and every session's verdict")
 	fs.DurationVar(&o.gap, "gap", time.Second, "settle time between attempts when -n is more than 1")
 	fs.BoolVar(&o.stopWhenDifferent, "stop-when-different", false, "with -n, stop at the first attempt that doesn't match the recording")
-	fs.StringVar(&o.mode, "mode", "", "replay intent: application | transport | wire | auto (omitted: asks, or compatibility auto)")
+	fs.StringVar(&o.mode, "mode", "", "advanced compatibility override: application | transport | wire | auto (default: fresh application sessions)")
 	fs.BoolVar(&o.dryRun, "dry-run", false, "preview selected sessions and requirements without network activity")
 	var selectedSessions fileFlags
 	fs.Var(&selectedSessions, "session", "select a session ID from check -details (repeatable; includes related FTP data)")
@@ -212,17 +226,17 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	fs.Var(&sshExpects, "expect", "expected SSH output substring, one per -cmd")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire reproduce <capture.pcap> -t <device-ip> [options]")
-		fmt.Println("   or: livewire reproduce -in <capture.pcap> -t <device-ip> -i <connection>")
-		fmt.Println("\nReplay a recorded exchange against your device and report whether it")
-		fmt.Println("behaves the same. Anything not given is asked for, with the likely answer")
-		fmt.Println("pre-selected. To be precise about what is replayed, run check -details to")
-		fmt.Println("find session IDs, then -session <id> -dry-run to preview without sending.")
-		fmt.Println("Packet-based replay may need Administrator or sudo; socket-based")
-		fmt.Println("application replay does not.")
-		fmt.Println("\nFor intermittent issues, add -n 5. Use -under-load for the recorded pacing,")
-		fmt.Println("or -mode transport for transport-level behavior.")
-		printFlags(fs, flagIn, flagTarget, flagIface, flagCount, "under-load", "exact-tcp", "wire", "mode", "session", "dry-run", flagDetails)
+		fmt.Printf("usage: livewire %s <capture.pcap> -t <device-ip> [options]\n", command)
+		fmt.Println("\nReplay application requests through fresh connections and compare live responses.")
+		fmt.Println("The OS maintains TCP state. TLS uses -keylog to recover captured requests,")
+		fmt.Println("then opens a fresh certificate-verified TLS session. No -mode is needed.")
+		fmt.Println("Use check -details to find session IDs; -session <id> -dry-run previews without sending.")
+		fmt.Println("For intermittent issues add -n 5; -under-load preserves supported captured pacing.")
+		fmt.Println("Stateless captured-packet injection: livewire replay -in <capture> -i <connection>.")
+		if command == "live" {
+			fmt.Println("Legacy live -in controls remain available: livewire live -in <capture> -h.")
+		}
+		printFlags(fs, flagIn, flagTarget, flagCount, "under-load", "session", "dry-run", "keylog", "ca", "server-name", "report", flagDetails)
 	}
 	pcapPath, err := parseCaptureArgs(fs, args, &pcapFlag)
 	if err != nil {
@@ -234,7 +248,7 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 	warnDeprecatedFlags(fs)
 	if pcapPath == "" {
 		fs.Usage()
-		return o, errReproduceCaptureRequired
+		return o, fmt.Errorf("give a capture file, e.g. livewire %s issue.pcap", command)
 	}
 	if o.times < 1 {
 		return o, fmt.Errorf("-n must be at least 1")
@@ -260,8 +274,8 @@ func parseReproduceFlags(args []string) (reproduceOptions, error) {
 }
 
 // resolveReproduceIntent turns the requested mode, profile, and shortcuts into
-// one resolved intent and fidelity profile, asking the operator when nothing
-// was chosen and a terminal is attached.
+// one resolved intent and fidelity profile. Primary commands use application
+// sessions without requiring an additional mode choice.
 func resolveReproduceIntent(o *reproduceOptions) (fidelityProfile, *replay.Registry, error) {
 	selectedProfile := o.profile
 	if o.underLoad && strings.EqualFold(selectedProfile, "functional") {
@@ -276,11 +290,7 @@ func resolveReproduceIntent(o *reproduceOptions) (fidelityProfile, *replay.Regis
 		}
 		o.mode = "wire"
 	}
-	if o.mode == "" && isTerminal(os.Stdin) && !o.dryRun && selectedProfile == "functional" {
-		fmt.Println("Choose what to reproduce: 1) application behavior  2) transport behavior  3) captured frames  4) automatic compatibility")
-		choices := []string{"application", "transport", "wire", "auto"}
-		o.mode = choices[promptChoice("Replay intent [1]: ", 0, len(choices))]
-	}
+	o.mode = defaultReplayMode(o.mode, selectedProfile)
 	resolvedMode, resolvedProfile, err := replayintent.Resolve(o.mode, selectedProfile)
 	if err != nil {
 		return fidelityProfile{}, nil, err
@@ -312,6 +322,21 @@ func resolveReproduceIntent(o *reproduceOptions) (fidelityProfile, *replay.Regis
 		}
 	}
 	return profile, registry, nil
+}
+
+// Inspection and execution must agree when the operator omits an override.
+func defaultReplayMode(mode, profile string) string {
+	if mode != "" {
+		return mode
+	}
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case "transport":
+		return "transport"
+	case "wire":
+		return "wire"
+	default:
+		return "application"
+	}
 }
 
 // inspectReproduce compiles the replay plan for the resolved intent and refuses
@@ -732,8 +757,6 @@ func printReproduceSummary(summary iterate.Summary, runs iterate.Plan, profile f
 		fmt.Println("Otherwise, send us the report file above and we'll take a look.")
 	}
 }
-
-var errReproduceCaptureRequired = fmt.Errorf("give the capture file we sent you, e.g. livewire reproduce issue.pcap")
 
 // reproduceAliases names the flags kept only so older docs and scripts keep
 // working. They behave identically to the short name they shadow.

@@ -1,4 +1,11 @@
-# Livewire 1.0.0 release audit
+# Livewire 1.0.1 release audit
+
+The follow-up changes and disposition of v1.0.0 are recorded in
+[V1_FOLLOWUP.md](V1_FOLLOWUP.md). Fresh qualification of the changed source and
+binaries is in progress. The results below remain historical v1.0.0 evidence;
+they do not qualify the changed patch by themselves.
+
+## Historical v1.0.0 audit
 
 Version 1 addresses stateful PCAP replay and makes observed outcomes explicit.
 Application replay creates fresh TCP/TLS connections, learns supported live

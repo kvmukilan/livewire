@@ -106,6 +106,11 @@ func TestUnifiedTLSNamesMissingKeyLogWithoutSending(t *testing.T) {
 		if !strings.Contains(out, "-keylog <file>") {
 			t.Errorf("%s did not name the exact missing input:\n%s", command, out)
 		}
+		for _, explanation := range []string{"fresh TLS handshake", "cannot decrypt the recorded session", "TLS key logging enabled"} {
+			if !strings.Contains(out, explanation) {
+				t.Errorf("%s omitted TLS recovery guidance %q:\n%s", command, explanation, out)
+			}
+		}
 	}
 }
 

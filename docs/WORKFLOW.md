@@ -4,8 +4,9 @@ For prerequisite diagnostics, failure recovery, supported platforms, and the
 stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes version 1. Automatic inspection identifies available
-replay routes; replay intent is a separate choice. The release's
+This guide describes version 1.0.1. `live` and `reproduce` open fresh application
+sessions by default; the separate `replay` command sends stateless packets.
+Advanced intent overrides remain available for existing scripts. The release's
 [qualification scope](V1_QUALIFICATION.md) states which software tests passed
 and which field checks remain outstanding.
 
@@ -13,8 +14,8 @@ and which field checks remain outstanding.
 
 ```sh
 livewire check issue.pcap -details
-livewire reproduce issue.pcap -mode application -session tcp-0 -dry-run
-livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50
+livewire reproduce issue.pcap -session tcp-0 -dry-run
+livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50
 ```
 
 Use the session IDs shown for that capture. Repeat `-session` to include more
@@ -26,7 +27,12 @@ traffic can block that scope. Select the intended exchange instead of forcing
 all traffic through a different driver. Reports retain excluded packet indexes
 and counts. A match describes selected sessions only.
 
-| Intent | Behavior |
+No mode flag is needed for the commands above. For packet-only replay use
+`livewire replay -in issue.pcap -i <connection>`. It retains captured bytes,
+directions, order and timing; it cannot turn old TLS ciphertext into a fresh
+secure exchange. These advanced overrides remain available:
+
+| Advanced intent | Behavior |
 |---|---|
 | `application` | Uses supported application adapters or fresh TLS/FTP/SSH sessions; no implicit transport fallback. |
 | `transport` | Uses supported stateful transport behavior, without interpreting application messages. Confirmed encrypted sessions needing fresh security state are blocked. Unrecognized binary payloads can be exercised as transport data without claiming application equivalence. |
@@ -51,7 +57,7 @@ Choose the observable failure first: a different response, a reset, a stalled
 request, a device crash, or a timing threshold. Retain device logs and a packet
 capture from the test run to check that symptom independently of reply matching.
 
-For supported application protocols over TCP, `-mode application` uses fresh OS TCP
+For supported application protocols over TCP, `live` and `reproduce` use fresh OS TCP
 connections. The OS maintains sequence numbers, acknowledgements, retransmission,
 and flow control; adapters maintain supported application identifiers and state.
 Captured segmentation and packet loss are not reproduced by a socket replay.
@@ -78,14 +84,14 @@ it cannot promise identical network or device state.
 To investigate intermittent application behavior:
 
 ```sh
-livewire reproduce issue.pcap -mode application -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m
+livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m
 ```
 
 Each attempt opens a fresh connection. Reset required target data between runs
 when testing depends on it. Add `-under-load` for supported captured pacing and
 cross-session overlap; worker bounds and live response delays can shift actual
-sends, so inspect reported timing. Secure drivers currently support functional
-replay only. `-strict-exit` makes incomplete, different, unverified, or wire-only
+sends, so inspect reported timing. TLS application replay also supports captured pacing; FTP/FTPS and SSH support
+functional replay only. `-strict-exit` makes incomplete, different, unverified, or wire-only
 results fail automation; it does not turn reply matching into a fault detector.
 
 Use `-state-dir <new-dir>` to record durable progress and `-resume <dir>` with
@@ -97,9 +103,9 @@ require an explicit recovery contract.
 ## Secure exchanges
 
 ```sh
-livewire reproduce tls.pcap -mode application -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
+livewire reproduce tls.pcap -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
 livewire check ftps.pcap -mode application -keylog sslkeys.log -details
-livewire reproduce ssh.pcap -mode application -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
+livewire reproduce ssh.pcap -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
 ```
 
 FTPS negotiation is decrypted offline to associate data sessions when a matching
@@ -112,8 +118,9 @@ material, command bodies, and response bodies are excluded from reports. SSH
 output evidence contains lengths and digests. Blank expectations do not count
 as verification. TLS identity verification remains enabled by default.
 
-Fresh secure sessions support functional replay. Timing/exact-transport options
-and actual-packet output are rejected instead of silently ignored. Add `-n 5`
+Fresh secure sessions support functional replay, and TLS supports captured pacing.
+Unsupported timing/exact-transport options and actual-packet output are rejected
+instead of silently ignored. Add `-n 5`
 for fresh repeated attempts and `-gap 0s` for no settle delay.
 
 ## Dashboard
@@ -141,10 +148,12 @@ session selection and fresh secure application replay are one-sided features.
 
 ## Compatibility and API additions
 
-- `live <capture>` aliases `reproduce`, including flags on either side of the
-  positional capture. `live -in <capture>` keeps the historical TCP engine.
-- Noninteractive commands without `-mode` retain automatic routing. Interactive
-  reproduction asks for intent unless an explicit mode/profile was provided.
+- `live <capture>` and `reproduce` use fresh application sessions, including flags on either side of the
+  positional capture. `live -in <capture>` with explicit secure inputs uses the
+  same fresh-session route; otherwise it keeps the historical TCP engine.
+- Commands without `-mode` now select fresh application sessions consistently
+  in terminals and scripts. To retain v1.0.0 automatic transport selection for
+  unrecognized TCP, pass the advanced compatibility override `-mode auto`.
 - `-wire` and `-profile wire` select explicit wire replay. Existing protocol
   commands remain available for compatibility.
 - `/api/plan` accepts `mode`, `sessions`, `shape` (`one`/`lab`), and

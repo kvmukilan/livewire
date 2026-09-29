@@ -31,8 +31,8 @@ var vocabulary = []struct {
 	{"check", []string{flagIn, flagDetails, "json"}, nil},
 	{"capture", []string{flagIface, flagOut, flagCount}, []string{"iface", "out", "count"}},
 	{"live",
-		[]string{flagIn, flagIface, flagTarget, flagCount, flagOut, flagLive},
-		[]string{"iface", "target", "out", "times", "iterations", "dry-run"}},
+		[]string{flagIn, flagIface, flagTarget, flagCount, "keylog", "session", "dry-run"},
+		[]string{"iface", "target", "times", "iterations"}},
 	{"replay", []string{flagIn, flagIface, flagCount}, []string{"iface", "loop"}},
 	{"convert", []string{flagIn, flagOut}, []string{"out"}},
 	{"rewrite", []string{flagIn, flagOut}, []string{"out"}},
@@ -148,7 +148,7 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 
 // The front door exposes the complete everyday workflow.
 func TestUsageShowsOnlyEverydayCommands(t *testing.T) {
-	want := []string{"reproduce", "check", "capture", "ifaces", "web"}
+	want := []string{"reproduce", "live", "check", "capture", "ifaces", "web"}
 	var got []string
 	for _, c := range commands {
 		if c.group == groupEveryday {
@@ -295,7 +295,7 @@ func TestBinarySurface(t *testing.T) {
 		if stderr != "" {
 			t.Errorf("successful help must not look like a PowerShell error; stderr was:\n%s", stderr)
 		}
-		if !strings.Contains(stdout, "Reproduce a recorded exchange on your device:") {
+		if !strings.Contains(stdout, "Play a recorded exchange through fresh application connections:") {
 			t.Errorf("stdout did not contain the help hub:\n%s", stdout)
 		}
 	})
@@ -305,11 +305,11 @@ func TestBinarySurface(t *testing.T) {
 			topic string
 			want  []string
 		}{
-			{topic: "examples", want: []string{"-n 5", "-keylog", "-wire"}},
+			{topic: "examples", want: []string{"-n 5", "-keylog", "livewire replay -in"}},
 			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
 			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "-wire"}},
 			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
-			{topic: "reliability", want: []string{"-mode application", "-mode transport", "-strict-exit", "-run-timeout", "-resume", "cannot restore", "fault recurred"}},
+			{topic: "reliability", want: []string{"fresh OS TCP", "-exact-tcp", "-strict-exit", "-run-timeout", "-resume", "cannot restore", "fault recurred"}},
 			{topic: "commands", want: []string{"Primary commands:", "Advanced commands:", "tls-replay"}},
 		}
 		for _, tc := range cases {
@@ -506,7 +506,7 @@ func buildBinary(t *testing.T) string {
 			return
 		}
 		binPath = filepath.Join(dir, "livewire.exe")
-		if out, err := exec.Command("go", "build", "-o", binPath, ".").CombinedOutput(); err != nil {
+		if out, err := exec.Command("go", "build", "-buildvcs=false", "-o", binPath, ".").CombinedOutput(); err != nil {
 			binErr = err
 			t.Logf("build output:\n%s", out)
 		}

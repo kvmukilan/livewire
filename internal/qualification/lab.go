@@ -32,6 +32,7 @@ type LabCaseResult struct {
 	LastAt                time.Time `json:"lastAt"`
 	RequestsObserved      int       `json:"requestsObserved"`
 	ResponsesVerified     int       `json:"responsesVerified"`
+	FramesObserved        int       `json:"framesObserved,omitempty"`
 	CleanupVerified       bool      `json:"cleanupVerified"`
 	RepeatedProcessPasses int       `json:"repeatedProcessPasses"`
 }
@@ -111,7 +112,8 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		need(run.Environment != "", label+"environment missing")
 		need(!run.Interrupted && run.CleanupVerified, label+"interrupted or cleanup unverified")
 		need(run.Finished.Sub(run.Started) >= SoakSeconds*time.Second, label+"two-hour run missing")
-		need(run.Command == "live" || run.Command == "reproduce", label+"unknown command")
+		stateless := run.Suite == "stateless"
+		need((!stateless && (run.Command == "live" || run.Command == "reproduce")) || (stateless && run.Command == "replay" && run.Platform == "linux-amd64"), label+"unknown command or stateless platform")
 		need(run.Platform == "windows-amd64" || run.Platform == "linux-amd64", label+"unknown platform")
 		name := "livewire-" + o.Version + "-" + run.Platform
 		if strings.HasPrefix(run.Platform, "windows") {
@@ -123,7 +125,10 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		if run.Suite == "packet" {
 			required = PacketLabCases
 		}
-		need(run.Suite == "application" || run.Suite == "packet", label+"unknown suite")
+		if stateless {
+			required = []string{"mixed-frames"}
+		}
+		need(run.Suite == "application" || run.Suite == "packet" || stateless, label+"unknown suite")
 		cases := map[string]LabCaseResult{}
 		for _, c := range run.Cases {
 			_, duplicate := cases[c.Name]
@@ -135,7 +140,11 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 			c, exists := cases[name]
 			need(exists && c.Passes >= 3 && c.Failures == 0 && c.CleanupVerified, label+name+": repeated checks or cleanup missing")
 			need(!c.FirstAt.Before(run.Started) && !c.LastAt.After(run.Finished) && c.LastAt.Sub(c.FirstAt) >= SoakSeconds*time.Second, label+name+": case was not exercised across two hours")
-			need(c.RequestsObserved >= c.Passes && (name == "wire" || name == "transport-tcp" || c.ResponsesVerified >= c.Passes), label+name+": independent traffic/response checks missing")
+			if stateless {
+				need(c.FramesObserved >= c.Passes && c.RequestsObserved == 0 && c.ResponsesVerified == 0, label+name+": independent frames missing or application response claim")
+			} else {
+				need(c.RequestsObserved >= c.Passes && (name == "wire" || name == "transport-tcp" || c.ResponsesVerified >= c.Passes), label+name+": independent traffic/response checks missing")
+			}
 			need(c.RepeatedProcessPasses >= 3, label+name+": CLI repetition checks missing")
 		}
 		need(len(run.Evidence) > 0, label+"transcript evidence missing")
@@ -152,6 +161,9 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		for _, command := range []string{"live", "reproduce"} {
 			need(seen[platformSuite+"/"+command], "missing lab run: "+platformSuite+"/"+command)
 		}
+	}
+	if requiresStatelessLab(o.Version) {
+		need(seen["linux-amd64/stateless/replay"], "missing lab run: linux-amd64/stateless/replay")
 	}
 	checked := map[string]bool{}
 	for _, ref := range lab.Checks {

@@ -55,6 +55,43 @@ func arp() *pcapio.Record {
 	return &pcapio.Record{Data: b, CapLen: len(b), OrigLen: len(b), LinkType: wire.LinkEthernet, Time: time.Unix(2, 0)}
 }
 
+func TestApplicationIntentAllowsLiveDatagramAndEchoDrivers(t *testing.T) {
+	for _, proto := range []byte{wire.ProtoUDP, wire.ProtoICMPv4} {
+		var rows []*pcapio.Record
+		for i := 0; i < 2; i++ {
+			data := make([]byte, 14+20+8+4)
+			binary.BigEndian.PutUint16(data[12:14], 0x0800)
+			data[14], data[22], data[23] = 0x45, 64, proto
+			binary.BigEndian.PutUint16(data[16:18], uint16(len(data)-14))
+			copy(data[26:30], []byte{192, 0, 2, 10})
+			copy(data[30:34], []byte{192, 0, 2, 20})
+			if i == 1 {
+				data[29], data[33] = data[33], data[29]
+			}
+			if proto == wire.ProtoUDP {
+				binary.BigEndian.PutUint16(data[34:36], 41000)
+				binary.BigEndian.PutUint16(data[36:38], 4567)
+				binary.BigEndian.PutUint16(data[38:40], 12)
+				if i == 1 {
+					data[34], data[35], data[36], data[37] = data[36], data[37], data[34], data[35]
+				}
+			} else {
+				if i == 0 {
+					data[34] = 8
+				}
+				binary.BigEndian.PutUint16(data[38:40], 123)
+				binary.BigEndian.PutUint16(data[40:42], 1)
+			}
+			copy(data[42:], "ping")
+			rows = append(rows, &pcapio.Record{Data: data, LinkType: wire.LinkEthernet, CapLen: len(data), OrigLen: len(data), Time: time.Unix(2, int64(i)*1e6)})
+		}
+		got, err := Inspect(rows, Options{Mode: "application"}, nil)
+		if err != nil || !got.Readiness.Supported || !got.Readiness.NeedsInterface || len(got.Plan.Entries) != 1 || got.Plan.Entries[0].Mode == replay.ModeWire {
+			t.Fatalf("protocol %d: live driver unavailable: %v %+v", proto, err, got)
+		}
+	}
+}
+
 func TestIntentPolicyAndPacketAccounting(t *testing.T) {
 	binaryBody := make([]byte, 2048)
 	_, _ = rand.New(rand.NewSource(92)).Read(binaryBody)
