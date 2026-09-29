@@ -1,0 +1,39 @@
+{
+  "excludedPrivateFiles": [
+    "process-cleanup.log",
+    "process-cleanup.json"
+  ],
+  "finalContentReview": {
+    "adjustment": "Removed fourteen absent framesObserved fields that audit glue had defaulted to zero; clarified the original wire.requestsObserved frame-counter name. Original run reports and all measured counters/spans are unchanged.",
+    "at": "2026-09-29T22:47:39.374953+00:00",
+    "originalPublicFileSha256": {
+      "README.md": "bd4f8e5ef66ee2607f1d84b10ff15b591b4e8494f666e5db48efae54430c8fa5",
+      "checksums.json": "e724af71a87d3bbf04ea64b650fcee13479d321349dbb611d73e99f62cd36d4d",
+      "provenance.json": "b14b9c2663be40f25e5277fc68d6cf58f5d958f00cd045dac2a0db89c24b1ad0",
+      "result.json": "97bee21b9fd51f64b7a34bc294a8e753fcaf620a36fc63a4573c193eb4eff67a"
+    },
+    "originalsRetainedPrivately": true
+  },
+  "freezeSha256": "eacd6c8b6870e4ad82e5b155a1f251a017d8063981dfe06e677fa4b8c057bab4",
+  "logEncoding": "New audit logs decoded as UTF-8, CRLF converted to LF before hashing; original bound run evidence was not changed.",
+  "notes": "Private process log and its execution metadata are retained, with only reviewed owned-resource results public.",
+  "privateAuditHelperSha256": "06ff36f029a22547c53f09e4a004c6c7c07201f533014af71b968e25241812c2",
+  "privateOrchestratorSha256": "11425ea078fd5dce31c969835aaabe2ab79f7f6721c56ff7dd35359cfe3aebb3",
+  "privateSummaryHelperSha256": "065477330d24ec5c71f9184be91f545b0d359c52575d696d5e10b4d603996ea5",
+  "schemaVersion": 1,
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "sourceVerifiers": [
+    {
+      "path": "scripts/replaylab_raw.py",
+      "sha256": "c48bf9b095b24c4d63e184bdb91d7eb9c1619545f6092400382a6a4baaaa6d0e"
+    },
+    {
+      "path": "internal/qualification/lab_packet_test.go",
+      "sha256": "11111969ec81f90fbd5377f97d2a6ad08f7d28721b11280553f83f40aa6883c9"
+    },
+    {
+      "path": "internal/qualification/lab_stateless_test.go",
+      "sha256": "5e9bd7003196c7475fae3679681990bbac5875bf57ec5539c779d34a0bc0389f"
+    }
+  ]
+}

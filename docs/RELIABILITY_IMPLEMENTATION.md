@@ -3,7 +3,7 @@
 This describes the 1.0 implementation. The
 [software-lab qualification profile](V1_QUALIFICATION.md) defines release evidence;
 physical-device qualification remains separate. The
-[2026-09-29 reliability review](RELIABILITY_REVIEW_2026-09-29.md) is an earlier
+[2026-09-29 reliability review](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELIABILITY_REVIEW_2026-09-29.md) is an earlier
 implementation snapshot; protocol behavior below includes subsequent fixes.
 Positional `live capture.pcap` and `reproduce` share the fresh-session
 orchestrator. `live -in` with explicit secure inputs also uses it; without

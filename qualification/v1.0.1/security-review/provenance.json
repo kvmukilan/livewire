@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "govulncheck.stdout.log",
+      "privateOriginal": "coverage/v1.0.1-security-diagnostic/govulncheck.stdout.log",
+      "originalSHA256": "8aef1caf3bed47e3a3ace981af40239252eeee8209cbc052299cd7c15c2e9dd3",
+      "retainedSHA256": "8aef1caf3bed47e3a3ace981af40239252eeee8209cbc052299cd7c15c2e9dd3",
+      "removedFields": [],
+      "normalization": "UTF-8 without BOM, LF, exactly one final newline; no content redaction",
+      "byteIdentical": true
+    },
+    {
+      "path": "dependencies.stdout.log",
+      "privateOriginal": "coverage/v1.0.1-security-diagnostic/dependencies.stdout.log",
+      "originalSHA256": "dca3a07c9fc47c6e9f68cf1114951aaf6b0047df5ed160cc277fce163ff0a6c8",
+      "retainedSHA256": "dca3a07c9fc47c6e9f68cf1114951aaf6b0047df5ed160cc277fce163ff0a6c8",
+      "removedFields": [],
+      "normalization": "UTF-8 without BOM, LF, exactly one final newline; no content redaction",
+      "byteIdentical": true
+    },
+    {
+      "path": "toolchain.stdout.log",
+      "privateOriginal": "coverage/v1.0.1-security-diagnostic/toolchain.stdout.log",
+      "originalSHA256": "a2e9ab7f897170401c0be97faade5de382483d84597b8537ef9bf726420afe9b",
+      "retainedSHA256": "a2e9ab7f897170401c0be97faade5de382483d84597b8537ef9bf726420afe9b",
+      "removedFields": [],
+      "normalization": "UTF-8 without BOM, LF, exactly one final newline; no content redaction",
+      "byteIdentical": true
+    },
+    {
+      "path": "GO-2026-5932.json",
+      "privateOriginal": "coverage/v1.0.1-security-diagnostic/GO-2026-5932.json",
+      "originalSHA256": "f277b0400996200a7d5034c676661cd8cf18adeab1fdc5d0dc369e456ddf1fad",
+      "retainedSHA256": "10f20872fdf96e411dc7cc075492a02a85ec39e4a1d2623030bb9328cd043852",
+      "removedFields": [],
+      "normalization": "UTF-8 without BOM, LF, exactly one final newline; no content redaction",
+      "byteIdentical": false
+    },
+    {
+      "path": "review.json",
+      "privateOriginal": "coverage/v1.0.1-security-diagnostic/summary.json",
+      "originalSHA256": "4e944f99a4cd8ec561a40665472af0eee9660123d0e1e47a058327cd5f23d71b",
+      "retainedSHA256": "e313a2e64f382c4a257f4196e1073e53b6d141fefe1433b010643efe2bd16669",
+      "removedFields": [
+        "sourceRoot",
+        "commands"
+      ],
+      "reason": "Omit private checkout location and redundant local invocation records, including their absolute path; source pins, tool versions, result counts and package reachability remain unchanged.",
+      "normalization": "JSON reserialized as UTF-8 without BOM, LF, exactly one final newline",
+      "byteIdentical": false
+    }
+  ]
+}

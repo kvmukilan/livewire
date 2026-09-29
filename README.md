@@ -95,6 +95,6 @@ available throughout 1.x.
 | [docs/RELEASE_AUDIT.md](docs/RELEASE_AUDIT.md) | what the current release candidate has and has not been checked against |
 | [SECURITY.md](SECURITY.md) | handling captures, credentials, and reports |
 | [CHANGELOG.md](CHANGELOG.md) | what changed in each release |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | building, testing, and releasing from source |
+| [CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) | building, testing, and releasing from source |
 
 Livewire is licensed under the [MIT License](LICENSE).

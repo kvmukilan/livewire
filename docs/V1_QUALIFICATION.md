@@ -30,8 +30,10 @@ and demand confirmations before sending the next fragment.
 | SSH | Fresh pinned host identity, explicit command outputs and exit status |
 
 TLS soak captures use TLS 1.2 and fresh peers negotiate TLS 1.3. Captured TLS 1.3
-decryption and active FTP protection/role handling have separate regression
-tests; those are not additional two-hour matrix combinations.
+to fresh TLS 1.2, HTTP/1.1 ALPN, secure `live -in` dispatch, and active FTP
+protection/role handling have separate regression tests; those are not
+additional two-hour matrix combinations. Custom rule packs and IPv6 TCP/UDP
+also have regression coverage rather than additional two-hour matrix cases.
 
 The Linux packet matrix uses owned network namespaces and virtual Ethernet
 links for DNS/UDP, generic UDP, ICMPv4/v6, adaptive TCP, captured TCP and wire
@@ -46,7 +48,7 @@ evidence and server counters, and verifies released connections. Short smoke
 tests cannot satisfy this gate. Reports retain the tested protocol combinations,
 environment, executable hash, source digest, failures and cleanup evidence.
 
-Additional HTTP checks exercised 840 repetitions of five captured sessions in
+Historical v1.0.0 HTTP checks exercised 840 repetitions of five captured sessions in
 one CLI process for each command on each platform. Each ran for about 70 minutes
 and verified 8,400 responses with fresh per-connection cookies and complete
 cleanup. [Results and reproduction instructions](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/long-process-http/README.md)
@@ -57,19 +59,25 @@ existing `physical` profile retains its device, driver, browser and human-pilot
 requirements. To validate the profile declared by a manifest:
 
 ```sh
-go run ./scripts/qualify validate -version 1.0.0 -artifacts dist/v1.0.0 qualification/stable.json
+go run ./scripts/qualify validate -version 1.0.1 -artifacts dist/v1.0.1 qualification/stable.json
 ```
 
-All six required runs completed with zero failures and verified cleanup.
-The 78 platform/suite/command/case combinations each exceeded two hours, across
-16,600 CLI processes and 49,800 replay iterations. The committed
-[evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
-and manifest retain exact spans, counts, hashes, and coverage limits.
+For v1.0.1, all seven required runs completed with zero failures and verified
+cleanup. Each of the 79 platform/suite/command/case combinations exceeded two
+hours, across 17,015 CLI processes and 51,045 replay iterations. The
+[current evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
+retains exact spans, counts, source/binary hashes and independent final audits.
+These are repeated-process soaks; they do not claim one process stayed alive
+for two hours.
+
+The [historical v1.0.0 evidence](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
+retains its completed six-run qualification unchanged. Those prior runs do not
+qualify the changed v1.0.1 source.
 
 ## Repeat the software labs
 
-Use the v1.0.0 source checkout and checksum-verified release binaries under
-`dist/v1.0.0`. Each invocation requires a new output directory. The examples
+Use the v1.0.1 source checkout and checksum-verified release binaries under
+`dist/v1.0.1`. Each invocation requires a new output directory. The examples
 run `live`; repeat with `-command reproduce` and a different `-out` directory
 to exercise the other command. Omitting `-cases` runs the complete application
 matrix. Build and run the lab executable directly so it receives cancellation.
@@ -79,18 +87,18 @@ Windows PowerShell:
 ```powershell
 $env:GOTOOLCHAIN = 'go1.26.7'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
-go build -o coverage/replaylab.exe ./scripts/replaylab
+go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
-./coverage/replaylab.exe -binary ./dist/v1.0.0/livewire-1.0.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab.exe -binary ./dist/v1.0.1/livewire-1.0.1-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 Linux shell:
 
 ```sh
 mkdir -p coverage
-chmod +x dist/v1.0.0/livewire-1.0.0-linux-amd64
-GOTOOLCHAIN=go1.26.7 go build -o coverage/replaylab ./scripts/replaylab || exit 1
-./coverage/replaylab -binary "$PWD/dist/v1.0.0/livewire-1.0.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+chmod +x dist/v1.0.1/livewire-1.0.1-linux-amd64
+GOTOOLCHAIN=go1.26.7 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
+./coverage/replaylab -binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 The Linux packet lab requires root, Python 3, `iproute2`, `iptables`, and
@@ -98,10 +106,11 @@ The Linux packet lab requires root, Python 3, `iproute2`, `iptables`, and
 namespaces, and the kernel's `netem` queue discipline available. Ensure the
 Linux release binary is executable. The lab creates
 its own namespaces and interfaces, removes only those resources, and runs
-both commands when `--command` is omitted. For the unchanged v1.0.0 source:
+both commands when `--command` is omitted. For the unchanged v1.0.1 source:
 
 ```sh
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.0.0/livewire-1.0.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest f01dd0fd79190f0e3754fdc535fe187a75ade0341e482eb24d8fa1809c7f7122 --version 1.0.0 --duration 7200 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest 8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb --version 1.0.1 --duration 7200 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" --output "$PWD/coverage/lab-linux-stateless" --source-digest 8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb --version 1.0.1 --command replay --duration 7200 --round-gap 20
 ```
 
 These commands create private captures and test key material as well as reports.

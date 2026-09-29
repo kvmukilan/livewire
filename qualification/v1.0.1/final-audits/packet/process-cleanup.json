@@ -1,0 +1,24 @@
+{
+  "checkedAt": "2026-09-29T22:45:49.779994+00:00",
+  "command": [
+    "wsl.exe",
+    "-u",
+    "root",
+    "--",
+    "ps",
+    "-eo",
+    "pid,ppid,args"
+  ],
+  "ownedHarnessCommandLinesAbsent": true,
+  "ownedNamespacesAbsent": [
+    "lwc-10fe35de58",
+    "lwc-86c37e09df",
+    "lws-10fe35de58",
+    "lws-86c37e09df"
+  ],
+  "ownedProcessIdsAbsent": [
+    624,
+    630
+  ],
+  "privateSnapshotSha256": "41d777c9c7823c7f2832b9d9b4b894406d1ea91bbec4bd5ff85aa934a3eb6883"
+}

@@ -1,0 +1,11 @@
+Application qualification final independent audit
+Observed: 2026-09-29T22:36:31.839917+00:00
+Passed: True
+Source digest: 8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb
+windows-live: 7257.693s, min case span 7228.117s, 3440 processes / 10320 CLI iterations, 11181 artifact hashes checked, failures 0.
+windows-reproduce: 7257.660s, min case span 7228.062s, 3440 processes / 10320 CLI iterations, 11181 artifact hashes checked, failures 0.
+linux-live: 7256.813s, min case span 7226.822s, 3360 processes / 10080 CLI iterations, 10921 artifact hashes checked, failures 0.
+linux-reproduce: 7256.811s, min case span 7226.821s, 3360 processes / 10080 CLI iterations, 10921 artifact hashes checked, failures 0.
+windows OS cleanup at 2026-09-29T22:36:29.8671300Z: 32 target ports checked, 0 remaining listeners, 0 remaining owned processes.
+linux OS cleanup at 2026-09-29T22:36:31.749516+00:00: 32 target ports checked, 0 remaining listeners, 0 remaining owned processes.
+Four actual application software-peer soaks; no physical NIC/device or human-pilot claim. Each CLI process ran three repetitions; this does not claim one CLI process remained alive for two hours. OS snapshots independently verify owned process exit and closure of every target listener after the runs.
