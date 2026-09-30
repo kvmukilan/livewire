@@ -1,5 +1,8 @@
 import release from './release.json';
 export { release };
+export const siteBase = import.meta.env.BASE_URL;
+export const sitePath = (path: string) => `${siteBase}${path.replace(/^\//, '')}`;
+export const routePath = (pathname: string) => pathname.startsWith(siteBase) ? `/${pathname.slice(siteBase.length)}` : pathname;
 export const releaseURL = `${release.repository}/releases/tag/v${release.version}`;
 export const download = (file: string) => `${release.repository}/releases/download/v${release.version}/${file}`;
 export const source = (path: string) => `${release.repository}/blob/${release.docsRef}/${path}`;
@@ -11,4 +14,4 @@ export const navigation = [
   { href: '/protocols/', label: 'Protocols' },
   { href: '/releases/', label: 'Releases' },
   { href: '/troubleshooting/', label: 'Troubleshooting' },
-];
+].map(item => ({ ...item, href: sitePath(item.href) }));

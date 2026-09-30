@@ -1,4 +1,4 @@
-# Livewire website on Vercel
+# Livewire website hosting
 
 ## Purpose and scope
 
@@ -57,8 +57,8 @@ CLI capture/evidence tree is never part of the deployment.
 
 On 2026-09-30 a tested preview was deployed with Vercel's unauthenticated
 temporary-deployment feature. Vercel assigned it a one-hour expiry. No Vercel
-account login was available in this environment; permanent production hosting
-remains dependent on connecting the owner's account. Ownership claim credentials
+account login was available in this environment; permanent Vercel hosting
+requires connecting the owner's account. Ownership claim credentials
 are private, ignored local files and are not published in this repository.
 
 The initial site correctly pins published v1.0.1 and explains its older command
@@ -67,9 +67,18 @@ the corrected CLI's qualification and published artifacts pass verification.
 Set `PUBLIC_SITE_URL` to the permanent verified HTTPS origin to enable canonical
 URLs, sitemap entries and indexing. Temporary previews disallow crawling.
 
+GitHub Pages is the lasting fallback under the existing repository owner's
+account, at `https://kvmukilan.github.io/livewire/`. Its deployment workflow builds
+and tests the static site before publishing, with `PUBLIC_SITE_URL` set to
+`https://kvmukilan.github.io` and `PUBLIC_BASE_PATH` set to `/livewire/`. The Vercel
+root-domain configuration remains supported. The initial Pages deployment is
+pending the reviewed website workflow reaching the main branch; configuring
+Pages alone does not mean the site has been published.
+
 Launch is complete when a new operator can install a checksum-verified binary,
 preview a capture, run a local synthetic live example, understand the keylog
 requirement, and distinguish a verified response from stateless transmission.
 
-The implementation and temporary deployment are complete; a permanent Vercel
-account deployment and final release-metadata promotion remain separate steps.
+The implementation and temporary deployment are complete. The lasting Pages
+deployment, final release-metadata promotion and any later Vercel account
+connection are recorded separately from CLI replay qualification.

@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const dist = path.join(root, 'dist');
+const base = process.env.PUBLIC_BASE_PATH || '/';
+const site = process.env.PUBLIC_SITE_URL;
 const release = JSON.parse(readFileSync(path.join(root, 'src/data/release.json'), 'utf8'));
 assert.match(release.version, /^\d+\.\d+\.\d+$/);
 assert.equal(release.docsRef, `v${release.version}`);
@@ -22,6 +24,13 @@ for (const file of htmlFiles) {
   assert.match(html, /<html lang="en"/);
   assert.match(html, /name="description"/);
   assert.match(html, /href="#main"/);
+  if (site) {
+    const relative = path.relative(dist, file).replaceAll('\\', '/');
+    if (relative !== '404.html') {
+      const route = relative === 'index.html' ? '' : relative.replace(/index\.html$/, '');
+      assert.ok(html.includes(`rel="canonical" href="${new URL(base + route, site).href}"`), `Canonical URL missing project base: ${relative}`);
+    }
+  }
   assert.equal((html.match(/<h1(?:\s|>)/g) || []).length, 1);
   assert.ok(!/https:\/\/(?:fonts\.googleapis|fonts\.gstatic|www\.googletagmanager)/.test(html), 'Unexpected third-party runtime');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
@@ -43,7 +52,11 @@ for (const file of htmlFiles) {
       continue;
     }
     if (href.startsWith('javascript:')) throw Error('JavaScript navigation is forbidden');
-    const [pathname, hash] = href.split('#');
+    let [pathname, hash] = href.split('#');
+    if (pathname.startsWith('/')) {
+      assert.ok(pathname.startsWith(base), `${file}: link escapes project base: ${href}`);
+      pathname = '/' + pathname.slice(base.length);
+    }
     let target = pathname ? path.resolve(pathname.startsWith('/') ? dist : path.dirname(file), `.${pathname.startsWith('/') ? '' : '/'}${pathname}`) : file;
     if (pathname && !path.extname(pathname)) target = path.join(target, 'index.html');
     assert.ok(existsSync(target), `${path.relative(dist, file)} → missing ${href}`);
@@ -64,4 +77,10 @@ const jsBytes = js.reduce((total,file) => total + statSync(file).size, 0);
 assert.ok(jsBytes + maxInlineJS < 15000, `Client JS exceeded 15KB: ${jsBytes + maxInlineJS}`);
 assert.ok(files.some(file => file.endsWith('.woff2')), 'Local fonts missing');
 for (const font of ['ibm-plex-sans', 'jetbrains-mono']) assert.ok(existsSync(path.join(dist, `${font}-LICENSE.txt`)), `Font license missing: ${font}`);
-console.log(`Verified ${htmlFiles.length} pages, ${checkedLinks} local links/assets, release v${release.version}, five pinned guides, local fonts, ${jsBytes} external JS bytes and at most ${maxInlineJS} inline JS bytes/page.`);
+if (site) {
+  const sitemap = readFileSync(path.join(dist,'sitemap.xml'),'utf8');
+  assert.equal((sitemap.match(/<loc>/g)||[]).length, 12);
+  for (const match of sitemap.matchAll(/<loc>(.*?)<\/loc>/g)) assert.ok(match[1].startsWith(new URL(base,site).href));
+  if (process.env.VERCEL_ENV !== 'preview') assert.ok(readFileSync(path.join(dist,'robots.txt'),'utf8').includes(new URL(base+'sitemap.xml',site).href));
+}
+console.log(`Verified ${htmlFiles.length} pages, ${checkedLinks} local links/assets under ${base}, release v${release.version}, five pinned guides, local fonts, ${jsBytes} external JS bytes and at most ${maxInlineJS} inline JS bytes/page.`);
