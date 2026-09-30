@@ -27,7 +27,27 @@ func TestReproduceAndReplaySendExactFramesWithUnverifiedReports(t *testing.T) {
 					args = append([]string{"-in"}, args...)
 				}
 				sender := &statelessTestSender{link: wire.LinkEthernet}
-				err := cmdStatelessReplayWithSender(command, args, func(string) (backend.PacketBackend, error) { return sender, nil })
+				progress, err := os.CreateTemp(t.TempDir(), "progress")
+				if err != nil {
+					t.Fatal(err)
+				}
+				originalStdout := os.Stdout
+				os.Stdout = progress
+				defer func() { os.Stdout = originalStdout; _ = progress.Close() }()
+				err = cmdStatelessReplayWithSender(command, args, func(string) (backend.PacketBackend, error) { return sender, nil })
+				os.Stdout = originalStdout
+				if closeErr := progress.Close(); closeErr != nil {
+					t.Fatal(closeErr)
+				}
+				output, readErr := os.ReadFile(progress.Name())
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				// Progress describes completed send attempts. A line beginning
+				// with PASS also resembles an FTP credential in exported logs.
+				if !strings.Contains(string(output), "attempt 1 complete (") || !strings.Contains(string(output), "attempt 2 complete (") || strings.Contains(strings.ToLower(string(output)), "\npass ") {
+					t.Fatalf("ambiguous send progress: %q", output)
+				}
 				if err != nil || sender.closed != 1 || len(sender.frames) != 2*len(records) {
 					t.Fatalf("err=%v closed=%d sent=%d", err, sender.closed, len(sender.frames))
 				}
