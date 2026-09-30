@@ -3,6 +3,7 @@
 package hoststack
 
 import (
+	"errors"
 	"net/netip"
 	"strings"
 	"testing"
@@ -44,16 +45,47 @@ func TestIptablesArmDisarmRunner(t *testing.T) {
 }
 
 func TestIptablesDisarmSwallowsMissing(t *testing.T) {
+	calls := 0
 	fake := func(name string, args ...string) ([]byte, error) {
+		calls++
 		return []byte("iptables: Bad rule (does a matching rule exist in that chain?)."), errFake{}
 	}
 	s := &iptablesSuppressor{
-		rule: Rule{TargetIP: netip.MustParseAddr("10.0.0.1"), TargetPort: 502},
-		bin:  "iptables",
-		run:  fake,
+		rule:  Rule{TargetIP: netip.MustParseAddr("10.0.0.1"), TargetPort: 502},
+		bin:   "iptables",
+		run:   fake,
+		armed: true,
 	}
 	if err := s.Disarm(); err != nil {
 		t.Fatalf("Disarm should swallow 'no matching rule', got %v", err)
+	}
+	if err := s.Disarm(); err != nil || calls != 1 || s.armed {
+		t.Fatalf("missing rule cleanup not idempotent: err=%v calls=%d armed=%v", err, calls, s.armed)
+	}
+}
+
+func TestIptablesDisarmFailureRemainsRetryable(t *testing.T) {
+	failure := errors.New("iptables unavailable")
+	calls := 0
+	s := &iptablesSuppressor{rule: Rule{TargetIP: netip.MustParseAddr("192.0.2.1"), TargetPort: 502}, bin: "iptables", armed: true}
+	s.run = func(name string, args ...string) ([]byte, error) {
+		calls++
+		if name != "iptables" || args[0] != "-D" {
+			t.Fatalf("unexpected operation: %s %v", name, args)
+		}
+		if calls == 1 {
+			return []byte("resource temporarily unavailable"), failure
+		}
+		return nil, nil
+	}
+	if err := s.Disarm(); !errors.Is(err, failure) || !s.armed {
+		t.Fatalf("failure lost cleanup ownership: %v armed=%v", err, s.armed)
+	}
+	if err := s.Disarm(); err != nil || s.armed {
+		t.Fatalf("retry did not remove rule: %v armed=%v", err, s.armed)
+	}
+	if err := s.Disarm(); err != nil || calls != 2 {
+		t.Fatalf("cleanup not idempotent: %v calls=%d", err, calls)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ type liveOpts struct {
 	actualPath      string
 	strictExit      bool
 	ctx             context.Context
+	cancel          context.CancelFunc // cancels work on an output failure; signal cleanup stays deferred
 	target, iface   string
 	profile         string
 	seed            int64
@@ -140,7 +142,9 @@ func liveOnePass(flows []*engine.Flow, flowSel int, o liveOpts, rep *replayRepor
 	}
 	target := fmt.Sprintf("%s:%d", targetIP, targetPort)
 
-	res, err := livereplay.RunContext(liveContext(o), o.config(f, targetIP, targetPort), func(line string) { fmt.Println(line) })
+	res, err := livereplay.RunContext(liveContext(o), o.config(f, targetIP, targetPort), func(line string) {
+		writeCommandProgress(os.Stdout, o.cancel, "%s\n", line)
+	})
 	if err != nil {
 		rep.add(0, f, target, "failed", res, err)
 		tally.Add(iterate.Incomplete)
@@ -280,9 +284,9 @@ func liveAllPass(flows []*engine.Flow, o liveOpts, rep *replayReport) (iterate.T
 	logf := func(idx int, line string) {
 		mu.Lock()
 		if idx < 0 {
-			fmt.Println(line)
+			writeCommandProgress(os.Stdout, o.cancel, "%s\n", line)
 		} else {
-			fmt.Printf("[flow %d] %s\n", idx, line)
+			writeCommandProgress(os.Stdout, o.cancel, "[flow %d] %s\n", idx, line)
 		}
 		mu.Unlock()
 	}
