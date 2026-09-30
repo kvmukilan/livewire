@@ -178,7 +178,7 @@ func TestInvalidOptionsAndTruncatedCapture(t *testing.T) {
 		t.Fatalf("TLS application timing preview: %v %+v", err, timing)
 	}
 	withoutSecrets, err := Inspect(secure, Options{Mode: "application", Profile: "timing"}, nil)
-	if err != nil || withoutSecrets.Readiness.Supported || !strings.Contains(withoutSecrets.Readiness.Blocker, "key log") {
+	if err != nil || withoutSecrets.Readiness.Supported || !strings.Contains(withoutSecrets.Readiness.Blocker, "embedded in PCAPNG or supplied with -keylog") {
 		t.Fatalf("keylog-free timing not blocked: %v %+v", err, withoutSecrets)
 	}
 	for _, opts := range []Options{{Mode: "guess"}, {Profile: "unknown"}, {Mode: "application", Profile: "wire"}, {Mode: "transport", Profile: "wire"}, {Sessions: []string{"tcp-99"}}, {KeyLog: []byte("CLIENT_RANDOM invalid invalid\n")}} {

@@ -41,3 +41,37 @@ test('zero gap is sent as zero; session selection cannot silently become all',as
  const d=dashboard();assert.equal(d.run('nonNegativeMS("attemptGap")'),0);
  d.run('selectedIDs=[]');await d.run('compile()');assert.equal(d.run('compiled'),null);assert.match(d.element('formError').textContent,/Select at least one/);
 });
+
+const handshakeOutcome={adapter:'tls-handshake',handshakeCompleted:true,completed:false,applicationReplayCompleted:false,verified:false,matched:false,requests:0,responses:0,reasonCode:'captured_plaintext_unavailable',protocolVersion:'TLS 1.3',peerIdentityChecked:true};
+async function renderReports(outcomes,status={done:true,running:false,ok:false,applicationIncomplete:true}){
+ const d=dashboard();d.context.reports=outcomes.map(outcome=>({outcome}));
+ d.context.status=status;
+ d.run("artifactItems=reports.map((_,i)=>i+'.report.json');api=async path=>reports[Number(decodeURIComponent(path.split('=')[1]).split('.')[0])];setPill('run failed','bad');");
+ await d.run('renderResult(status)');return d;
+}
+test('verified handshake-only results show amber application-incomplete details',async()=>{
+ for(const count of [1,2]){
+  const d=await renderReports(Array.from({length:count},()=>({...handshakeOutcome})));
+  assert.equal(d.element('jobPill-child').textContent,'application incomplete');
+  assert.equal(d.element('jobPill-child').style.background,'var(--amber)');
+  assert.match(d.element('metricLine').textContent,/Fresh TLS handshakes? completed/);
+  assert.match(d.element('metricLine').textContent,/TLS 1.3; peer identity verified/);
+  assert.match(d.element('metricLine').textContent,/Application replay remains incomplete and unverified/);
+ }
+});
+test('certificate failures and failed earlier attempts remain failed',async()=>{
+ const failed={...handshakeOutcome,handshakeCompleted:false,peerIdentityChecked:false,reasonCode:'execution_failed',error:'certificate verification failed'};
+ for(const outcomes of [[failed],[failed,{...handshakeOutcome}],[{...handshakeOutcome},{...handshakeOutcome,error:'cleanup failed'}]]){
+  const d=await renderReports(outcomes);assert.equal(d.element('jobPill-child').textContent,'run failed');assert.equal(d.element('jobPill-child').style.background,'var(--red)');
+ }
+});
+test('missing reports, cancellation and partial attempts cannot become handshake-only completion',async()=>{
+ for(const [outcomes,status] of [
+  [[],{done:true,running:false,ok:false,applicationIncomplete:true}],
+  [[{...handshakeOutcome}],{done:true,running:false,ok:false,applicationIncomplete:false}],
+  [[{...handshakeOutcome}],{done:true,running:false,ok:false}],
+  [[{...handshakeOutcome}],{done:false,running:true,ok:false,applicationIncomplete:true}],
+ ]){
+  const d=await renderReports(outcomes,status);assert.equal(d.element('jobPill-child').textContent,'run failed');assert.equal(d.element('jobPill-child').style.background,'var(--red)');
+ }
+});
