@@ -28,6 +28,12 @@ against that origin. `SITE_TEST_OUTPUT` selects a separate ignored artifact
 directory for remote screenshots and failure traces. Never put credentials or
 private claim URLs in these variables or reports.
 
+The build and browser checks must receive the same `PUBLIC_BASE_PATH`. They
+check all internal links and assets against that prefix, verify canonical and
+sitemap URLs, and exercise the custom 404 and reference guides at mobile and
+desktop sizes. `SITE_TEST_URL` is always the origin; the configured base is
+added by the test runner.
+
 ## Reviewed content boundary
 
 The only release metadata is `src/data/release.json`. Promote it only after the
@@ -48,10 +54,34 @@ Use `website/` as the project root, the Astro preset, `npm ci`, and `npm run bui
 The deployment output is `website/dist/`. No server adapter is required. Deploy
 only this site directory/output, never the repository's capture evidence tree.
 
-Set `PUBLIC_SITE_URL` to the final verified HTTPS origin for canonical URLs,
+Set `PUBLIC_SITE_URL` to the final verified HTTPS origin (without a path) for canonical URLs,
 the sitemap, and crawlable robots policy. Without it, robots disallows crawling
 and canonical URLs are omitted. A temporary preview is not a permanent owned
 production domain. Deployment and account ownership are handled separately.
+
+## GitHub Pages project site
+
+Following [Astro's GitHub Pages guidance](https://docs.astro.build/en/guides/deploy/github/),
+use a separate origin and project base. Set these environment variables for both
+`npm run build` and `npm test`:
+
+```yaml
+PUBLIC_SITE_URL: https://kvmukilan.github.io
+PUBLIC_BASE_PATH: /livewire/
+```
+
+The resulting canonical home URL is `https://kvmukilan.github.io/livewire/`.
+Upload only `website/dist/` using the reviewed Pages workflow. `.nojekyll` is
+included. Navigation, public assets, imported reference links, sitemap entries,
+and the custom `404.html` retain the project prefix. No browser-side router or
+fallback to an application page is used.
+
+For root-path Vercel hosting, leave `PUBLIC_BASE_PATH` unset (it defaults to `/`)
+and set `PUBLIC_SITE_URL` to that verified origin. GitHub Pages controls its own
+HTTP response headers; Vercel's `vercel.json` header rules do not apply there.
+The project-local `robots.txt` is published under `/livewire/`; ownership of the
+account-root robots policy is separate. Preview builds without a production
+origin include `noindex` and never invent a canonical domain.
 
 Design: slate/navy surfaces, green state indicators, local IBM Plex Sans and
 JetBrains Mono fonts, native links/details, visible keyboard focus, minimal
