@@ -12,7 +12,7 @@ import (
 )
 
 // cmdRstdrop drops the host kernel's outbound RSTs to a target and holds the rule
-// until Ctrl-C. Same guard `live` arms automatically, exposed for use with an
+// until Ctrl-C. Same guard packet TCP replay arms, exposed for use with an
 // external injector (scapy). Needs root (iptables) / Administrator (WinDivert).
 func cmdRstdrop(args []string) error {
 	fs := flag.NewFlagSet("rstdrop", flag.ContinueOnError)
@@ -25,9 +25,9 @@ func cmdRstdrop(args []string) error {
 	fs.Usage = func() {
 		fmt.Println("usage: livewire rstdrop -t <target-ip> -port <port> [-sport <n>]")
 		fmt.Println("\nDrop the host's outbound RSTs to a target until Ctrl-C.")
-		fmt.Println("\nYou usually do not need this: 'reproduce' and 'live' arm the same guard")
-		fmt.Println("automatically for the duration of a replay. Use it only when an external")
-		fmt.Println("injector (Scapy, a hand-rolled script) is sending the packets instead.")
+		fmt.Println("\nAdvanced live packet-TCP replay arms this guard automatically.")
+		fmt.Println("Fresh OS-managed live sessions do not need it. Stateless reproduce/replay")
+		fmt.Println("does not install a guard. This command is an explicit low-level lab control.")
 		printFlags(fs, flagTarget, "port", "sport")
 	}
 	if err := fs.Parse(args); err != nil {

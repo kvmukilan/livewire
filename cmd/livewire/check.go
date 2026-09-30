@@ -38,7 +38,7 @@ func cmdCheck(args []string) error {
 		fmt.Println("usage: livewire check <capture.pcap>")
 		fmt.Println("   or: livewire check -in <capture.pcap> [-details]")
 		fmt.Println("\nLook at a capture without touching the network: what traffic it holds, and")
-		fmt.Println("whether livewire can replay it faithfully. Run this before 'reproduce' if")
+		fmt.Println("whether livewire can replay it faithfully. Run this before 'live' if")
 		fmt.Println("you want to know what you were sent.")
 		printFlags(fs, flagIn, flagDetails, "json", "session")
 	}

@@ -1,0 +1,61 @@
+{
+  "blockingFindings": [],
+  "profile": "software-lab",
+  "schemaVersion": 1,
+  "softwareLab": {
+    "checks": [
+      {
+        "path": "v1.0.1/windows-checks/checks.json",
+        "sha256": "4f62515154f583fad095f44455f57b8938aa176cd98b6cb62425fb8d1e192b8f"
+      },
+      {
+        "path": "v1.0.1/linux-checks/checks.json",
+        "sha256": "eb9b8c9bfea7aace6cd0d942d63e1da76f9945391cef01f41c13bb59114c2482"
+      }
+    ],
+    "humanPilotQualified": false,
+    "limitations": [
+      "Software-lab qualification only; no physical NIC/device or uncoached human-pilot qualification.",
+      "Windows application checks use independent loopback peers; Windows Npcap physical-driver fault behavior is unqualified.",
+      "Linux application and packet checks run on WSL2 software networking; packet peers use owned namespaces and virtual Ethernet.",
+      "Linux arm64 is cross-built and has no runtime qualification in this profile.",
+      "MQTT enhanced authentication, unsupported DNP3 authentication/object/link-control forms, HTTP/2 and HTTP/3 remain unsupported.",
+      "Fault observations and compared responses do not establish an industrial-device crash or other field fault without target-side evidence.",
+      "TLS client-certificate authentication and HTTP/2/3 application replay are outside the supported CLI scope.",
+      "Two-hour matrices cover the built-in cases; custom rule packs, IPv6 TCP/UDP and captured TLS 1.3 combinations have regression coverage, not additional two-hour matrix qualification."
+    ],
+    "physicalQualified": false,
+    "runs": [
+      {
+        "path": "v1.0.1/windows-live/report.json",
+        "sha256": "6e31d4d9da78477be5285bf019d1128576c51b7e14e1916de4e49752452b0026"
+      },
+      {
+        "path": "v1.0.1/windows-reproduce/report.json",
+        "sha256": "801ab777f6614e755115069a58af63c7420b7220236ecb851b103927408eb02c"
+      },
+      {
+        "path": "v1.0.1/linux-live/report.json",
+        "sha256": "d6c8157ee9bc15487ba959056833ac362913da84f40a5e6f4ee32d2e1933953c"
+      },
+      {
+        "path": "v1.0.1/linux-reproduce/report.json",
+        "sha256": "9dd205a060aa6dbd795d0d18a5476df748c0663ada30fbfcaf34121877f9ba0e"
+      },
+      {
+        "path": "v1.0.1/linux-packet/live.run.json",
+        "sha256": "ce5f72014c27b75d9e5fcdb8eb1cb5743bfe9056586656cbbc04ad46fea253fe"
+      },
+      {
+        "path": "v1.0.1/linux-packet/reproduce.run.json",
+        "sha256": "318ff4f62a088d4deff27cfafd4acf7f6fa243ef0881c6441493d524bc0a9ce9"
+      },
+      {
+        "path": "v1.0.1/linux-stateless/replay.run.json",
+        "sha256": "65fb8a569a91975f598d78f14736d3746ec4224f9d02d9913c5980452c7ad914"
+      }
+    ]
+  },
+  "sourceDigest": "8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb",
+  "version": "1.0.1"
+}

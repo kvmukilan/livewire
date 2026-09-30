@@ -66,7 +66,7 @@ func printProtocolReadiness(ready protocolReadiness) {
 	}
 }
 
-// orchestratorOptions contains the requirements shared by `reproduce` and the
+// orchestratorOptions contains the requirements shared by `live` and the
 // positional `live` experience. It deliberately contains values, not flag-set
 // details, so protocol runners do not need to know which front door was used.
 type orchestratorOptions struct {

@@ -1,0 +1,30 @@
+---
+interface Props { code: string; label?: string; }
+const { code, label = 'Terminal' } = Astro.props;
+---
+<div class="code-block">
+  <div class="code-toolbar"><span>{label}</span><button class="copy-button" data-copy type="button" aria-label={`Copy ${label} command`} hidden>Copy <span aria-hidden="true">↗</span></button></div>
+  <pre tabindex="0"><code>{code}</code></pre>
+  <span class="copy-status sr-only" aria-live="polite"></span>
+</div>
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) => {
+    if (!navigator.clipboard) return;
+    button.hidden = false;
+    button.addEventListener('click', async () => {
+      const parent = button.closest('.code-block');
+      const code = parent?.querySelector('code')?.textContent;
+      const status = parent?.querySelector('.copy-status');
+      if (!code || !status) return;
+      try {
+        await navigator.clipboard.writeText(code);
+        button.textContent = 'Copied';
+        status.textContent = 'Command copied to clipboard.';
+      } catch {
+        button.textContent = 'Select text';
+        status.textContent = 'Copy unavailable. Select the command text to copy it.';
+      }
+      setTimeout(() => { button.textContent = 'Copy ↗'; }, 2200);
+    });
+  });
+</script>

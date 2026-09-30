@@ -44,6 +44,9 @@ type labCounts struct {
 }
 
 func validateLabTranscript(run LabRun, base string) error {
+	if !labCommandAllowed(run.Version, run.Suite, run.Command) {
+		return fmt.Errorf("lab command does not match the release contract")
+	}
 	if run.Suite == "stateless" {
 		return validateStatelessTranscript(run, base)
 	}
@@ -72,6 +75,7 @@ func validateLabTranscript(run LabRun, base string) error {
 	}
 	totals := map[string]LabCaseResult{}
 	rounds := map[string]int{}
+	usedArtifacts := map[string]bool{}
 	packetCleanup := false
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 4<<20)
@@ -94,7 +98,7 @@ func validateLabTranscript(run LabRun, base string) error {
 				if packetCleanup {
 					return fmt.Errorf("packet execution after cleanup")
 				}
-				if (event.Command != "live" && event.Command != "reproduce") || event.Case == "" || event.Error != "" || event.Repeat < 2 || event.Round < 1 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !event.CleanupVerified {
+				if !labCommandAllowed(run.Version, "packet", event.Command) || event.Case == "" || event.Error != "" || event.Repeat < 2 || event.Round < 1 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !event.CleanupVerified {
 					return fmt.Errorf("invalid packet execution at transcript line %d", line)
 				}
 			default:
@@ -130,12 +134,26 @@ func validateLabTranscript(run LabRun, base string) error {
 				return fmt.Errorf("incomplete CLI reports for %s", event.Case)
 			}
 			seen := map[string]bool{}
+			var reports [][]byte
 			for _, path := range paths {
 				if seen[path] {
 					return fmt.Errorf("duplicate CLI report for %s", event.Case)
 				}
 				seen[path] = true
-				if _, err := read(path, ""); err != nil {
+				data, err := read(path, "")
+				if err != nil {
+					return err
+				}
+				reports = append(reports, data)
+			}
+			if UsesStatelessReproduce(run.Version) {
+				for _, path := range append(append([]string{}, paths...), event.Output) {
+					if usedArtifacts[path] {
+						return fmt.Errorf("reused application execution artifact %q", path)
+					}
+					usedArtifacts[path] = true
+				}
+				if err := validateApplicationCLIReports(run.Version, event, reports); err != nil {
 					return err
 				}
 			}

@@ -42,7 +42,7 @@ type LabCaseResult struct {
 type LabRun struct {
 	SchemaVersion   int             `json:"schemaVersion"`
 	Version         string          `json:"version"`
-	Suite           string          `json:"suite"` // application or packet
+	Suite           string          `json:"suite"` // application, packet, or stateless
 	Platform        string          `json:"platform"`
 	Environment     string          `json:"environment"`
 	Command         string          `json:"command"`
@@ -113,7 +113,7 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		need(!run.Interrupted && run.CleanupVerified, label+"interrupted or cleanup unverified")
 		need(run.Finished.Sub(run.Started) >= SoakSeconds*time.Second, label+"two-hour run missing")
 		stateless := run.Suite == "stateless"
-		need((!stateless && (run.Command == "live" || run.Command == "reproduce")) || (stateless && run.Command == "replay" && run.Platform == "linux-amd64"), label+"unknown command or stateless platform")
+		need(labCommandAllowed(o.Version, run.Suite, run.Command) && (!stateless || run.Platform == "linux-amd64"), label+"command does not match the release contract or stateless platform")
 		need(run.Platform == "windows-amd64" || run.Platform == "linux-amd64", label+"unknown platform")
 		name := "livewire-" + o.Version + "-" + run.Platform
 		if strings.HasPrefix(run.Platform, "windows") {
@@ -157,13 +157,8 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 			errs = append(errs, label+err.Error())
 		}
 	}
-	for _, platformSuite := range []string{"windows-amd64/application", "linux-amd64/application", "linux-amd64/packet"} {
-		for _, command := range []string{"live", "reproduce"} {
-			need(seen[platformSuite+"/"+command], "missing lab run: "+platformSuite+"/"+command)
-		}
-	}
-	if requiresStatelessLab(o.Version) {
-		need(seen["linux-amd64/stateless/replay"], "missing lab run: linux-amd64/stateless/replay")
+	for _, key := range requiredLabRuns(o.Version) {
+		need(seen[key], "missing lab run: "+key)
 	}
 	checked := map[string]bool{}
 	for _, ref := range lab.Checks {

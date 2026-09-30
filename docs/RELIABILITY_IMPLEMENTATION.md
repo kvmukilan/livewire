@@ -1,26 +1,30 @@
 # Replay reliability implementation
 
-This describes the 1.0 implementation. The
+This describes the 1.1 command contract and replay implementation. The
 [software-lab qualification profile](V1_QUALIFICATION.md) defines release evidence;
 physical-device qualification remains separate. The
 [2026-09-29 reliability review](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELIABILITY_REVIEW_2026-09-29.md) is an earlier
 implementation snapshot; protocol behavior below includes subsequent fixes.
-Positional `live capture.pcap` and `reproduce` share the fresh-session
-orchestrator. `live -in` with explicit secure inputs also uses it; without
+Positional `live capture.pcap` uses the fresh-session orchestrator.
+`reproduce capture.pcap` is stateless packet transmission; `replay` is its
+compatibility alias. `live -in` with explicit secure inputs also uses the
+fresh-session orchestrator; without
 secure inputs, `live -in` retains its simulation default and transport driver. Application replay uses
 operating-system TCP; transport and wire execution retain their own drivers.
 Each TCP application attempt establishes fresh connection state. TLS captures are decrypted
 offline with explicitly supplied key material, then replayed over new verified
 TLS connections; captured TLS keys and ciphertext do not become the live session.
-Compatibility commands and deprecated flag aliases remain available through 1.x.
+Compatibility commands remain available. From 1.0.x, move application-style
+`reproduce ... -t ...` commands to `live ... -t ...`; application flags on
+stateless `reproduce` are rejected before sending.
 
 ## Run and resume
 
 ```text
-livewire reproduce issue.pcap -t 192.0.2.50 -dry-run -details
-livewire reproduce issue.pcap -t 192.0.2.50 -state-dir run-001 -strict-exit -run-timeout 10m
+livewire live issue.pcap -t 192.0.2.50 -dry-run -details
+livewire live issue.pcap -t 192.0.2.50 -state-dir run-001 -strict-exit -run-timeout 10m
 livewire live issue.pcap -t 192.0.2.50 -resume run-001 -dry-run
-livewire reproduce issue.pcap -t 192.0.2.50 -resume run-001 -strict-exit -run-timeout 10m
+livewire live issue.pcap -t 192.0.2.50 -resume run-001 -strict-exit -run-timeout 10m
 ```
 
 Repeat the original target, replay, security, scenario, and protocol options.
@@ -203,9 +207,10 @@ changed bodies, split/coalesced/reordered/duplicate/unsolicited/malformed traffi
 and cancellation and resource cleanup. Test code defines the scenarios; retained
 passing logs establish which checks actually ran.
 
-The 1.0 software-lab profile requires native Windows/Linux checks, independent
-application peers, Linux virtual packet networking, and successful repeated
-`reproduce` and `live` executions spanning two hours per required case. A smoke
+The 1.1 software-lab profile requires native Windows/Linux checks, independent
+application peers, Linux virtual packet networking, and successful stateful
+`live` and stateless `reproduce`/`replay` executions spanning two hours per
+required case. A smoke
 run or an in-progress soak does not satisfy that gate. See
 [V1_QUALIFICATION.md](V1_QUALIFICATION.md) for the exact scope and final evidence.
 The separate physical profile retains its three-consecutive-pass, device/firmware,

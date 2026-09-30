@@ -28,7 +28,7 @@ func TestWholeBinaryDefaultFrontDoorsAgainstIndependentStreamPeers(t *testing.T)
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build actual CLI: %v\n%s", err, output)
 	}
-	for _, command := range []string{"live", "reproduce"} {
+	for _, command := range []string{"live"} {
 		t.Run(command, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
@@ -65,7 +65,7 @@ func TestWholeBinaryDefaultFrontDoorsAgainstIndependentStreamPeers(t *testing.T)
 }
 
 func TestLabValidationRejectsAmbiguousRuns(t *testing.T) {
-	for _, options := range []Options{{Command: "unknown", Repeat: 2}, {Command: "live", Repeat: 1}, {Command: "live", Repeat: 2, Duration: -time.Second}, {Command: "live", Repeat: 2, Cases: []string{"missing"}}, {Command: "live", Repeat: 2, Cases: []string{"http1", "http1"}}} {
+	for _, options := range []Options{{Command: "unknown", Repeat: 2}, {Command: "reproduce", Version: "1.1.0", Repeat: 2}, {Command: "replay", Version: "1.1.0", Repeat: 2}, {Command: "live", Repeat: 1}, {Command: "live", Repeat: 2, Duration: -time.Second}, {Command: "live", Repeat: 2, Cases: []string{"missing"}}, {Command: "live", Repeat: 2, Cases: []string{"http1", "http1"}}} {
 		if _, err := Run(context.Background(), options); err == nil {
 			t.Fatalf("invalid options accepted: %+v", options)
 		}

@@ -190,7 +190,7 @@ type oneFlowResult struct {
 // offset when -pace is set (so overlapping connections overlap on the wire as
 // they did in the recording) — the fidelity that "only happens under load" bugs
 // need. -sequential forces one-at-a-time. logf carries progress; idx<0 is a
-// global line, idx>=0 is scoped to a flow. Shared by `live -all` and `reproduce`.
+// global line, idx>=0 is scoped to a flow. Shared by legacy and primary live replay.
 func replayAllFlows(flows []*engine.Flow, o liveOpts, logf func(idx int, line string)) (results []oneFlowResult, skipped int) {
 	type task struct {
 		idx    int

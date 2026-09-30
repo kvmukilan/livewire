@@ -32,19 +32,26 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 ```sh
 livewire check issue.pcap                      # what is in the capture, can it be replayed
 livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
-livewire reproduce issue.pcap -t 192.168.1.50  # replay it against your device
+livewire reproduce issue.pcap -i eth0          # stateless replay of the recorded packets
 livewire web                                   # the same workflow in a browser
 ```
 
-`reproduce` asks for anything it still needs, with the right answer
-pre-selected, and reports matching checked responses, differences, or an
-incomplete/unverified exchange. It saves a shareable report next to the capture.
+**`live` is stateful.** It creates fresh application connections, lets the OS
+maintain TCP state, and adapts supported protocol state to live responses. It
+reports checked response matches, differences, or incomplete exchanges, and
+saves a shareable report next to the capture.
 
-`live` and `reproduce` use fresh application sessions by default; no extra mode
-choice is needed. The OS maintains TCP state and supported adapters update
-application state from live responses. For stateless packet injection, use
-`livewire replay -in issue.pcap -i <connection>`: it sends captured bytes in
-capture order without establishing TCP/TLS sessions or checking replies.
+**`reproduce` is stateless.** It sends the recorded frames in capture order,
+including both recorded directions, using captured timing or an explicit rate.
+It does not establish TCP/TLS sessions or check responses. Use `-dry-run` to
+preview and `-report packets.json` to retain transmission counts. `replay` is
+a compatibility alias for this same packet sender. Neither primary command
+requires a mode choice.
+
+**Upgrading from 1.0.x:** application commands formerly written as
+`reproduce capture.pcap -t ...` must use `live capture.pcap -t ...` in 1.1.
+Application-only options on `reproduce` are rejected with migration guidance.
+See the [command migration](docs/V1_FOLLOWUP.md).
 
 For a TLS capture, use
 `livewire live tls.pcap -keylog sslkeys.log -t device.example:443`.
@@ -60,9 +67,9 @@ When you need to be precise about what is replayed:
 
 ```sh
 livewire check issue.pcap -details                                        # list the sessions
-livewire reproduce issue.pcap -session tcp-0 -dry-run   # preview, send nothing
-livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50
-livewire reproduce issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
+livewire live issue.pcap -session tcp-0 -dry-run   # preview, send nothing
+livewire live issue.pcap -session tcp-0 -t 192.168.1.50
+livewire live issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
 livewire compare issue.pcap issue.actual.pcap                             # where did it diverge
 ```
 
@@ -73,7 +80,7 @@ captured TCP behavior, repeated attempts, and durable progress. Matching checked
 responses alone does not prove that the original device fault recurred.
 
 To check a response timeout explicitly, use
-`livewire reproduce issue.pcap -t 192.168.1.50 -response-timeout 5s -expect-fault timeout`.
+`livewire live issue.pcap -t 192.168.1.50 -response-timeout 5s -expect-fault timeout`.
 This applies to TCP/TLS application replay and records the fault separately from
 response equivalence. MQTT keepalives and DNP3 fragment confirmations are serviced
 during replay; unsupported authentication and DNP3 object layouts stop with an

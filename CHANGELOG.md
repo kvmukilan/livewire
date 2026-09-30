@@ -2,6 +2,36 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.1.0] - Unreleased
+
+Correct the primary command contract: **`live` is stateful application replay;
+`reproduce` is stateless captured-packet replay.** `replay` remains a
+compatibility alias for `reproduce`. Neither primary command requires a mode.
+
+**Migration from 1.0.x:** use `live` for former application commands such as
+`reproduce capture.pcap -t device`. Application-only options on `reproduce`
+are rejected before capture loading or network access, with migration guidance.
+Existing versioned releases and evidence remain unchanged.
+
+- Route `reproduce` through the checked stateless sender, preserving recorded
+  bytes, both directions, capture order and selected pacing. Require an explicit
+  interface to send; keep dry runs free of network activity.
+- Accept positional capture paths and historical `-in` for stateless commands.
+  Reports name the invoked command and always retain `verified: false`.
+- Keep fresh TCP/TLS, live protocol state, response comparison and durable
+  application recovery under `live`. Preserve historical `live -in` dry runs.
+- Align command help, operator guides and dashboard labels with the two purposes.
+- Require fresh stateful `live` and stateless `reproduce`/`replay` qualification,
+  including independent mixed-protocol frame captures. Earlier application
+  `reproduce` results cannot qualify the corrected command.
+- Add the static product/documentation website, with local fonts, accessible
+  navigation, version-pinned downloads and explicit TLS/qualification boundaries.
+
+Qualification is in progress; final release evidence will be recorded before
+publication. Stateless TLS bytes can be sent without decryption keys, but they
+cannot establish a new TLS application session. Fresh secure application replay
+continues to require matching capture key material or supported explicit inputs.
+
 ## [1.0.1] - 2026-09-30
 
 Fresh application sessions are now the default for `live`, `reproduce` and

@@ -1,0 +1,13 @@
+---
+import Base from './Base.astro';
+import { navigation, release } from '../data/site';
+interface Props { title: string; description: string; eyebrow?: string; sections?: {id: string; label: string}[]; }
+const { title, description, eyebrow = 'OPERATOR GUIDE', sections = [] } = Astro.props;
+---
+<Base title={title} description={description}>
+  <div class="guide-layout wrap">
+    <aside class="guide-sidebar"><a class="sidebar-home" href="/">← Overview</a><span class="eyebrow">DOCUMENTATION</span><nav aria-label="Documentation">{navigation.map(item => <a href={item.href} aria-current={Astro.url.pathname === item.href ? 'page' : undefined}>{item.label}</a>)}</nav><div class="sidebar-version">Examples for <strong>v{release.version}</strong><span>Verified release downloads</span></div></aside>
+    <article class="guide-content"><header class="guide-heading"><span class="eyebrow">{eyebrow}</span><h1>{title}</h1><p class="lede">{description}</p></header><slot /></article>
+    {sections.length > 0 && <aside class="guide-toc"><span class="eyebrow">ON THIS PAGE</span><nav aria-label="On this page">{sections.map(section => <a href={`#${section.id}`}>{section.label}</a>)}</nav></aside>}
+  </div>
+</Base>

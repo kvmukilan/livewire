@@ -10,6 +10,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 from pathlib import Path
 import signal
 import socket
@@ -262,7 +263,68 @@ def decode_pcap(path):
     return out
 
 
-def stateless_fixture(path):
+def corrected_contract(version):
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:-[A-Za-z0-9.-]+)?", version)
+    if match is None:
+        raise ValueError("expected a release version such as 1.1.0")
+    return tuple(map(int, match.groups())) >= (1, 1, 0)
+
+
+def is_stateless(command, version):
+    return command == "replay" or command == "reproduce" and corrected_contract(version)
+
+
+def protocol_byte_frames():
+    """Representative protocol bytes, including opaque security records.
+
+    These are deliberately not authenticated TLS/SSH sessions. Application
+    behavior is qualified separately by the live suite's independent peers.
+    """
+    cmac, smac = STATELESS_MACS
+    frames = []
+
+    def tcp(port, payload, reverse=False, ipv6=False):
+        client, server = (C6, S6) if ipv6 else (C4, S4)
+        src, dst, sp, dp = (server, client, port, 41000) if reverse else (client, server, 41000, port)
+        body = struct.pack("!HHIIBBHHH", sp, dp, 1000 + len(frames), 9000, 80, 24, 65535, 0, 0) + payload
+        frames.append(packet(src, dst, 6, transport(src, dst, 6, body, 16), cmac, smac, reverse))
+
+    tcp(80, b"GET /capture HTTP/1.1\r\nHost: lab.invalid\r\n\r\n")
+    tcp(53, struct.pack("!H", len(DNS_QUERY)) + DNS_QUERY)
+    for level, port in ((4, 1883), (5, 1884)):
+        body = b"\x00\x04MQTT" + bytes([level, 2, 0, 60])
+        if level == 5:
+            body += b"\x00"  # no MQTT 5 CONNECT properties
+        body += b"\x00\x0ccaptured-lab"
+        tcp(port, b"\x10" + bytes([len(body)]) + body)
+    tcp(502, bytes.fromhex("000100000006010300000001"))
+
+    def dnp_crc(data):
+        crc = 0
+        for byte in data:
+            crc ^= byte
+            for _ in range(8):
+                crc = (crc >> 1) ^ (0xA6BC if crc & 1 else 0)
+        return struct.pack("<H", (~crc) & 0xffff)
+    # Unconfirmed link data, first/last transport and application READ.
+    user = bytes.fromhex("c0c0013c0106")
+    header = bytes.fromhex("0564") + bytes([5 + len(user), 0xc4, 1, 0, 0, 4])
+    tcp(20000, header + dnp_crc(header) + user + dnp_crc(user))
+    tcp(21, b"220 Captured FTP service\r\n", reverse=True)
+    tcp(20, b"captured FTP data bytes", reverse=True)
+    tcp(21, b"AUTH TLS\r\n")
+    opaque_tls = bytes.fromhex("1703030020") + bytes(range(32))
+    tcp(21, opaque_tls)
+    tcp(990, opaque_tls, reverse=True)
+    tcp(22, b"SSH-2.0-CapturedLab\r\n", reverse=True)
+    tcp(22, bytes(range(32)))
+    tcp(19001, b"captured IPv6 TCP bytes", ipv6=True)
+    body = struct.pack("!HHHH", 41001, 19000, 8 + len(UDP_REQ), 0) + UDP_REQ
+    frames.append(packet(C6, S6, 17, transport(C6, S6, 17, body, 6), cmac, smac))
+    return frames
+
+
+def stateless_fixture(path, version="1.0.1"):
     """Opaque mixed Ethernet bytes; no application/security semantics claimed."""
     cmac, smac = STATELESS_MACS
     frames = []
@@ -279,6 +341,8 @@ def stateless_fixture(path):
     echo = struct.pack("!BBHHH", 128, 0, 0, 4242, 1) + ECHO
     frames.append(packet(C6, S6, 58, transport(C6, S6, 58, echo, 2), cmac, smac))
     frames.append(smac + cmac + bytes.fromhex("88b5") + b"unknown Ethernet payload")
+    if corrected_contract(version):
+        frames.extend(protocol_byte_frames())
     frames = [frame.ljust(60, b"\0") for frame in frames]
     with Path(path).open("xb") as output:
         output.write(struct.pack("<IHHIIII", 0xA1B2C3D4, 2, 4, 0, 0, 65535, 1))
@@ -306,7 +370,7 @@ def ethernet_frames(path):
     return frames
 
 
-def verify_stateless_report(report, fixture, capture, repeats, version):
+def verify_stateless_report(report, fixture, capture, repeats, version, command="replay"):
     expected = ethernet_frames(fixture)
     observed = ethernet_frames(capture)
     if not expected or observed != expected * repeats:
@@ -314,6 +378,10 @@ def verify_stateless_report(report, fixture, capture, repeats, version):
     wanted = {"tool": "livewire", "version": version, "mode": "wire", "status": "wire",
               "completed": True, "verified": False, "passes": repeats, "framesPerPass": len(expected),
               "framesSent": len(observed), "captureDigest": "sha256:" + sha(fixture)}
+    if corrected_contract(version):
+        if command not in ("reproduce", "replay"):
+            raise ValueError("not a stateless front door")
+        wanted["command"] = command
     if any(type(report.get(k)) is not type(v) or report.get(k) != v for k, v in wanted.items()) or report.get("error"):
         raise ValueError("stateless report differs or claims verified application behavior")
     return len(observed)
@@ -421,8 +489,8 @@ class Lab:
         def mac(namespace, interface):
             info = json.loads(self.run(["ip", "-n", namespace, "-j", "link", "show", "dev", interface]))
             return bytes.fromhex(info[0]["address"].replace(":", ""))
-        if self.args.command == ["replay"]:
-            stateless_fixture(self.out / "mixed-frames.pcap")
+        if len(self.args.command) == 1 and is_stateless(self.args.command[0], self.args.version):
+            stateless_fixture(self.out / "mixed-frames.pcap", self.args.version)
             self.event(event="setup", clientNamespace=self.client, serverNamespace=self.server, scriptSha256=sha(__file__))
             return
         fixtures(self.out, mac(self.client, self.cif), mac(self.server, self.sif))
@@ -436,8 +504,8 @@ class Lab:
     def execute(self, command, name, round_number):
         if sha(self.args.binary) != self.binary_sha:
             raise RuntimeError("CLI binary changed during qualification")
-        if command == "replay":
-            return self.execute_stateless(round_number)
+        if is_stateless(command, self.args.version):
+            return self.execute_stateless(command, round_number)
         prefix = self.out / ("%s-%s-%05d" % (command, name, round_number))
         capture = Path(str(prefix) + ".independent.pcap")
         capture_filter = "ether src 02:42:42:00:00:01" if name == "wire" else "ip or ip6"
@@ -508,8 +576,8 @@ class Lab:
         self.event(event="pass", command=command, case=name, round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, requests=requests, responses=responses, elapsedSeconds=round(time.monotonic() - monotonic, 4), impairment="netem delay 5ms 1ms loss 2% reorder 10% 50%" if impaired else "none", independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=Path(str(prefix) + ".report.json").name, reportSha256=self.checked_evidence[Path(str(prefix) + ".report.json").name], **proof)
         print(json.dumps({"command": command, "case": name, "round": round_number, "passes": case["passes"]}), flush=True)
 
-    def execute_stateless(self, round_number):
-        prefix = self.out / ("replay-mixed-frames-%05d" % round_number)
+    def execute_stateless(self, command, round_number):
+        prefix = self.out / ("%s-mixed-frames-%05d" % (command, round_number))
         capture = Path(str(prefix) + ".independent.pcap")
         fixture = self.out / "mixed-frames.pcap"
         capture_filter = " or ".join("ether src " + ":".join("%02x" % b for b in mac) for mac in STATELESS_MACS)
@@ -521,7 +589,7 @@ class Lab:
         report_path = Path(str(prefix) + ".report.json")
         output_path = Path(str(prefix) + ".cli.log")
         began = utc()
-        argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), "replay", "-in", str(fixture), "-i", self.cif, "-n", "3", "-report", str(report_path)]
+        argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), command, "-in", str(fixture), "-i", self.cif, "-n", "3", "-report", str(report_path)]
         result = subprocess.run(argv, capture_output=True, text=True, timeout=25)
         output_path.write_text(result.stdout + result.stderr, encoding="utf-8")
         time.sleep(0.05)
@@ -531,7 +599,7 @@ class Lab:
         cap.lab_log_handle.close()
         self.handles.remove(cap.lab_log_handle)
         if result.returncode != 0: raise RuntimeError("stateless CLI failed: " + result.stdout + result.stderr)
-        frames = verify_stateless_report(json.loads(report_path.read_text()), fixture, capture, 3, self.args.version)
+        frames = verify_stateless_report(json.loads(report_path.read_text()), fixture, capture, 3, self.args.version, command)
         rules = self.run(["ip", "netns", "exec", self.client, "iptables-save"])
         firewall = Path(str(prefix) + ".firewall.txt")
         firewall.write_text(rules, encoding="utf-8")
@@ -540,14 +608,14 @@ class Lab:
             ref = evidence_ref(self.out, artifact)
             self.checked_evidence[ref["path"]] = ref["sha256"]
         finished = utc()
-        case = self.results["replay"]["mixed-frames"]
+        case = self.results[command]["mixed-frames"]
         case["firstAt"] = case.get("firstAt", began)
         case["lastAt"], case["cleanupVerified"] = finished, True
         case["passes"] += 1
         case["repeatedProcessPasses"] += 1
         case["framesObserved"] = case.get("framesObserved", 0) + frames
-        self.event(event="pass", command="replay", case="mixed-frames", round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, framesObserved=frames, requests=0, responses=0, fixture=fixture.name, fixtureSha256=self.checked_evidence[fixture.name], independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=report_path.name, reportSha256=self.checked_evidence[report_path.name], output=output_path.name, firewall=firewall.name, firewallSha256=self.checked_evidence[firewall.name])
-        print(json.dumps({"command": "replay", "case": "mixed-frames", "round": round_number, "passes": case["passes"], "frames": frames}), flush=True)
+        self.event(event="pass", command=command, case="mixed-frames", round=round_number, started=began, finished=finished, repeat=3, cleanupVerified=True, framesObserved=frames, requests=0, responses=0, fixture=fixture.name, fixtureSha256=self.checked_evidence[fixture.name], independentCapture=capture.name, captureSha256=self.checked_evidence[capture.name], report=report_path.name, reportSha256=self.checked_evidence[report_path.name], output=output_path.name, firewall=firewall.name, firewallSha256=self.checked_evidence[firewall.name])
+        print(json.dumps({"command": command, "case": "mixed-frames", "round": round_number, "passes": case["passes"], "frames": frames}), flush=True)
 
     def cleanup(self):
         clean = True
@@ -582,7 +650,7 @@ class Lab:
             evidence = [{"path": name, "sha256": digest} for name, digest in sorted(self.checked_evidence.items())]
             evidence.append(evidence_ref(self.out, self.transcript))
         for command, cases in self.results.items():
-            doc = {"schemaVersion": 1, "version": self.args.version, "suite": "stateless" if command == "replay" else "packet", "platform": "linux-amd64", "environment": "Linux isolated owned network namespaces and veth; software peers; no physical NIC qualification", "command": command, "binarySha256": self.binary_sha, "sourceDigest": self.args.source_digest, "started": self.started, "finished": utc(), "interrupted": interrupted, "cleanupVerified": clean, "cases": list(cases.values()), "evidence": evidence}
+            doc = {"schemaVersion": 1, "version": self.args.version, "suite": "stateless" if is_stateless(command, self.args.version) else "packet", "platform": "linux-amd64", "environment": "Linux isolated owned network namespaces and veth; software peers; no physical NIC qualification", "command": command, "binarySha256": self.binary_sha, "sourceDigest": self.args.source_digest, "started": self.started, "finished": utc(), "interrupted": interrupted, "cleanupVerified": clean, "cases": list(cases.values()), "evidence": evidence}
             (self.out / (command + ".run.json")).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         if evidence_error is not None:
             raise evidence_error
@@ -597,19 +665,25 @@ def main():
     p.add_argument("--output", required=True, help="new directory for immutable evidence")
     p.add_argument("--source-digest", required=True)
     p.add_argument("--version", required=True, help="expected executable release version")
-    p.add_argument("--command", choices=["live", "reproduce", "replay"], action="append", help="omit for both stateful front doors; replay uses a separate output directory")
+    p.add_argument("--command", choices=["live", "reproduce", "replay"], action="append", help="live packet suite by default; reproduce/replay each require a separate stateless run (pre-1.1 versions retain historical routing)")
     p.add_argument("--case", choices=CASES + ["mixed-frames"], action="append", help="targeted smoke checks; omit for full qualification")
     p.add_argument("--duration", type=float, default=7200)
     p.add_argument("--round-gap", type=float, default=5)
     p.add_argument("--netem", action="store_true", help="exercise stateful TCP with namespace-local loss, jitter, and reordering")
     args = p.parse_args()
-    args.command = args.command or ["live", "reproduce"]
-    if "replay" in args.command:
-        if args.command != ["replay"] or args.case not in (None, ["mixed-frames"]): p.error("replay requires a separate run containing only mixed-frames")
+    try:
+        corrected = corrected_contract(args.version)
+    except ValueError as error:
+        p.error(str(error))
+    args.command = args.command or (["live"] if corrected else ["live", "reproduce"])
+    if len(set(args.command)) != len(args.command): p.error("duplicate commands are not separate runs")
+    if any(is_stateless(command, args.version) for command in args.command):
+        if len(args.command) != 1 or args.case not in (None, ["mixed-frames"]): p.error("stateless reproduce/replay requires a separate run containing only mixed-frames")
         args.case = ["mixed-frames"]
+        if args.netem: p.error("stateless byte-fidelity checks do not use loss/reordering impairment")
     else:
         args.case = args.case or CASES
-        if "mixed-frames" in args.case: p.error("mixed-frames requires --command replay")
+        if "mixed-frames" in args.case: p.error("mixed-frames requires a stateless reproduce/replay command")
     if os.geteuid() != 0: p.error("requires root for owned network namespaces and raw packet capture")
     lab = Lab(args)
     interrupted, clean = True, False

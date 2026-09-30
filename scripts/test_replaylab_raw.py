@@ -1,5 +1,7 @@
 """Artifact integrity checks; these do not require packet privileges."""
 import json
+import contextlib
+import io
 import struct
 import signal
 from pathlib import Path
@@ -8,7 +10,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from replaylab_raw import Lab, collect_evidence, decode_pcap, evidence_ref, ethernet_frames, main, sha, stateless_fixture, verify_stateless_report, verify_wire_capture, verify_wire_report, wire_fixture
+from replaylab_raw import Lab, collect_evidence, corrected_contract, decode_pcap, evidence_ref, ethernet_frames, is_stateless, main, sha, stateless_fixture, verify_stateless_report, verify_wire_capture, verify_wire_report, wire_fixture
 
 
 class EvidenceTests(unittest.TestCase):
@@ -61,6 +63,62 @@ class EvidenceTests(unittest.TestCase):
 
 
 class StatelessTests(unittest.TestCase):
+    def test_versioned_command_routing_before_any_network_setup(self):
+        class Parsed(Exception):
+            pass
+        def parsed(version, commands):
+            found = []
+            def construct(args):
+                found.append(args)
+                raise Parsed()
+            argv = ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", version]
+            for command in commands:
+                argv += ["--command", command]
+            with patch("sys.argv", argv), patch("replaylab_raw.os.geteuid", return_value=0, create=True), patch("replaylab_raw.Lab", side_effect=construct):
+                with self.assertRaises(Parsed):
+                    main()
+            return found[0]
+        self.assertEqual(parsed("1.0.1", []).command, ["live", "reproduce"])
+        self.assertEqual(parsed("1.1.0", []).command, ["live"])
+        self.assertNotEqual(parsed("1.0.1", ["reproduce"]).case, ["mixed-frames"])
+        for command in ("reproduce", "replay"):
+            args = parsed("1.1.0", [command])
+            self.assertEqual((args.command, args.case), ([command], ["mixed-frames"]))
+            self.assertTrue(is_stateless(command, args.version))
+        self.assertFalse(is_stateless("reproduce", "1.0.1"))
+        self.assertTrue(corrected_contract("v1.1.0-rc.1"))
+        for tail in (["--command", "live", "--command", "reproduce"], ["--command", "reproduce", "--command", "replay"], ["--command", "live", "--command", "live"], ["--command", "reproduce", "--netem"], ["--command", "live", "--case", "mixed-frames"]):
+            argv = ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", "1.1.0", *tail]
+            with self.subTest(tail=tail), patch("sys.argv", argv), patch("replaylab_raw.Lab") as constructor, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    main()
+                constructor.assert_not_called()
+
+    def test_corrected_stateless_fixture_covers_protocol_bytes_and_actual_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture, actual = Path(directory) / "mixed.pcap", Path(directory) / "actual.pcap"
+            frames = stateless_fixture(fixture, "1.1.0")
+            self.assertEqual(len(frames), 22)
+            rows = decode_pcap(fixture)
+            ports = {row.get("dport") for row in rows} | {row.get("sport") for row in rows}
+            self.assertTrue({20, 21, 22, 53, 80, 443, 502, 990, 1883, 1884, 20000}.issubset(ports))
+            payloads = [row.get("payload", b"") for row in rows]
+            self.assertTrue(any(b"MQTT\x04" in payload for payload in payloads))
+            self.assertTrue(any(b"MQTT\x05" in payload for payload in payloads))
+            self.assertIn(b"AUTH TLS\r\n", payloads)
+            self.assertTrue(any(payload.startswith(b"SSH-2.0-") for payload in payloads))
+            self.assertTrue(any(payload.startswith(b"\x05\x64") for payload in payloads))
+            data = fixture.read_bytes()[:24]
+            for frame in frames * 3:
+                data += struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame
+            actual.write_bytes(data)
+            for command in ("reproduce", "replay"):
+                report = {"tool": "livewire", "version": "1.1.0", "command": command, "mode": "wire", "status": "wire", "completed": True, "verified": False, "passes": 3, "framesPerPass": 22, "framesSent": 66, "captureDigest": "sha256:" + sha(fixture)}
+                self.assertEqual(verify_stateless_report(report, fixture, actual, 3, "1.1.0", command), 66)
+                for wrong in ("live", "replay" if command == "reproduce" else "reproduce", None):
+                    with self.subTest(command=command, wrong=wrong), self.assertRaises(ValueError):
+                        verify_stateless_report(dict(report, command=wrong), fixture, actual, 3, "1.1.0", command)
+
     def test_wire_interleaved_sessions_reject_session_grouping_and_tie_reordering(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture, capture = Path(directory) / "wire.pcap", Path(directory) / "observed.pcap"

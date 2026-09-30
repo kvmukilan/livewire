@@ -210,7 +210,7 @@ func TestUnifiedTLSNoModeUsesFreshHandshakeAcrossVersions(t *testing.T) {
 	for _, command := range []struct {
 		name string
 		run  func([]string) error
-	}{{"live", cmdLive}, {"live-in", func(args []string) error { return cmdLive(append([]string{"-in"}, args...)) }}, {"reproduce", cmdReproduce}} {
+	}{{"live", cmdLive}, {"live-in", func(args []string) error { return cmdLive(append([]string{"-in"}, args...)) }}} {
 		for _, captured := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
 			t.Run(command.name+"/captured-"+tls.VersionName(captured), func(t *testing.T) {
 				captureCert, _ := testTLSCertificate(t)
@@ -261,7 +261,7 @@ func TestUnifiedTLSCertificateFailureSendsNoApplicationBytes(t *testing.T) {
 	for _, command := range []struct {
 		name string
 		run  func([]string) error
-	}{{"live", cmdLive}, {"reproduce", cmdReproduce}} {
+	}{{"live", cmdLive}} {
 		for _, reason := range []string{"wrong-hostname", "untrusted-ca"} {
 			t.Run(command.name+"/"+reason, func(t *testing.T) {
 				captureCert, _ := testTLSCertificate(t)
@@ -322,7 +322,7 @@ func TestUnifiedTLSInvalidInputsStopBeforeDial(t *testing.T) {
 	for _, command := range []struct {
 		name string
 		run  func([]string) error
-	}{{"live", cmdLive}, {"reproduce", cmdReproduce}} {
+	}{{"live", cmdLive}} {
 		for _, tc := range []struct {
 			name, capture, keylog, ca, want string
 		}{
@@ -417,7 +417,7 @@ func writeTLSFixture(t *testing.T, dir string, events []tlsWireEvent, keylog, ca
 	return capture, keylogPath, caPath
 }
 
-func TestUnifiedReproduceReterminatesVerifiedTLS(t *testing.T) {
+func TestUnifiedLiveReterminatesVerifiedTLS(t *testing.T) {
 	cert, ca := testTLSCertificate(t)
 	events, keylog := captureHTTPOverTLS(t, cert)
 	capture, keylogPath, caPath := writeTLSFixture(t, t.TempDir(), events, keylog, ca)
@@ -455,7 +455,7 @@ func TestUnifiedReproduceReterminatesVerifiedTLS(t *testing.T) {
 	}()
 
 	report := filepath.Join(t.TempDir(), "tls.report.json")
-	err = cmdReproduce([]string{capture, "-keylog", keylogPath, "-t", listener.Addr().String(), "-server-name", "localhost", "-ca", caPath, "-strict", "-timeout", "2s", "-report", report})
+	err = cmdLive([]string{capture, "-keylog", keylogPath, "-t", listener.Addr().String(), "-server-name", "localhost", "-ca", caPath, "-strict", "-timeout", "2s", "-report", report})
 	if err != nil {
 		t.Fatalf("unified TLS reproduce: %v", err)
 	}
@@ -522,7 +522,7 @@ func TestUnifiedTLSIterationsReportActualIntermittence(t *testing.T) {
 
 	reportBase := filepath.Join(t.TempDir(), "tls.report.json")
 	bin := buildBinary(t)
-	out, runErr := runBinary(t, bin, "reproduce", capture,
+	out, runErr := runBinary(t, bin, "live", capture,
 		"-keylog", keylogPath, "-t", listener.Addr().String(), "-server-name", "localhost", "-ca", caPath,
 		"-timeout", "2s", "-n", "2", "-gap", "0s", "-report", reportBase)
 	if runErr != nil {

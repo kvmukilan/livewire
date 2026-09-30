@@ -14,7 +14,7 @@ import (
 )
 
 // reterminationReport gives TLS and SSH the same auditable report envelope as
-// reproduce and lab without ever serializing key logs, private keys, passwords,
+// live and lab without ever serializing key logs, private keys, passwords,
 // plaintext commands, or response bodies.
 type reterminationReport struct {
 	Fault           *faultObservation    `json:"faultObservation,omitempty"`
@@ -91,7 +91,7 @@ func buildReterminationPlan(trace *replay.Trace, selected *replay.Session, adapt
 			}
 		} else {
 			entry.Driver, entry.Mode, entry.Fidelity = "none", replay.ModeBlocked, replay.FidelityBlocked
-			entry.Blockers = []string{fmt.Sprintf("%s executes only the selected encrypted session; use reproduce or lab for this lane", driver)}
+			entry.Blockers = []string{fmt.Sprintf("%s executes only the selected encrypted session; use live or lab for this lane", driver)}
 		}
 		plan.Entries = append(plan.Entries, entry)
 	}
