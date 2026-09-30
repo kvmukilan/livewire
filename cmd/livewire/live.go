@@ -6,10 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/engine"
@@ -210,7 +208,7 @@ func cmdLiveLegacy(args []string) (retErr error) {
 		if err != nil {
 			return err
 		}
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		ctx, stop := commandSignalContext(context.Background())
 		defer stop()
 		ctx, cancel := execution.context(ctx)
 		defer cancel()
@@ -231,6 +229,7 @@ func cmdLiveLegacy(args []string) (retErr error) {
 			evidence: stream, actualPath: actual,
 			strictExit: execution.strictExit,
 			ctx:        ctx,
+			cancel:     cancel,
 			target:     target, iface: iface, seed: *seed, noGuard: *noGuard,
 			verbose: *verbose, useTUI: *useTUI, verify: vmode, adaptive: *adaptive,
 			pace: *pace, rawL4: *rawL4, sequential: *sequential, report: *report,

@@ -4,7 +4,7 @@
 
 The public product and documentation site is implemented in `website/`.
 It is static: it explains the workflows, links verified
-GitHub downloads, and expose the supported protocol matrix and qualification
+GitHub downloads, and exposes the supported protocol matrix and qualification
 boundaries. Captures, TLS key logs and credentials stay on the operator's machine.
 The existing `livewire web` dashboard remains the local replay interface.
 
@@ -71,14 +71,18 @@ GitHub Pages is the lasting fallback under the existing repository owner's
 account, at `https://kvmukilan.github.io/livewire/`. Its deployment workflow builds
 and tests the static site before publishing, with `PUBLIC_SITE_URL` set to
 `https://kvmukilan.github.io` and `PUBLIC_BASE_PATH` set to `/livewire/`. The Vercel
-root-domain configuration remains supported. The initial Pages deployment is
-pending the reviewed website workflow reaching the main branch; configuring
-Pages alone does not mean the site has been published.
+root-domain configuration remains supported. The initial Pages deployment
+passed on 2026-09-30 from merge `f59708fd6519752b5ec13b4d172fa1204c30a858`
+in [workflow run 36674876290](https://github.com/kvmukilan/livewire/actions/runs/36674876290).
+An independent remote check matched all 27 served files to the reviewed build,
+verified HTTPS and the custom 404, and passed all 18 Chromium checks. The site
+contains 13 HTML pages including the 404. Desktop and mobile screenshots were
+visually reviewed; these checks do not claim an uncoached human usability pilot.
 
 Launch is complete when a new operator can install a checksum-verified binary,
 preview a capture, run a local synthetic live example, understand the keylog
 requirement, and distinguish a verified response from stateless transmission.
 
-The implementation and temporary deployment are complete. The lasting Pages
-deployment, final release-metadata promotion and any later Vercel account
-connection are recorded separately from CLI replay qualification.
+The implementation, temporary preview and lasting Pages deployment are complete.
+Release-metadata promotion and any later Vercel account connection are recorded
+separately from CLI replay qualification.

@@ -21,6 +21,10 @@ Existing versioned releases and evidence remain unchanged.
 - Keep fresh TCP/TLS, live protocol state, response comparison and durable
   application recovery under `live`. Preserve historical `live -in` dry runs.
 - Align command help, operator guides and dashboard labels with the two purposes.
+- Cancel guarded replay safely when command output closes, remove temporary RST
+  rules before final output, and prevent dashboard rule creation during shutdown.
+  Retain failed cleanup ownership so retries cannot falsely report success;
+  serialize concurrent guard releases on Windows and Linux.
 - Require fresh stateful `live` and stateless `reproduce`/`replay` qualification,
   including independent mixed-protocol frame captures. Earlier application
   `reproduce` results cannot qualify the corrected command.

@@ -11,13 +11,11 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
@@ -528,7 +526,7 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	if o.strict {
 		verify = engine.VerifyStrict
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := commandSignalContext(context.Background())
 	defer stop()
 	ctx, cancel := o.executionFlags.context(ctx)
 	defer cancel()
@@ -540,6 +538,7 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	ctx = replay.WithExecution(ctx, exec)
 	live := liveOpts{
 		ctx:    ctx,
+		cancel: cancel,
 		target: deviceIP.String(), iface: iface, seed: 1, noGuard: o.noGuard,
 		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: profile.Pace, rawL4: profile.RawL4,
 		variables: o.variables, responseTimeout: o.responseTimeout,
@@ -640,11 +639,11 @@ func (r *genericReproduceRun) attempt(i int) iterate.Tally {
 		defer r.mu.Unlock()
 		switch {
 		case r.runs.Repeats():
-			fmt.Printf("  [attempt %d] %s\n", i+1, line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  [attempt %d] %s\n", i+1, line)
 		case idx < 0 || len(r.plan.Entries) == 1:
-			fmt.Printf("  %s\n", line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  %s\n", line)
 		default:
-			fmt.Printf("  [session %d] %s\n", idx, line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  [session %d] %s\n", idx, line)
 		}
 	}
 	if !r.quiet && r.runs.Repeats() {

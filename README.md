@@ -6,11 +6,14 @@ field problems on SCADA and
 industrial equipment (Modbus, DNP3) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
 FTPS, TLS, SSH, and ordinary TCP, UDP, and ICMP.
 
-The **1.0** line adds live TCP flow control, protocol maintenance, durable replay
+The **1.x** line includes live TCP flow control, protocol maintenance, durable replay
 progress, and explicit reset/timeout observations. Its release uses
 [software-lab qualification](docs/V1_QUALIFICATION.md); physical NIC/device and
 human-pilot qualification remain separate. Binaries, checksums, and provenance attestations are on the
 [Releases page](https://github.com/kvmukilan/livewire/releases).
+
+The [website and version-pinned guides](https://kvmukilan.github.io/livewire/)
+cover installation, the two replay workflows and secure captures.
 
 ## Install
 
@@ -85,8 +88,9 @@ This applies to TCP/TLS application replay and records the fault separately from
 response equivalence. MQTT keepalives and DNP3 fragment confirmations are serviced
 during replay; unsupported authentication and DNP3 object layouts stop with an
 explanation. See the [reliability guide](docs/RELIABILITY_IMPLEMENTATION.md) for
-protocol limits and recovery rules. Historical commands and flag aliases remain
-available throughout 1.x.
+protocol limits and recovery rules. Historical command names and other flag
+aliases remain available; application-style `reproduce` calls require the
+explicit 1.1 migration described above.
 
 ## Documentation
 

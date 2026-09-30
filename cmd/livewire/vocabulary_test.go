@@ -116,8 +116,9 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 		{name: "convert -out", args: []string{"convert", "-in", pcap, "-out", filepath.Join(dir, "a.pcap")}, notWant: "are required"},
 		{name: "rewrite -out", args: []string{"rewrite", "-in", pcap, "-out", filepath.Join(dir, "b.pcap")}, notWant: "are required"},
 		{name: "capture -iface and -out", args: []string{"capture", "-iface", "no-such-device-xyz", "-out", filepath.Join(dir, "c.pcap")}, notWant: "are required"},
-		// Without the alias the address is empty and fails to parse.
-		{name: "rstdrop -ip", args: []string{"rstdrop", "-ip", "192.0.2.1", "-port", "502"}, notWant: "invalid -t"},
+		// Invalid port bounds the test before it can arm a host firewall rule.
+		// Reaching this diagnostic proves the address alias parsed successfully.
+		{name: "rstdrop -ip", args: []string{"rstdrop", "-ip", "192.0.2.1", "-port", "-1"}, want: "invalid -port"},
 		// Without the alias there is no interface, so it asks for one.
 		{name: "replay -iface", args: []string{"replay", "-in", pcap, "-iface", "no-such-device-xyz"}, notWant: "-i is required"},
 		// Without the alias -iface is ignored, live stays in dry-run mode and
