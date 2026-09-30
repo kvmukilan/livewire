@@ -109,7 +109,7 @@ GOTOOLCHAIN=go1.26.7 go run ./scripts/qualify validate -version 1.1.0 -artifacts
 
 ## Repeat the software labs
 
-The [hosted qualification workflow](../.github/workflows/qualification.yml)
+The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.1.0/.github/workflows/qualification.yml)
 runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
 with the full candidate commit, reviewed source digest, version and frozen
 Windows/Linux amd64 executable hashes. It checks out that commit, builds with

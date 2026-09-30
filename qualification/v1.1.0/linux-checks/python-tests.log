@@ -1,0 +1,9 @@
+==> python-tests
+Python interpreter: /usr/bin/python3 (3.13.12 (main, Feb  4 2026, 15:06:39) [GCC 15.2.0])
+$ /usr/bin/python3 -m unittest discover -s scripts -p test_*.py
+.....................................
+----------------------------------------------------------------------
+Ran 37 tests in 1.150s
+
+OK
+==> python-tests ok (1.375s)

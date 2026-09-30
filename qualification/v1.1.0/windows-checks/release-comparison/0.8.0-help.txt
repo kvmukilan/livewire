@@ -1,0 +1,19 @@
+livewire 0.8.0 - reproduce a network problem from a capture
+
+Two commands cover the normal workflow:
+
+  Guided and safe - detect the protocol, ask only for missing inputs,
+  open fresh secure sessions, verify replies, and write evidence:
+    livewire reproduce issue.pcap
+
+  Live and advanced - the same automatic protocol handling, with expert
+  controls and the historical 'live -in ...' mode still available:
+    livewire live issue.pcap
+
+Help topics:
+  livewire help examples       copy-paste common workflows
+  livewire help troubleshoot   recover from common problems
+  livewire help protocols      see automatic drivers and safe fallbacks
+  livewire help diagnose       collect reproducible support evidence
+  livewire help commands       list every command
+  livewire help <command>      explain one command and its options

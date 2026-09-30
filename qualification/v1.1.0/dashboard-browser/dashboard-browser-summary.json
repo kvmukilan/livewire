@@ -1,0 +1,144 @@
+{
+  "browser": {
+    "headless": true,
+    "installedPlaywright": true,
+    "mobileDocumentHorizontalOverflow": false,
+    "name": "Chromium",
+    "pageErrors": 0,
+    "version": "153.0.8010.12",
+    "viewports": [
+      {
+        "height": 1100,
+        "width": 1440
+      },
+      {
+        "height": 844,
+        "width": 390
+      }
+    ],
+    "visualReview": "Model inspected screenshots 03, 04, 05 and 06 through image-view tool"
+  },
+  "captureSelection": {
+    "embeddedRequirementNamesPCAPNGAndKeylog": true,
+    "method": "Select repository-generated synthetic capture from the owned dashboard working directory",
+    "previews": 2,
+    "targetConnectionsOpenedByPreviews": 0,
+    "uploadControlAvailable": false
+  },
+  "checks": [
+    {
+      "applicationBytes": 0,
+      "applicationCompleted": false,
+      "freshHandshakeCompleted": true,
+      "matched": false,
+      "name": "keyless TLS",
+      "peerIdentityChecked": true,
+      "protocolVersion": "TLS 1.2",
+      "statusColor": "amber",
+      "verified": false,
+      "visibleDetail": "Fresh TLS handshake completed; peer identity verified; application replay incomplete and unverified",
+      "visibleStatus": "application incomplete"
+    },
+    {
+      "alpn": "http/1.1",
+      "applicationCompleted": true,
+      "externalKeylogSupplied": false,
+      "matched": true,
+      "name": "embedded TLSK application replay",
+      "peerIdentityChecked": true,
+      "protocolVersion": "TLS 1.3",
+      "requestBytes": 64,
+      "requests": 1,
+      "responses": 1,
+      "tlsSecretsSource": "embedded",
+      "verified": true,
+      "visibleStatus": "run finished"
+    },
+    {
+      "applicationCompleted": false,
+      "applicationIncompleteStatusFlag": false,
+      "applicationRequests": 0,
+      "certificateVerificationEnabled": true,
+      "expectedNegativeCheck": true,
+      "expectedServerName": "wrong-host.invalid",
+      "freshHandshakeCompleted": false,
+      "matched": false,
+      "name": "real wrong-host certificate failure",
+      "statusColor": "red",
+      "verified": false,
+      "visibleStatus": "run failed"
+    }
+  ],
+  "cleanup": {
+    "browserExitedNormally": true,
+    "fixtureExitedNormally": true,
+    "idleDashboardRequiredForcedStop": true,
+    "limitation": "The hidden dashboard process had no console. Its exact owned PID was terminated after a bounded graceful-stop attempt; this does not qualify graceful dashboard shutdown.",
+    "observedAt": "2026-09-30T18:16:33.722604+00:00",
+    "ownedListenersChecked": 3,
+    "ownedProcessesChecked": 10,
+    "remainingOwnedListeners": 0,
+    "remainingOwnedProcesses": 0,
+    "verified": true
+  },
+  "commit": "3d681f0b359129ebc6a86198e91a539f8ec52bfc",
+  "finished": "2026-09-30T18:16:33.722666+00:00",
+  "freezeSHA256": "65ac76c10ee86b39184e28d1b70ebd7773f24600b00b127a6ff66a7b7cf02bd9",
+  "passed": true,
+  "peer": {
+    "activeConnectionsAfterChecks": 0,
+    "applicationRequests": 1,
+    "applicationResponses": 1,
+    "differentFromCapturedRandom": true,
+    "distinctFreshClientRandoms": 2,
+    "expectedNegativeHandshakeErrors": 1,
+    "successfulFreshHandshakes": 2,
+    "unexpectedErrors": 0,
+    "zeroApplicationConnections": 1
+  },
+  "privateProofHashes": {
+    "VISUAL_REVIEW.md": "e1d5eaaa287c946014cd1bf1175b6915debf202e6c7c4ee163bea9686369f42f",
+    "browser-result.json": "d6c292b1e9728bc19fc473ce86dbe7e4684bab54d6a11d46e5c0bd0d397c9e7e",
+    "peer-final.json": "abab92e2ae1baa26c6970be9c015b1e997f36c26342e1b0b77bf614b0b640dab",
+    "qa-summary.json": "e0e6a1d821ac3217d206c8d95f569260ecddeaa7a1b291452345c5a631f10435"
+  },
+  "retention": "Only this scoped summary, README and checksums are retained in the public-ready bundle. Raw fixture captures, embedded TLS secrets, certificates, executables, full browser payloads, interface inventory, process IDs and listener ports are omitted.",
+  "schemaVersion": 1,
+  "scope": "supplemental automated rendered-browser QA; not release qualification, human acceptance, or physical-device evidence",
+  "screenshots": [
+    {
+      "name": "01-keyless-preview.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "74339bf8f0a613b6e05f63612058cc4c12eefe712f886a32b88e5a981f498792"
+    },
+    {
+      "name": "02-embedded-preview.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "c13172573f7986ea30dd15e5cb71a54c48c0f75a83653b480867546d010b45b1"
+    },
+    {
+      "name": "03-mobile-embedded-preview.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "f9c8368bfe7281b499f398a4f790efe226d3004c6431fa773e58c1f0312d3b8d"
+    },
+    {
+      "name": "04-keyless-fresh-handshake.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "7754102d2664df8ec7c01427fc91c8526fe0903b634572418a4a613b71b35573"
+    },
+    {
+      "name": "05-embedded-application-replay.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "fde9b7ddc15339e4cf55c4f60e86abdd970ffe014606be9343d9b488053d5de5"
+    },
+    {
+      "name": "06-certificate-failure-remains-failed.png",
+      "retention": "private; hash retained here, image not copied",
+      "sha256": "4dfddd07555f08717f41bf3cfc85ac5a1d47636809d3bc93194bb670b74aa9c2"
+    }
+  ],
+  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "started": "2026-09-30T18:16:14.668290+00:00",
+  "version": "1.1.0",
+  "windowsBinarySHA256": "a9163c27c754f819806963e3b9baeb250aba3de8881a1119780df3e6cbc60627"
+}

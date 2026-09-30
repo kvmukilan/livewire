@@ -4,8 +4,7 @@ For prerequisite diagnostics, failure recovery, supported platforms, and the
 stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes the upcoming version 1.1.0. Downloads still provide 1.0.1
-until release promotion; use its
+This guide describes version 1.1.0. When using a 1.0.1 binary, use its
 [version-pinned workflow](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WORKFLOW.md)
 with that binary. In 1.1, `live` opens fresh stateful application
 sessions; `reproduce` sends captured packets statelessly. `replay` is a
@@ -166,14 +165,16 @@ session selection and fresh secure application replay are one-sided features.
 ## Compatibility and API additions
 
 - `live <capture>` uses fresh application sessions, including flags on either side of the
-  positional capture. `live -in <capture>` with explicit secure inputs uses the
-  same fresh-session route; otherwise it keeps the historical TCP engine.
+  positional capture. Recognized TLS or explicit secure inputs route
+  `live -in <capture>` through the same fresh-session path; other captures
+  retain the historical TCP engine.
 - `reproduce <capture>` is stateless. From 1.0.x, migrate application commands
   from `reproduce ... -t ...` to `live ... -t ...`. Application-only flags are
   rejected before sending. `replay` is a stateless compatibility alias.
-- Positional `live <capture>` and `live -in <capture>` with explicit secure
-  inputs select fresh application sessions without a mode prompt in terminals
-  and scripts. Other `live -in` invocations retain the legacy simulation default.
+- Positional `live <capture>` selects fresh application sessions without a mode
+  prompt in terminals and scripts. Recognized TLS does the same with `live -in`,
+  including a keyless handshake that leaves application replay incomplete.
+  Other `live -in` invocations without secure inputs retain the simulation default.
   To retain v1.0.0 automatic transport selection for
   unrecognized TCP, pass the advanced compatibility override `-mode auto`.
 - Advanced `live -wire` and `live -profile wire` select explicit wire replay.

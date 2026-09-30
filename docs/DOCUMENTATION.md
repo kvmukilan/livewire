@@ -1,7 +1,6 @@
 # Livewire Operator Guide
 
-This guide describes the upcoming 1.1.0 command contract. Downloads still
-provide 1.0.1 until release promotion; use the
+This guide describes the 1.1.0 command contract. When using a 1.0.1 binary, use the
 [1.0.1 operator guide](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/DOCUMENTATION.md)
 with that binary. Start with [Replay workflow](WORKFLOW.md)
 for fresh live sessions, session selection, and offline preview.
@@ -736,10 +735,22 @@ non-interactive runs it stops before network activity and names the exact flags.
 
 ### TLS 1.2 and 1.3
 
-Provide the matching NSS `SSLKEYLOGFILE`. Livewire decrypts supported AEAD
-records, prepares the detected inner protocol, and opens a fresh verified TLS
-connection. An adjacent key log or `SSLKEYLOGFILE` environment value may be
-suggested, but is never consumed without affirmative operator selection.
+Use `live <capture> -t <host:port>` to establish fresh verified TLS from a
+complete captured ClientHello. No external keylog or request file is needed
+for that handshake. Without TLS secrets, application replay remains incomplete
+and unverified, with no application bytes sent.
+
+Matching TLS secrets embedded in PCAPNG or explicitly supplied with `-keylog`
+allow Livewire to decrypt supported AEAD records, prepare the detected inner
+protocol and replay captured application messages on a fresh connection.
+An explicit keylog takes priority over embedded secrets. Supplied secrets that
+cannot decrypt the selected exchange fail before sending. An adjacent keylog
+or `SSLKEYLOGFILE` environment value is never consumed without explicit selection.
+See [TLS directly from a capture](TLS_CAPTURE_REPLAY.md).
+
+The examples below use an external keylog for HTTP application replay. When the
+capture embeds matching secrets, omit only `-keylog`; application variables
+such as `-set http.host=...` still require decrypted application messages.
 
 Windows:
 
@@ -989,7 +1000,7 @@ commands` lists the complete catalog.
 | `capture` | Record an interface into PCAP |
 | `ifaces` | List usable interfaces and exact Windows Npcap device names |
 | `web` | Serve the embedded local dashboard |
-| `live -in ...` | Historical TCP controls and dry runs unless explicit secure inputs select fresh application sessions |
+| `live -in ...` | Fresh sessions for recognized TLS or explicit secure inputs; historical TCP controls and dry runs for other captures |
 | `lab` | Coordinated two-sided replay through a DUT |
 | `replay` | Compatibility alias for stateless `reproduce` |
 | `rewrite` | Apply static MAC/IP/port/TTL/VLAN/sequence edits |
@@ -1023,8 +1034,8 @@ The same idea keeps the same name on every command that has it.
 | `-details` | show the expert tables rather than the plain-language summary | `live`, `check` |
 
 `live`, `reproduce`, `replay` and `check` accept a positional capture, including
-flags on either side. Historical `live -in ...` retains its legacy parser unless
-explicit secure inputs select fresh application replay.
+flags on either side. Recognized TLS or explicit secure inputs route `live -in`
+through fresh sessions; other captures retain the historical parser and controls.
 
 Superseded spellings — `-to`, `-on`, `-iface`, `-target`, `-out`, `-loop`,
 `-count`, `-ip`, `-times`, `-iterations`, `-dry-run` — remain accepted wherever
@@ -1060,13 +1071,13 @@ for an intermittent fault. The dashboard exposes the same control as an
 - `-stop-when-different` ends the run at the first attempt that diverges, for
   when one failing sample is all you need. Ctrl-C stops cleanly and still writes
   a report covering the attempts that ran.
-- Legacy `live -in ... -n` requires an on-wire replay when requesting more than
-  one attempt; repeating its deterministic simulation is refused. Positional
+- Non-TLS legacy `live -in ... -n` requires an on-wire replay when requesting
+  more than one attempt; repeating its deterministic simulation is refused. Positional
   `live ... -dry-run` previews the plan without executing any attempts.
 
 Run `livewire <command> -h` for the common flags, or `-all-flags` for all of them.
 
-## 16. Deliberate 0.9 boundaries
+## 16. Current boundaries
 
 - No distributed replay agents.
 - No TRex-scale throughput target.

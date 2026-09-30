@@ -1,0 +1,19 @@
+==> dashboard
+$ node --test scripts/dashboard.test.cjs
+✔ changing capture invalidates an old preview and disables Start (4.387915ms)
+✔ a late inspection response cannot restore stale state (2.185923ms)
+✔ failed reinspection clears the previous successful preview (1.856905ms)
+✔ two rapid Start actions submit only one run (3.716224ms)
+✔ zero gap is sent as zero; session selection cannot silently become all (1.457146ms)
+✔ verified handshake-only results show amber application-incomplete details (2.651025ms)
+✔ certificate failures and failed earlier attempts remain failed (3.372981ms)
+✔ missing reports, cancellation and partial attempts cannot become handshake-only completion (4.554057ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 237.44206
+==> dashboard ok (486ms)

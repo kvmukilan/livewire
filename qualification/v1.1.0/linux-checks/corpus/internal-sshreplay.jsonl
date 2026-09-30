@@ -1,0 +1,8 @@
+{"Time":"2026-09-30T23:55:31.944298771+05:30","Action":"start","Package":"github.com/kvmukilan/livewire/internal/sshreplay"}
+{"Time":"2026-09-30T23:55:31.94847764+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Test":"TestSSHBoundsChannelOpenAfterSuccessfulHandshake"}
+{"Time":"2026-09-30T23:55:31.948554835+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Test":"TestSSHBoundsChannelOpenAfterSuccessfulHandshake","Output":"=== RUN   TestSSHBoundsChannelOpenAfterSuccessfulHandshake\n"}
+{"Time":"2026-09-30T23:55:33.006047785+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Test":"TestSSHBoundsChannelOpenAfterSuccessfulHandshake","Output":"--- PASS: TestSSHBoundsChannelOpenAfterSuccessfulHandshake (1.06s)\n"}
+{"Time":"2026-09-30T23:55:33.006112867+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Test":"TestSSHBoundsChannelOpenAfterSuccessfulHandshake","Elapsed":1.06}
+{"Time":"2026-09-30T23:55:33.006122826+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Output":"PASS\n"}
+{"Time":"2026-09-30T23:55:33.006907763+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Output":"ok  \tgithub.com/kvmukilan/livewire/internal/sshreplay\t1.062s\n"}
+{"Time":"2026-09-30T23:55:33.006929394+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/sshreplay","Elapsed":1.063}

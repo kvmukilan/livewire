@@ -1,0 +1,16 @@
+Replay intent: application; 5 selected packet(s), 0 explicitly excluded.
+Loaded current-gzip.pcap: 1 session(s), 0 raw frame(s).
+
+Profile: functional — preserve application requests and ordering; adapt TCP to the live device
+Replaying against 127.0.0.1 on "" ...
+  sent 1 http/1 message(s)
+  received 1 http/1 message(s)
+
+---- tcp-0 (tcp, semantic) ----
+RESULT: completed=true matched=true sent=1 received=1
+--------------------------------
+TIMING: replies took 0.5 ms live vs 1.0 ms recorded (slowest 0.5 ms over 1 turn(s))
+
+A shareable report was saved to C:\Users\kvmuk\livewire\coverage\v1.1.0-windows-checks\release-comparison\current-replay.json — send this back so we can see what happened.
+
+Summary: 1 same as recording, 0 different, 0 unverified, 0 wire-only, 0 did not complete.
