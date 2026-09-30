@@ -320,6 +320,13 @@ func replayContextError(ctx context.Context, fallback error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	// The socket deadline can fire before the context timer's goroutine updates
+	// Err. Classify an I/O timeout at an elapsed context deadline consistently,
+	// without converting an earlier exchange timeout or unrelated I/O failure.
+	var networkError net.Error
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) && errors.As(fallback, &networkError) && networkError.Timeout() {
+		return context.DeadlineExceeded
+	}
 	return fallback
 }
 
