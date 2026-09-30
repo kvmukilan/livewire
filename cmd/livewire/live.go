@@ -34,7 +34,8 @@ func isTerminal(f *os.File) bool {
 // cmdLive has a positional primary mode and an exact compatibility mode. A
 // positional capture uses fresh-session application orchestration;
 // the historical `live -in ...` form keeps its original TCP dry-run/on-wire
-// behavior unless explicit secure-session inputs select the common route.
+// behavior for non-TLS captures unless explicit secure-session inputs select
+// the common route. Recognized TLS always uses fresh secure-session execution.
 func cmdLive(args []string) error {
 	for _, arg := range args {
 		if arg == "-in" || arg == "--in" || strings.HasPrefix(arg, "-in=") || strings.HasPrefix(arg, "--in=") {
@@ -137,7 +138,7 @@ func cmdLiveLegacy(args []string) (retErr error) {
 		fmt.Println("  dry-run:  livewire live -in <file> [-mode rewrite|peer|both] [-seed N] [-o rewritten.pcap] [-v]")
 		fmt.Println("  on-wire:  livewire live -in <file> -live -i <connection> [-t ip[:port]] [-n 5]")
 		fmt.Println("\nThe positional form uses fresh application sessions, including TLS, FTPS, or SSH.")
-		fmt.Println("The -in form retains legacy behavior unless secure inputs such as -keylog are supplied.")
+		fmt.Println("The -in form uses fresh sessions for TLS or explicit secure inputs; other captures retain legacy behavior.")
 		fmt.Println("For positional secure/wire options, run: livewire live <capture> -all-flags")
 		printFlags(fs, flagIn, flagLive, flagIface, flagTarget, flagCount, flagOut, "all", "mode", "flow", "report", "v")
 	}
@@ -167,11 +168,6 @@ func cmdLiveLegacy(args []string) (retErr error) {
 	if times > maxReplayAttempts {
 		return fmt.Errorf("-n must not exceed %d", maxReplayAttempts)
 	}
-	if times > 1 && !realLive {
-		// The dry run is deterministic, so repeating it produces N identical
-		// reports and tells the operator nothing.
-		return fmt.Errorf("-n only applies to an on-wire replay; add -live and -i <connection>")
-	}
 	if *gap < 0 {
 		return fmt.Errorf("-gap cannot be negative")
 	}
@@ -184,6 +180,16 @@ func cmdLiveLegacy(args []string) (retErr error) {
 		return err
 	}
 	recs := capture.Records
+	if detectProtocolRoute(recs).kind == protocolTLS {
+		_, conflict := secureLiveInput(fs, args)
+		if conflict != "" {
+			return fmt.Errorf("captured TLS requires a fresh secure session and cannot use legacy -%s; use live <capture> -t <host:port>", conflict)
+		}
+		return cmdCaptureReplay("live", args)
+	}
+	if times > 1 && !realLive {
+		return fmt.Errorf("-n only applies to an on-wire replay; add -live and -i <connection>")
+	}
 	if err := execution.openState(captureDigest, map[string]any{"legacy": true, "target": target, "interface": iface, "flow": *flowSel, "all": *allFlows, "verify": *verify, "adaptive": *adaptive, "pace": *pace, "rawL4": *rawL4, "seed": *seed, "times": times, "gap": *gap, "concurrency": execution.concurrency, "guardDisabled": *noGuard}, !realLive); err != nil {
 		return err
 	}

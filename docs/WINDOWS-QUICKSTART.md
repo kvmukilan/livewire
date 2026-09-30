@@ -183,8 +183,10 @@ Print packet-level rewrite and TX/RX information:
 .\livewire.exe live -in $Capture -i $Iface -t $Target -all -v
 ```
 
-The legacy `live -in` form exposes the TCP engine unless explicit secure inputs
-such as `-keylog` select fresh application replay. Positional `live <capture>`
+The legacy `live -in` form exposes the TCP engine for non-TLS captures unless
+explicit secure inputs select fresh application replay. Recognized TLS always
+uses fresh sessions; without embedded secrets or `-keylog`, only its handshake
+runs and application replay remains incomplete. Positional `live <capture>`
 is the stateful application workflow for supported TCP, UDP, ICMP, HTTP, DNS,
 MQTT, Modbus, DNP3 and secure protocols. For stateless captured packets, use:
 

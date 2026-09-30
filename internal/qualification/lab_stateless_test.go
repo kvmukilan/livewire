@@ -78,8 +78,9 @@ func statelessValidatorFixtureVersion(t *testing.T, version, command string, fra
 	if UsesStatelessReproduce(version) {
 		commandField = fmt.Sprintf(`"command":%q,`, command)
 	}
-	for round := 1; round <= 3; round++ {
-		at := start.Add(time.Duration(round-1) * time.Hour)
+	rounds, interval := syntheticLabCadence(version, 1)
+	for round := 1; round <= rounds; round++ {
+		at := start.Add(time.Duration(round-1) * interval)
 		prefix := ""
 		if round > 1 {
 			prefix = fmt.Sprintf("round-%d-", round)
@@ -95,7 +96,7 @@ func statelessValidatorFixtureVersion(t *testing.T, version, command string, fra
 		}
 	}
 	transcript.WriteString("{\"event\":\"cleanup\",\"verified\":true}\n")
-	run.Cases = []LabCaseResult{{Name: "mixed-frames", Passes: 3, RepeatedProcessPasses: 3, FirstAt: start, LastAt: start.Add(7200 * time.Second), CleanupVerified: true, FramesObserved: len(frames) * 6}}
+	run.Cases = []LabCaseResult{{Name: "mixed-frames", Passes: rounds, RepeatedProcessPasses: rounds, FirstAt: start, LastAt: start.Add(7200 * time.Second), CleanupVerified: true, FramesObserved: len(frames) * 2 * rounds}}
 	run.Evidence = append(run.Evidence, write("events.jsonl", transcript.Bytes()))
 	return run, base, write
 }

@@ -54,6 +54,7 @@ func validateStatelessTranscript(run LabRun, base string) error {
 	observed := LabCaseResult{Name: "mixed-frames", CleanupVerified: true}
 	cleaned := false
 	usedArtifacts := map[string]bool{}
+	continuity := LabContinuity{Version: run.Version}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 4<<20)
 	for scanner.Scan() {
@@ -79,6 +80,9 @@ func validateStatelessTranscript(run LabRun, base string) error {
 			}
 		default:
 			return fmt.Errorf("unsuccessful stateless event %q", event.Event)
+		}
+		if err := continuity.Observe(event.Case, event.Started, event.Finished); err != nil {
+			return err
 		}
 		if event.FixtureSHA256 == "" || event.CaptureSHA256 == "" || event.ReportSHA256 == "" || event.FirewallSHA256 == "" {
 			return fmt.Errorf("stateless execution hashes missing")
@@ -147,7 +151,7 @@ func validateStatelessTranscript(run LabRun, base string) error {
 		return err
 	}
 	c := run.Cases[0]
-	if !cleaned || c.Name != observed.Name || c.Passes != observed.Passes || c.RepeatedProcessPasses != observed.RepeatedProcessPasses || c.Failures != 0 || c.RequestsObserved != 0 || c.ResponsesVerified != 0 || c.FramesObserved != observed.FramesObserved || !c.CleanupVerified || !c.FirstAt.Equal(observed.FirstAt) || !c.LastAt.Equal(observed.LastAt) {
+	if !cleaned || c.Name != observed.Name || c.Passes != observed.Passes || c.RepeatedProcessPasses != observed.RepeatedProcessPasses || c.Failures != 0 || c.RequestsObserved != 0 || c.ResponsesVerified != 0 || c.HandshakesObserved != 0 || c.FramesObserved != observed.FramesObserved || !c.CleanupVerified || !c.FirstAt.Equal(observed.FirstAt) || !c.LastAt.Equal(observed.LastAt) {
 		return fmt.Errorf("stateless summary differs from execution transcript or cleanup missing")
 	}
 	return nil

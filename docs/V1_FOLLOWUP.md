@@ -7,7 +7,7 @@ The intended contract is now explicit: **`live` is stateful application replay;
 
 | Command | Behavior | Evidence |
 |---|---|---|
-| `live capture.pcap -t device` | Opens fresh connections; OS TCP and supported adapters maintain live state. TLS plaintext is recovered with matching capture keys, then sent over a new verified session. | Compared live responses, differences and incomplete exchanges. |
+| `live capture.pcap -t device` | Opens fresh connections; OS TCP and supported adapters maintain live state. TLS can establish a fresh connection from a captured ClientHello. Embedded or explicit matching secrets also enable captured application replay. | Compared live responses, differences and incomplete exchanges; connection-only TLS remains incomplete and unverified at application level. |
 | `reproduce capture.pcap -i interface` | Injects the recorded frames unchanged, including both captured directions, in capture order with selected pacing. | Actual send counts; never a response-equivalence claim. |
 | `replay ...` | Compatibility alias for stateless `reproduce`. | The same packet evidence and limitations. |
 
@@ -15,6 +15,11 @@ The intended contract is now explicit: **`live` is stateful application replay;
 a key log. It cannot use those old bytes to negotiate a new TLS session. Use
 `live` with matching capture key material when the target must understand the
 recorded application requests.
+
+A separate key-log file is optional for captures with matching embedded TLS
+secrets. Without any matching secrets, `live` establishes and checks only the
+fresh TLS connection; it cannot recover old encrypted application messages.
+See [TLS directly from a capture](TLS_CAPTURE_REPLAY.md).
 
 ## Migration from 1.0.x
 
@@ -37,8 +42,10 @@ Application-only options on `reproduce`, including `-t`, `-keylog`, `-resume`
 and explicit application modes, are rejected before capture loading or network
 access, with instructions to use `live`. This prevents old application scripts
 from silently becoming packet injection. Stateless sends require an explicit
-interface; `-dry-run` never opens a sender. `live -in` keeps its historical
-dry-run/packet controls unless explicit secure inputs select fresh sessions.
+interface; `-dry-run` never opens a sender. Detected TLS under `live -in` uses
+the same fresh-session path as positional `live`, including keyless handshakes
+and embedded secrets. Incompatible explicit packet controls are rejected before
+traffic; ordinary non-TLS legacy dry-run/packet behavior is retained.
 
 Use `rewrite` separately for static captured addresses or ports. Stateless
 reproduction does not retarget packets or track TCP state. Captured pacing is

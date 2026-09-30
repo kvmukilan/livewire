@@ -326,7 +326,7 @@ func TestUnifiedTLSInvalidInputsStopBeforeDial(t *testing.T) {
 		for _, tc := range []struct {
 			name, capture, keylog, ca, want string
 		}{
-			{"missing-keylog", capture, "", caPath, "-keylog <file>"},
+			{"keyless-strict", capture, "", caPath, "-strict"},
 			{"wrong-session-keylog", capture, wrongKeyPath, caPath, "no keylog entry"},
 			{"malformed-ca", capture, keyPath, badCAPath, "CA contains no parseable certificates"},
 			{"opaque", opaqueCapture, "", "", "appears encrypted or opaque"},
@@ -338,6 +338,9 @@ func TestUnifiedTLSInvalidInputsStopBeforeDial(t *testing.T) {
 				}
 				defer listener.Close()
 				args := []string{tc.capture, "-t", listener.Addr().String(), "-report", filepath.Join(t.TempDir(), "result.json")}
+				if tc.name == "keyless-strict" {
+					args = append(args, "-strict")
+				}
 				if tc.keylog != "" {
 					args = append(args, "-keylog", tc.keylog)
 				}

@@ -8,6 +8,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/adapters"
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
+	"github.com/kvmukilan/livewire/internal/tlsreplay"
 )
 
 type Options struct {
@@ -250,6 +251,24 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			e.Fidelity = replay.FidelitySemantic
 			e.Driver = string(route.Kind) + "-reterminate"
 			e.Adapter = e.Driver
+			if route.Kind == TLS && len(opts.KeyLog) == 0 {
+				client, _, err := replay.TCPPayloadStreams(route.Session)
+				if err == nil {
+					_, err = tlsreplay.ParseClientHello(client)
+				}
+				if err != nil {
+					block("keylog-free TLS handshake: " + err.Error())
+					continue
+				}
+				if profile != replay.ProfileFunctional {
+					block("TLS application timing requires a matching key log; keylog-free TLS supports a fresh handshake only")
+					continue
+				}
+				e.Driver, e.Adapter = "tls-handshake", "tls-handshake"
+				e.Fidelity = replay.FidelityHandshake
+				e.Transformations = append(e.Transformations, "fresh TLS handshake from captured SNI, ALPN and supported modern versions; new randomness, keys and secure cipher selection")
+				e.Warnings = append(e.Warnings, "application replay remains incomplete without captured TLS secrets; no ciphertext is transmitted and no response match is claimed", "only TLS 1.2/1.3 offers are retained; exact ClientHello, cipher fingerprint, PSK resumption and timing are not reproduced")
+			}
 			if route.Kind == FTP {
 				e.Mode = replay.ModeCoordinated
 				e.Driver = "ftp-coordinator"
@@ -257,7 +276,9 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			}
 		}
 		r.Requirements = []string{"target host:port"}
-		if route.Kind == TLS || route.Kind == FTP && NeedsKeyLog(route.Session) {
+		if route.Kind == TLS && len(opts.KeyLog) == 0 {
+			r.Requirements = append(r.Requirements, "trusted certificate or explicit private CA", "optional matching NSS key log or embedded PCAPNG TLS secrets for application replay; otherwise fresh handshake only")
+		} else if route.Kind == TLS || route.Kind == FTP && NeedsKeyLog(route.Session) {
 			r.Requirements = append(r.Requirements, "matching NSS key log (-keylog)", "trusted certificate or explicit private CA")
 		}
 		if route.Kind == SSH {

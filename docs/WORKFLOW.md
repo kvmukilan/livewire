@@ -112,13 +112,19 @@ require an explicit recovery contract.
 ## Secure exchanges
 
 ```sh
+livewire live tls.pcap -t device.example:443 -ca device-ca.pem
 livewire live tls.pcap -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
 livewire check ftps.pcap -mode application -keylog sslkeys.log -details
 livewire live ssh.pcap -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
 ```
 
 FTPS negotiation is decrypted offline to associate data sessions when a matching
-key log is supplied. No key log is consumed merely because it exists nearby.
+key log is supplied or is embedded in the selected PCAPNG. An explicit key log
+takes priority over embedded secrets. No external key log is consumed merely
+because it exists nearby. TLS without secrets establishes a fresh handshake
+from captured public ClientHello metadata and reports application replay as
+incomplete and unverified. It sends no old ciphertext or invented requests.
+See [TLS capture replay](TLS_CAPTURE_REPLAY.md).
 Multiple independent secure exchanges require explicit session selection; this
 version does not coordinate arbitrary mixed secure sessions in one run.
 
@@ -127,7 +133,9 @@ material, command bodies, and response bodies are excluded from reports. SSH
 output evidence contains lengths and digests. Blank expectations do not count
 as verification. TLS identity verification remains enabled by default.
 
-Fresh secure sessions support functional replay, and TLS supports captured pacing.
+Fresh secure sessions support functional replay, and TLS application replay with
+matching secrets supports captured pacing. Handshake-only TLS does not replay
+application timing, scenarios, durable checkpoints or response comparisons.
 Unsupported timing/exact-transport options and actual-packet output are rejected
 instead of silently ignored. Add `-n 5`
 for fresh repeated attempts and `-gap 0s` for no settle delay.

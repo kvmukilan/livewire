@@ -16,6 +16,12 @@ import (
 func syntheticApplicationReports(version string, event labEvent) []applicationLabReport {
 	kind, adapter := applicationLabProtocol(event.Case)
 	outcome := applicationLabOutcome{Adapter: adapter, Status: "matched", Completed: true, Verified: true, Matched: true, Compared: 1, Responses: 1, PeerIdentityChecked: true, Cleanup: "complete"}
+	if kind == "tls" {
+		outcome.TLSSecretsSource = "external"
+		if event.Case == "http1-tls" {
+			outcome.TLSSecretsSource = "embedded"
+		}
+	}
 	if kind == "ftp" {
 		body := []byte("livewire software-lab transfer\x00\x01\xff\n")
 		digest := fmt.Sprintf("sha256:%x", sha256.Sum256(body))
@@ -60,6 +66,8 @@ func TestApplicationReportsIndependentlyRequireLiveSuccess(t *testing.T) {
 		{"wrong kind", "http1-tls", func(r *applicationLabReport) { r.Kind = "ssh" }},
 		{"wrong adapter", "http1-tls", func(r *applicationLabReport) { r.Outcome.Adapter = "mqtt" }},
 		{"TLS identity", "http1-tls", func(r *applicationLabReport) { r.Outcome.PeerIdentityChecked = false }},
+		{"TLS missing embedded proof", "http1-tls", func(r *applicationLabReport) { r.Outcome.TLSSecretsSource = "external" }},
+		{"TLS missing external proof", "dns-tls", func(r *applicationLabReport) { r.Outcome.TLSSecretsSource = "none" }},
 		{"SSH identity", "ssh", func(r *applicationLabReport) { r.Outcome.PeerIdentityChecked = false }},
 		{"FTPS identity", "ftps-explicit", func(r *applicationLabReport) { r.Outcome.PeerIdentityChecked = false }},
 		{"FTP transfer missing", "ftp", func(r *applicationLabReport) { r.Outcome.Transfers = r.Outcome.Transfers[:1] }},
@@ -94,17 +102,8 @@ func TestApplicationReportsIndependentlyRequireLiveSuccess(t *testing.T) {
 func TestApplicationTranscriptRejectsRehashedReportsAndReuse(t *testing.T) {
 	for _, mutation := range []string{"malformed", "wire", "reuse-report", "reuse-output", "missing-secure-attempt"} {
 		t.Run(mutation, func(t *testing.T) {
-			doc, options := labValidatorFixtureVersion(t, "1.1.0")
-			data, path, err := verifiedLabEvidence(options.Base, doc.SoftwareLab.Runs[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			var run LabRun
-			if err := json.Unmarshal(data, &run); err != nil {
-				t.Fatal(err)
-			}
-			base := filepath.Dir(path)
-			data, err = os.ReadFile(filepath.Join(base, "transcript.jsonl"))
+			run, base := applicationTranscriptFixture(t)
+			data, err := os.ReadFile(filepath.Join(base, "transcript.jsonl"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -162,6 +161,50 @@ func TestApplicationTranscriptRejectsRehashedReportsAndReuse(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A short transcript suffices for outcome/parser tests. Only the manifest tests
+// generate the full synthetic two-hour cadence; neither fixture is release proof.
+func applicationTranscriptFixture(t *testing.T) (LabRun, string) {
+	t.Helper()
+	base := t.TempDir()
+	start := time.Unix(1700000000, 0).UTC()
+	run := LabRun{Version: "1.1.0", Suite: "application", Command: "live", Started: start, Finished: start.Add(time.Minute)}
+	write := func(name string, data []byte) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(base, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		run.Evidence = append(run.Evidence, Evidence{Path: name, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))})
+	}
+	var transcript bytes.Buffer
+	for round := 1; round <= 3; round++ {
+		for i, name := range []string{"http1", "http1-tls"} {
+			at := start.Add(time.Duration((round-1)*10+i) * time.Second)
+			e := labEvent{Case: name, Command: "live", Round: round, Repeat: 2, Started: at, Finished: at, VerifiedResponses: 2, After: labCounts{Requests: 2, Responses: 2}}
+			e.Output = fmt.Sprintf("%s-%d-output.txt", name, round)
+			write(e.Output, []byte("synthetic output"))
+			for j, report := range syntheticApplicationReports(run.Version, e) {
+				name := fmt.Sprintf("%s-%d-%d.json", name, round, j)
+				data, err := json.Marshal(report)
+				if err != nil {
+					t.Fatal(err)
+				}
+				write(name, data)
+				e.CLIReports = append(e.CLIReports, name)
+			}
+			e.CLIReport = e.CLIReports[0]
+			if err := json.NewEncoder(&transcript).Encode(e); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for i, name := range []string{"http1", "http1-tls"} {
+		first := start.Add(time.Duration(i) * time.Second)
+		run.Cases = append(run.Cases, LabCaseResult{Name: name, Passes: 3, RepeatedProcessPasses: 3, FirstAt: first, LastAt: first.Add(20 * time.Second), RequestsObserved: 6, ResponsesVerified: 6, CleanupVerified: true})
+	}
+	write("transcript.jsonl", transcript.Bytes())
+	return run, base
 }
 
 func TestStatelessExperimentalEtherTypeCannotBeKnownProtocol(t *testing.T) {

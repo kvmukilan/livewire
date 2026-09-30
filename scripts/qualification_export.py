@@ -85,17 +85,32 @@ def allowed(reference, suite, command):
     return any(re.fullmatch(re.escape(command + '-' + case) + r'-[0-9]{5}\.(?:report\.json|cli\.log|firewall\.txt|tcpdump\.log|independent\.pcap|actual\.pcap)', reference) for case in cases)
 
 
+def inspect_credential_field(key, value):
+    # This report field is provenance, not key material. Match the exact
+    # contract and finite enum; similarly named fields remain secret-bearing.
+    if key == 'tlsSecretsSource':
+        require(isinstance(value, str) and value in ('none', 'embedded', 'external'), 'invalid TLS secrets provenance')
+    elif SECRET_KEY.search(key):
+        require(value in ('', '[REDACTED]', None), 'unredacted credential field')
+
+
 def inspect_json(value):
     if isinstance(value, dict):
         for key, item in value.items():
-            if SECRET_KEY.search(key):
-                require(item in ('', '[REDACTED]', None), 'unredacted credential field')
+            inspect_credential_field(key, item)
             inspect_json(item)
     elif isinstance(value, list):
         for item in value:
             inspect_json(item)
     elif isinstance(value, str):
         require(not SECRET.search(value.encode()), 'encoded private material in JSON')
+        if value.lstrip().startswith(('{', '[')):
+            try:
+                decoded = json.loads(value)
+            except (ValueError, RecursionError):
+                pass
+            else:
+                inspect_json(decoded)
 
 
 def safe_contents(data, name):
@@ -104,8 +119,13 @@ def safe_contents(data, name):
     # Check textual credential fields regardless of extension, including a
     # JSON object smuggled into a CLI log or packet body.
     for key, value in re.findall(rb'"([^"\r\n]+)"\s*:\s*"([^"\r\n]*)"', data):
-        if SECRET_KEY.search(key.decode('ascii', errors='ignore')):
-            require(value in (b'', b'[REDACTED]'), 'unredacted credential content')
+        try:
+            decoded_key = json.loads(b'"' + key + b'"')
+            decoded_value = json.loads(b'"' + value + b'"')
+        except (ValueError, UnicodeError):
+            decoded_key = key.decode('ascii', errors='ignore')
+            decoded_value = value.decode('ascii', errors='ignore')
+        inspect_credential_field(decoded_key, decoded_value)
     if name.endswith('.pcap'):
         require(data[:4] in (b'\xd4\xc3\xb2\xa1', b'\xa1\xb2\xc3\xd4', b'\x4d\x3c\xb2\xa1', b'\xa1\xb2\x3c\x4d'), 'unrecognized PCAP evidence')
         return

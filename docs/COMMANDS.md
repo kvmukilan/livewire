@@ -38,14 +38,16 @@ exact flag to add.
 | HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | UDP or ICMP | live datagram/echo driver with reply checking |
 | ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
-| TLS with `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
-| explicit or implicit FTPS with `-keylog` | FTP control/data coordinator with fresh verified TLS |
+| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
+| TLS without secrets | fresh verified handshake from captured ClientHello metadata; application replay remains incomplete and unverified |
+| explicit or implicit FTPS with matching embedded secrets or `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
 | DNP3 Secure Authentication, MQTT enhanced authentication, or unsupported security | blocked with the reason; no false success |
 | unknown opaque/encrypted traffic | blocked; never silently replayed as ordinary TCP or wire traffic |
 
-An adjacent key log or `SSLKEYLOGFILE` value is only suggested. Livewire never
-reads one until the operator selects it or passes `-keylog` explicitly. Captured
+Embedded PCAPNG TLS secrets are used automatically; an explicit `-keylog` takes
+priority. Malformed embedded secrets fail closed. An adjacent key log or
+`SSLKEYLOGFILE` value is never read without explicit selection. Captured
 TLS/SSH ciphertext is never sent by automatic mode. Use `reproduce` for raw
 frame injection. Advanced `live -wire` and `live -profile wire` remain available
 for compatibility and also make no response-equivalence claim.
@@ -63,7 +65,7 @@ for compatibility and also make no response-equivalence claim.
 | `-exact-tcp` | use stateful transport replay for a low-level TCP issue |
 | `-wire` | explicitly inject captured frames as-is; requires `-i` and does not claim session adaptation or reply equivalence |
 | `-keylog <file>` | matching NSS key log for TLS or FTPS |
-| `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default |
+| `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default; handshake-only TLS defaults to captured SNI, then target hostname |
 | `-user`, `-pass`/`-key`, `-host-key`, `-cmd` | SSH requirements; repeat `-cmd` and optionally pair each with `-expect` |
 | `-details` | also print the capture assessment, the replay plan, and every session's verdict |
 | `-strict-exit` | exit nonzero unless every selected exchange completes with positive matching response evidence |
@@ -123,10 +125,11 @@ the [protocol details](RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 The positional `live <capture>` form uses the application orchestrator.
 `live -in <file>` with explicit secure inputs such as `-keylog`, `-ca`, or SSH
-credentials also uses that route. Mixing secure inputs with legacy-only
-controls is rejected before loading the capture or sending. Without secure
-inputs, historical `live -in` keeps its dry-run, flow-selection, sequence-rewrite
-and raw-L4 controls. See [Legacy `live -in` mode](#legacy-live--in-mode).
+credentials also uses that route. Recognized TLS always takes the fresh-session
+route, including `live -in <file> -t <host:port>` without secure flags. Incompatible
+legacy TCP controls are refused before traffic. Other captures retain historical
+`live -in` dry-run, flow-selection, sequence-rewrite and raw-L4 controls.
+See [Legacy `live -in` mode](#legacy-live--in-mode).
 
 ### `reproduce`
 
@@ -415,8 +418,9 @@ sessions are blockers.
 
 ### `tls-replay`
 
-Compatibility alias for the TLS driver selected automatically by positional
-`live`. It decrypts with the supplied key log and re-terminates a
+Compatibility command for captured TLS application replay. It retains its
+explicit keylog requirement; use `live` for embedded PCAPNG secrets or a
+keylog-free handshake. It decrypts with the supplied key log and re-terminates a
 fresh, certificate-verified connection through the detected inner adapter.
 
 ```sh

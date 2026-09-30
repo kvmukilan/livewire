@@ -169,7 +169,7 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	keys, err := s.planningKeyLog(req.Secure.Keylog)
+	keys, keySource, err := s.selectTLSKeys(req.Secure.Keylog, capture.TLSKeyLog())
 	if err != nil {
 		writeErr(w, 400, err)
 		return
@@ -188,6 +188,7 @@ func (s *Server) handleAdaptiveRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if inspection.Mode != "wire" && inspection.Mode != "transport" && inspection.Route.Kind != replayintent.Generic {
+		req.Secure.keylogData, req.Secure.keylogSource = keys, keySource
 		s.startSecureRun(w, req, digest, inspection, registry)
 		return
 	}

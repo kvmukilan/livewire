@@ -22,6 +22,7 @@ type applicationLabOutcome struct {
 	Error               string                   `json:"error"`
 	Cleanup             string                   `json:"cleanup"`
 	PeerIdentityChecked bool                     `json:"peerIdentityChecked"`
+	TLSSecretsSource    string                   `json:"tlsSecretsSource"`
 	Transfers           []applicationLabTransfer `json:"transfers"`
 }
 
@@ -95,6 +96,15 @@ func validateApplicationCLIReports(version string, event labEvent, reports [][]b
 					return fmt.Errorf("application CLI session mode, cleanup or attempt differs")
 				}
 				attempts[outcome.Attempt] = true
+			}
+			if kind == "tls" {
+				want := "external"
+				if event.Case == "http1-tls" {
+					want = "embedded"
+				}
+				if outcome.TLSSecretsSource != want {
+					return fmt.Errorf("TLS secrets source differs from the qualified fixture path")
+				}
 			}
 			if (kind == "tls" || kind == "ssh" || strings.HasPrefix(event.Case, "ftps-")) && !outcome.PeerIdentityChecked {
 				return fmt.Errorf("secure CLI outcome did not verify peer identity")

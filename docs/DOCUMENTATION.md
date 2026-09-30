@@ -948,9 +948,12 @@ Capture the original SYN and SYN-ACK when possible.
 
 ### The capture is TLS, SSH, or authenticated DNP3
 
-- Fresh TLS/FTPS replay needs the matching key log: add `-keylog <file>` to
-  `live <capture>` or `live -in <capture>`. A discovered key log is suggested,
-  never silently read.
+- TLS opens a fresh verified handshake from the capture's ClientHello with
+  `live <capture> -t <host:port>` or `live -in <capture> -t <host:port>`.
+  Application replay needs matching embedded PCAPNG TLS secrets or explicit
+  `-keylog <file>`; without them it remains incomplete and unverified. FTPS
+  requires recoverable control/data messages. Nearby external key logs are
+  never silently read. See [TLS capture replay](TLS_CAPTURE_REPLAY.md).
 - SSH needs `-user`, exactly one of `-pass`/`-key`, a pinned `-host-key`, and at
   least one explicit `-cmd`. Captured SSH ciphertext is never treated as a
   command script.

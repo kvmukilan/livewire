@@ -21,6 +21,14 @@ Existing versioned releases and evidence remain unchanged.
 - Keep fresh TCP/TLS, live protocol state, response comparison and durable
   application recovery under `live`. Preserve historical `live -in` dry runs.
 - Align command help, operator guides and dashboard labels with the two purposes.
+- Establish a fresh, verified TLS connection directly from a complete captured
+  ClientHello, without an HTTP request file or external key log. Preserve public
+  SNI/ALPN and supported version selection, generate fresh connection keys, and
+  report application replay incomplete when captured plaintext is unavailable.
+- Read matching TLS secrets embedded in PCAPNG for captured application replay
+  without a separate key-log file. Bound and validate secret blocks, retain
+  immutable input snapshots, exclude secrets from reports, and reject malformed
+  or conflicting embedded keys before sending.
 - Cancel guarded replay safely when command output closes, remove temporary RST
   rules before final output, and prevent dashboard rule creation during shutdown.
   Retain failed cleanup ownership so retries cannot falsely report success;
@@ -28,13 +36,17 @@ Existing versioned releases and evidence remain unchanged.
 - Require fresh stateful `live` and stateless `reproduce`/`replay` qualification,
   including independent mixed-protocol frame captures. Earlier application
   `reproduce` results cannot qualify the corrected command.
+- Reject qualification runs containing suspend or idle gaps. Add five GitHub
+  hosted two-hour jobs pinned to the candidate commit, source and executable
+  hashes, with independent transcript validation and bounded evidence export.
 - Add the static product/documentation website, with local fonts, accessible
   navigation, version-pinned downloads and explicit TLS/qualification boundaries.
 
 Qualification is in progress; final release evidence will be recorded before
 publication. Stateless TLS bytes can be sent without decryption keys, but they
 cannot establish a new TLS application session. Fresh secure application replay
-continues to require matching capture key material or supported explicit inputs.
+requires matching capture key material, embedded in PCAPNG or explicitly supplied.
+Connection-only TLS observations never count as captured application matches.
 
 ## [1.0.1] - 2026-09-30
 

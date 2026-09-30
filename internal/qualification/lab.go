@@ -19,6 +19,16 @@ var ApplicationLabCases = []string{
 	"ftp", "ftps-explicit", "ftps-implicit", "ssh",
 }
 
+// ApplicationLabCasesForVersion retains the historical application matrix and
+// adds independent PCAP-derived TLS handshake observations for v1.1 onward.
+func ApplicationLabCasesForVersion(version string) []string {
+	cases := append([]string(nil), ApplicationLabCases...)
+	if UsesStatelessReproduce(version) {
+		cases = append(cases, "tls-handshake")
+	}
+	return cases
+}
+
 var PacketLabCases = []string{"dns-udp", "udp", "icmp4", "icmp6", "stateful-tcp", "transport-tcp", "wire"}
 
 // LabCaseResult records repeated checks of actual CLI behavior against a peer
@@ -32,6 +42,7 @@ type LabCaseResult struct {
 	LastAt                time.Time `json:"lastAt"`
 	RequestsObserved      int       `json:"requestsObserved"`
 	ResponsesVerified     int       `json:"responsesVerified"`
+	HandshakesObserved    int       `json:"handshakesObserved,omitempty"`
 	FramesObserved        int       `json:"framesObserved,omitempty"`
 	CleanupVerified       bool      `json:"cleanupVerified"`
 	RepeatedProcessPasses int       `json:"repeatedProcessPasses"`
@@ -121,7 +132,7 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		}
 		sum, ok := packagedBinarySHA256(o.Artifacts, name)
 		need(ok && sum == run.BinarySHA256, label+"tested binary differs from release or is missing")
-		required := ApplicationLabCases
+		required := ApplicationLabCasesForVersion(o.Version)
 		if run.Suite == "packet" {
 			required = PacketLabCases
 		}
@@ -142,6 +153,8 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 			need(!c.FirstAt.Before(run.Started) && !c.LastAt.After(run.Finished) && c.LastAt.Sub(c.FirstAt) >= SoakSeconds*time.Second, label+name+": case was not exercised across two hours")
 			if stateless {
 				need(c.FramesObserved >= c.Passes && c.RequestsObserved == 0 && c.ResponsesVerified == 0, label+name+": independent frames missing or application response claim")
+			} else if name == "tls-handshake" && UsesStatelessReproduce(o.Version) {
+				need(c.HandshakesObserved >= c.Passes && c.RequestsObserved == 0 && c.ResponsesVerified == 0, label+name+": handshake observations missing or false application response claim")
 			} else {
 				need(c.RequestsObserved >= c.Passes && (name == "wire" || name == "transport-tcp" || c.ResponsesVerified >= c.Passes), label+name+": independent traffic/response checks missing")
 			}

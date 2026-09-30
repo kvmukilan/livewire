@@ -139,6 +139,20 @@ class ExportTests(unittest.TestCase):
         for name in ('fixtures/http1-tls/fixture.pcap', 'fixtures/http1-tls/fixture.pcapng', 'fixtures/http1-tls/keylog.txt', 'attempts/000001-http1-tls/capture.pcap'):
             self.assertFalse(exporter.allowed(name, 'application', 'live'))
 
+    def test_tls_secrets_source_allows_only_exact_public_provenance_enum(self):
+        for value in ('none', 'embedded', 'external'):
+            for document in ({'tlsSecretsSource': value}, {'outcome': {'tlsSecretsSource': value}}, {'encoded': json.dumps({'tlsSecretsSource': value})}):
+                exporter.safe_contents(json.dumps(document).encode(), 'report.json')
+            exporter.safe_contents(('status: ' + json.dumps({'tlsSecretsSource': value})).encode(), 'output.txt')
+        exporter.safe_contents(b'{"tls\\u0053ecretsSource":"\\u0065mbedded"}', 'report.json')
+        for key, value in (('tlsSecretsSource', 'private-value'), ('TLSSecretsSource', 'embedded'), ('tlsSecretsSourceExtra', 'embedded'), ('tlsSecretsSource', None), ('tlsSecretsSource', ''), ('tlsSecretsSource', {'secret': 'value'}), ('tlsSecretsSource', ['embedded'])):
+            for document in ({key: value}, {'encoded': json.dumps({key: value})}):
+                with self.subTest(key=key, value=value, encoded='encoded' in document):
+                    with self.assertRaises(ValueError):
+                        exporter.safe_contents(json.dumps(document).encode(), 'report.json')
+        with self.assertRaises(ValueError):
+            exporter.safe_contents(b'{"tls\\u0053ecretsSource":"private-value"}', 'report.json')
+
     def test_no_console_cancellation_still_kills_owned_windows_tree(self):
         process = mock.Mock(pid=12345)
         process.poll.side_effect = [None, None]

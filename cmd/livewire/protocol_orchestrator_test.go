@@ -91,26 +91,19 @@ func TestProtocolOrchestratorRoutesCaptures(t *testing.T) {
 	}
 }
 
-func TestUnifiedTLSNamesMissingKeyLogWithoutSending(t *testing.T) {
-	path := writeProtocolStub(t, t.TempDir(), "tls", 443, []byte{22, 3, 3, 0, 1, 0})
+func TestUnifiedTLSRequiresTargetAndCompleteClientHello(t *testing.T) {
+	cert, ca := testTLSCertificate(t)
+	events, keys := captureHTTPOverTLS(t, cert)
+	path, _, _ := writeTLSFixture(t, t.TempDir(), events, keys, ca)
 	bin := buildBinary(t)
-	withoutTarget, err := runBinary(t, bin, "live", path, "-keylog", "keys.log")
+	withoutTarget, err := runBinary(t, bin, "live", path)
 	if err == nil || !strings.Contains(withoutTarget, "-t <host:port>") {
 		t.Fatalf("TLS missing target should name the exact flag; err=%v\n%s", err, withoutTarget)
 	}
-	for _, command := range []string{"live"} {
-		out, err := runBinary(t, bin, command, path, "-t", "127.0.0.1:443")
-		if err == nil {
-			t.Fatalf("%s unexpectedly succeeded:\n%s", command, out)
-		}
-		if !strings.Contains(out, "-keylog <file>") {
-			t.Errorf("%s did not name the exact missing input:\n%s", command, out)
-		}
-		for _, explanation := range []string{"fresh TLS handshake", "cannot decrypt the recorded session", "TLS key logging enabled"} {
-			if !strings.Contains(out, explanation) {
-				t.Errorf("%s omitted TLS recovery guidance %q:\n%s", command, explanation, out)
-			}
-		}
+	incomplete := writeProtocolStub(t, t.TempDir(), "tls", 443, []byte{22, 3, 3, 0, 1, 0})
+	out, err := runBinary(t, bin, "live", incomplete, "-t", "127.0.0.1:443")
+	if err == nil || !strings.Contains(out, "ClientHello") {
+		t.Fatalf("incomplete ClientHello not rejected offline: %v %s", err, out)
 	}
 }
 

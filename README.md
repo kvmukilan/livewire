@@ -56,15 +56,19 @@ requires a mode choice.
 Application-only options on `reproduce` are rejected with migration guidance.
 See the [command migration](docs/V1_FOLLOWUP.md).
 
-For a TLS capture, use
-`livewire live tls.pcap -keylog sslkeys.log -t device.example:443`.
-The matching key log recovers the original requests; Livewire sends them over
-a new certificate-verified TLS connection. A capture containing only encrypted
-records cannot reveal those requests without matching decryption material.
+For a TLS capture, use `livewire live tls.pcap -t device.example:443`.
+Livewire establishes fresh TCP and certificate-verified TLS state from the
+captured ClientHello's public SNI, ALPN and supported modern versions. If the
+PCAPNG contains matching TLS secrets, it also recovers the recorded application
+requests and replays them through the supported protocol adapter. Otherwise,
+the result explicitly says **handshake completed; application replay incomplete**.
+An optional `-keylog sslkeys.log` supplies matching secrets and takes priority
+over embedded secrets. New TLS keys cannot decrypt an old encrypted exchange.
+See [TLS directly from a capture](docs/TLS_CAPTURE_REPLAY.md) for the boundaries.
 Private CAs use `-ca device-ca.pem`; `-server-name` sets the verified server name
 when connecting by IP. `live -in` with explicit secure inputs such as `-keylog`
-also uses fresh sessions. Without secure inputs, historical `live -in` retains
-its original TCP simulation/packet controls.
+also uses fresh sessions. Recognized TLS uses fresh sessions with either form;
+other captures retain historical `live -in` simulation/packet controls.
 
 When you need to be precise about what is replayed:
 

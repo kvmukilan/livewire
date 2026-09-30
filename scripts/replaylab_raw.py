@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import re
 from pathlib import Path
@@ -34,6 +35,46 @@ DNS_QUERY = bytes.fromhex("123401000001000000000000") + b"\x03lab\x07example\x00
 
 def utc():
     return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+class LabContinuity:
+    """v1.1+ wall-clock limits mirrored by qualification.LabContinuity.
+
+    Leave margin above 25s subprocess deadlines and 20s round gaps, but never
+    credit host suspension as sustained activity. Historical gates are unchanged.
+    """
+    MAX_EXECUTION, MAX_IDLE, MAX_CASE_GAP = 120, 60, 300
+
+    def __init__(self, version):
+        self.enabled = corrected_contract(version)
+        self.last_finished, self.case_finished = None, {}
+
+    @staticmethod
+    def timestamp(value):
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+    def check_start(self, name, started):
+        if not self.enabled:
+            return
+        started = self.timestamp(started)
+        if self.last_finished is not None:
+            gap = (started - self.last_finished).total_seconds()
+            if not 0 <= gap <= self.MAX_IDLE:
+                raise ValueError("lab continuity: %s idle gap %ss outside 0..%s" % (name, gap, self.MAX_IDLE))
+        if name in self.case_finished:
+            gap = (started - self.case_finished[name]).total_seconds()
+            if gap > self.MAX_CASE_GAP:
+                raise ValueError("lab continuity: %s case gap %ss exceeds %s" % (name, gap, self.MAX_CASE_GAP))
+
+    def observe(self, name, started, finished):
+        if not self.enabled:
+            return
+        self.check_start(name, started)
+        started, finished = self.timestamp(started), self.timestamp(finished)
+        duration = (finished - started).total_seconds()
+        if not 0 <= duration <= self.MAX_EXECUTION:
+            raise ValueError("lab continuity: %s execution duration %ss outside 0..%s" % (name, duration, self.MAX_EXECUTION))
+        self.last_finished = self.case_finished[name] = finished
 
 
 def sha(path):
@@ -457,6 +498,7 @@ class Lab:
         self.started = utc()
         self.binary_sha = sha(args.binary)
         self.checked_evidence = {}
+        self.continuity = LabContinuity(args.version)
         self.results = {command: {name: {"name": name, "passes": 0, "failures": 0, "requestsObserved": 0, "responsesVerified": 0, "repeatedProcessPasses": 0, "cleanupVerified": False} for name in args.case} for command in args.command}
 
     def event(self, **values):
@@ -502,6 +544,7 @@ class Lab:
         self.event(event="setup", clientNamespace=self.client, serverNamespace=self.server, scriptSha256=sha(__file__))
 
     def execute(self, command, name, round_number):
+        self.continuity.check_start(name, utc())
         if sha(self.args.binary) != self.binary_sha:
             raise RuntimeError("CLI binary changed during qualification")
         if is_stateless(command, self.args.version):
@@ -530,6 +573,7 @@ class Lab:
         if name not in ("wire", "transport-tcp"):
             argv += ["-strict-exit"]
         began, monotonic = utc(), time.monotonic()
+        self.continuity.check_start(name, began)
         impaired = self.args.netem and name == "stateful-tcp"
         if impaired:
             self.run(["ip", "netns", "exec", self.client, "tc", "qdisc", "add", "dev", self.cif, "root", "netem", "delay", "5ms", "1ms", "loss", "2%", "reorder", "10%", "50%"])
@@ -564,6 +608,7 @@ class Lab:
             ref = evidence_ref(self.out, artifact)
             self.checked_evidence[ref["path"]] = ref["sha256"]
         finished = utc()
+        self.continuity.observe(name, began, finished)
         case = self.results[command][name]
         case["firstAt"] = case.get("firstAt", began)
         case["lastAt"] = finished
@@ -589,6 +634,7 @@ class Lab:
         report_path = Path(str(prefix) + ".report.json")
         output_path = Path(str(prefix) + ".cli.log")
         began = utc()
+        self.continuity.check_start("mixed-frames", began)
         argv = ["ip", "netns", "exec", self.client, str(Path(self.args.binary).resolve()), command, "-in", str(fixture), "-i", self.cif, "-n", "3", "-report", str(report_path)]
         result = subprocess.run(argv, capture_output=True, text=True, timeout=25)
         output_path.write_text(result.stdout + result.stderr, encoding="utf-8")
@@ -608,6 +654,7 @@ class Lab:
             ref = evidence_ref(self.out, artifact)
             self.checked_evidence[ref["path"]] = ref["sha256"]
         finished = utc()
+        self.continuity.observe("mixed-frames", began, finished)
         case = self.results[command]["mixed-frames"]
         case["firstAt"] = case.get("firstAt", began)
         case["lastAt"], case["cleanupVerified"] = finished, True
@@ -671,10 +718,14 @@ def main():
     p.add_argument("--round-gap", type=float, default=5)
     p.add_argument("--netem", action="store_true", help="exercise stateful TCP with namespace-local loss, jitter, and reordering")
     args = p.parse_args()
+    if any(not math.isfinite(value) or value < 0 for value in (args.duration, args.round_gap)):
+        p.error("duration and round gap must be finite and nonnegative")
     try:
         corrected = corrected_contract(args.version)
     except ValueError as error:
         p.error(str(error))
+    if corrected and args.round_gap > LabContinuity.MAX_IDLE:
+        p.error("round gap exceeds qualification continuity limit of 60 seconds")
     args.command = args.command or (["live"] if corrected else ["live", "reproduce"])
     if len(set(args.command)) != len(args.command): p.error("duplicate commands are not separate runs")
     if any(is_stateless(command, args.version) for command in args.command):

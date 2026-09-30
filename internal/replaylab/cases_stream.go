@@ -68,7 +68,17 @@ func setupHTTPFixture(ctx context.Context, dir string, encrypted bool) (*Fixture
 		}
 		return nil
 	}
-	return SetupStreamFixture(ctx, dir, exchanges, handler, encrypted)
+	fixture, err := SetupStreamFixture(ctx, dir, exchanges, handler, encrypted)
+	if err != nil {
+		return nil, err
+	}
+	if encrypted {
+		if err := embedFixtureKeys(fixture); err != nil {
+			_ = fixture.Close()
+			return nil, err
+		}
+	}
+	return fixture, nil
 }
 
 func labDNSMessage(id uint16, name byte, response bool) []byte {

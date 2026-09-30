@@ -416,12 +416,12 @@ func TestDashboardFailedJobsAndStatus(t *testing.T) {
 	}
 }
 
-func TestTLSMissingInputsRejectedBeforeStartingJob(t *testing.T) {
+func TestTLSIncompleteHelloRejectedBeforeStartingJob(t *testing.T) {
 	dir := t.TempDir()
 	writeBlockedTLSPcap(t, dir)
 	s, h := testServerHandler(t, dir)
 	w := postJSON(t, h, "/api/run", map[string]any{"pcap": "tls.pcap", "targetIP": "127.0.0.1:443", "mode": "application", "profile": "functional", "verify": "lenient", "variables": map[string]string{"ftp.password": "private-secret"}})
-	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "key log") {
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "ClientHello") {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
 	if strings.Contains(w.Body.String(), "private-secret") {

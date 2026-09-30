@@ -15,8 +15,8 @@ a new TLS session merely because their bytes were sent.
 
 | Required two-hour run | Platform | What is checked |
 |---|---|---|
-| Application `live` | Windows amd64 | Independent protocol peers and checked live responses |
-| Application `live` | Linux amd64 | Independent protocol peers and checked live responses |
+| Application `live` | Windows amd64 | 16 application cases with checked live responses, plus a separately checked TLS connection-only case |
+| Application `live` | Linux amd64 | The same 17 cases against independent protocol peers |
 | Advanced packet `live` | Linux amd64 | Live datagram/echo and TCP behavior; explicit wire compatibility |
 | Stateless `reproduce` | Linux amd64 | Exact captured frame bytes, order and counts; unverified application outcome |
 | Stateless compatibility `replay` | Linux amd64 | The same packet contract through the retained alias |
@@ -27,6 +27,14 @@ checked output and cleanup. Reports retain actual commands, executable/source
 hashes, start/end times, failure counts and hash-bound captures/transcripts.
 Short smoke tests and interrupted runs cannot satisfy the gate. Repeated-process
 soaks do not claim one process remained alive for two hours.
+
+Version 1.1 also checks activity throughout the recorded span. An execution
+must finish within two minutes, the next execution must start within one minute,
+and each case must run again within five minutes. The producer stops on a
+continuity failure before crediting the affected execution; the independent
+transcript validator checks these limits again. Sleeping or suspended hosts,
+backward clock changes and long idle gaps cannot qualify through elapsed wall
+time alone. A failed run needs a new output directory and a fresh full soak.
 
 Historical v1.0.0 retains its six-run rules and v1.0.1 its seven-run rules.
 Their published evidence and manifests remain unchanged. Version 1.1 records
@@ -47,6 +55,15 @@ flag. Peers check actual requests and live protocol state:
 | DNP3, DNP3 over TLS | Changed fragmentation, unsolicited traffic and confirmations |
 | FTP, explicit FTPS, implicit FTPS | Fresh control/data connections, upload/download counts and digests, verified TLS |
 | SSH | Fresh pinned host identity, explicit command outputs and exit status |
+| TLS connection only | Captured SNI/ALPN and supported version selection, fresh ClientHello randomness, verified handshake and zero application bytes |
+
+The HTTP/1 TLS application fixture embeds its TLS secrets in PCAPNG and requires
+no separate key-log file. Other TLS application cases exercise explicit key-log
+input. The connection-only case has no decryption secrets: successful TLS setup
+is counted separately as a handshake observation, while the CLI must report
+application replay incomplete and unverified, with no compared responses. It
+cannot satisfy the checks for any of the 16 application replay cases. Together
+the five runs require 43 platform/suite/command/case combinations.
 
 TLS soak captures use TLS 1.2 while fresh peers negotiate TLS 1.3. The opposite
 version direction, HTTP/1.1 ALPN, secure `live -in`, active FTP roles and
@@ -91,6 +108,21 @@ GOTOOLCHAIN=go1.26.7 go run ./scripts/qualify validate -version 1.1.0 -artifacts
 ```
 
 ## Repeat the software labs
+
+The [hosted qualification workflow](../.github/workflows/qualification.yml)
+runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
+with the full candidate commit, reviewed source digest, version and frozen
+Windows/Linux amd64 executable hashes. It checks out that commit, builds with
+Go 1.26.7 using the release flags, and refuses a mismatched binary before running
+the lab. An independent Go transcript check must actually run and pass before
+the workflow exports qualifying evidence. Cancellation, continuity failures or
+cleanup failures produce diagnostics instead of a passing bundle.
+
+Artifacts contain allowlisted reports, transcripts, synthetic packet evidence,
+checksums and workflow/toolchain provenance. Application fixture captures,
+embedded TLS secrets, key logs, private keys and executables are excluded.
+Download and independently revalidate the exact artifacts before adding them to
+the release manifest; workflow success alone does not complete release review.
 
 Use the exact release checkout and checksum-verified binaries. Every run needs
 a fresh output directory. Build and run the lab executable directly so it
