@@ -55,6 +55,13 @@ func arp() *pcapio.Record {
 	return &pcapio.Record{Data: b, CapLen: len(b), OrigLen: len(b), LinkType: wire.LinkEthernet, Time: time.Unix(2, 0)}
 }
 
+func intentClientHello() []byte {
+	body := append([]byte{3, 3}, make([]byte, 32)...)
+	body = append(body, 0, 0, 2, 0xc0, 0x2b, 1, 0)
+	handshake := append([]byte{1, 0, 0, byte(len(body))}, body...)
+	return append([]byte{22, 3, 3, 0, byte(len(handshake))}, handshake...)
+}
+
 func TestApplicationIntentAllowsLiveDatagramAndEchoDrivers(t *testing.T) {
 	for _, proto := range []byte{wire.ProtoUDP, wire.ProtoICMPv4} {
 		var rows []*pcapio.Record
@@ -96,7 +103,7 @@ func TestIntentPolicyAndPacketAccounting(t *testing.T) {
 	binaryBody := make([]byte, 2048)
 	_, _ = rand.New(rand.NewSource(92)).Read(binaryBody)
 	http := exchange(80, 41000, []byte("GET / HTTP/1.1\r\nHost: device\r\n\r\n"), append([]byte(fmt.Sprintf("HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n", len(binaryBody))), binaryBody...))
-	tls := exchange(443, 41001, []byte{0x16, 3, 3, 0, 4, 1, 0, 0, 0}, nil)
+	tls := exchange(443, 41001, intentClientHello(), nil)
 	ssh := exchange(22, 41002, []byte("SSH-2.0-client\r\n"), []byte("SSH-2.0-server\r\n"))
 	opaque := exchange(4567, 41003, binaryBody, nil)
 	unknown := exchange(4567, 41004, []byte{1, 2, 3, 4}, nil)
@@ -164,10 +171,15 @@ func TestIntentPolicyAndPacketAccounting(t *testing.T) {
 }
 
 func TestInvalidOptionsAndTruncatedCapture(t *testing.T) {
-	secure := exchange(443, 41000, []byte{0x16, 3, 3, 0, 4, 1, 0, 0, 0}, nil)
-	timing, err := Inspect(secure, Options{Mode: "application", Profile: "timing"}, nil)
+	secure := exchange(443, 41000, intentClientHello(), nil)
+	keylog := []byte("CLIENT_RANDOM " + strings.Repeat("00", 32) + " " + strings.Repeat("11", 48) + "\n")
+	timing, err := Inspect(secure, Options{Mode: "application", Profile: "timing", KeyLog: keylog}, nil)
 	if err != nil || !timing.Readiness.Supported || timing.Plan.Profile != replay.ProfileTiming {
 		t.Fatalf("TLS application timing preview: %v %+v", err, timing)
+	}
+	withoutSecrets, err := Inspect(secure, Options{Mode: "application", Profile: "timing"}, nil)
+	if err != nil || withoutSecrets.Readiness.Supported || !strings.Contains(withoutSecrets.Readiness.Blocker, "key log") {
+		t.Fatalf("keylog-free timing not blocked: %v %+v", err, withoutSecrets)
 	}
 	for _, opts := range []Options{{Mode: "guess"}, {Profile: "unknown"}, {Mode: "application", Profile: "wire"}, {Mode: "transport", Profile: "wire"}, {Sessions: []string{"tcp-99"}}, {KeyLog: []byte("CLIENT_RANDOM invalid invalid\n")}} {
 		if _, err := Inspect(nil, opts, nil); err == nil {

@@ -231,8 +231,11 @@ above; point the setup script at your build directory with `-ExeDirectory`.
 Socket-based application routes need neither driver.
 
 TLS, FTPS, and SSH retermination are included in the default build and are
-selected automatically by positional `live <capture>`. TLS/FTPS
-needs an explicitly selected `-keylog`; unified SSH needs credentials, explicit
+selected automatically by positional `live <capture>`. TLS creates a fresh
+verified handshake directly from public capture metadata. Application replay
+uses matching embedded PCAPNG secrets or explicit `-keylog`; without secrets,
+application replay remains incomplete. FTPS requires recoverable encrypted
+control/data messages. Unified SSH needs credentials, explicit
 `-cmd` operations, and a pinned `-host-key`. Protocol-specific replay commands
 remain available for older scripts. The build is pure Go — no cgo or C toolchain.
 

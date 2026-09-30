@@ -1,7 +1,7 @@
 // Command task mirrors the CI pipeline for local use, so a contributor can run
 // the same gates with one command and one toolchain:
 //
-//	go run ./scripts/task check            # build, vet, test, dashboard, lint
+//	go run ./scripts/task check            # build, vet, test, dashboard, Python, lint
 //	go run ./scripts/task all              # everything CI runs on every push
 //	go run ./scripts/task <target>...      # any subset, in order
 //
@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -54,6 +55,7 @@ var fuzzTargets = []struct{ pkg, name string }{
 	{"./internal/adapters", "FuzzRulePackCompiler"},
 	{"./internal/lab", "FuzzScenarioParsing"},
 	{"./internal/tlsreplay", "FuzzTLSRecordAndHandshakeParsing"},
+	{"./internal/pcapio", "FuzzPCAPNGTLSSecrets"},
 	{"./internal/replay", "FuzzTraceExtractionCoverage"},
 	{"./internal/ipreasm", "FuzzIPv6FragmentReassembly"},
 	{"./internal/ipreasm", "FuzzMalformedFragmentFrames"},
@@ -83,6 +85,7 @@ func init() {
 		{name: "dashboard", summary: "dashboard state tests under node", run: func(ctx context.Context, _ []string) error {
 			return sh(ctx, "node", "--test", "scripts/dashboard.test.cjs")
 		}},
+		{name: "python-tests", summary: "Python 3.11+ lab and qualification tests", run: pythonTests},
 		{name: "lint", summary: "govulncheck, staticcheck, high-confidence gosec", run: lint},
 		{name: "race", summary: "tests under the race detector", run: func(ctx context.Context, _ []string) error {
 			return sh(ctx, "go", "test", "-race", "-count=1", "./...")
@@ -97,11 +100,11 @@ func init() {
 		{name: "cover", summary: "coverage profiles under coverage/ with floors", run: cover},
 		{name: "corpus", summary: "maintained regression corpus", run: corpus},
 		{name: "compare-releases", summary: "behavior comparison against published releases", options: true, run: compareReleases},
-		{name: "check", summary: "build, vet, test, dashboard, lint", run: func(ctx context.Context, _ []string) error {
-			return runTargets(ctx, []string{"build", "vet", "test", "dashboard", "lint"})
+		{name: "check", summary: "build, vet, test, dashboard, python-tests, lint", run: func(ctx context.Context, _ []string) error {
+			return runTargets(ctx, []string{"build", "vet", "test", "dashboard", "python-tests", "lint"})
 		}},
 		{name: "all", summary: "every gate CI runs on push", run: func(ctx context.Context, _ []string) error {
-			return runTargets(ctx, []string{"build", "vet", "test", "dashboard", "lint", "race", "shuffle", "fuzz", "cover", "corpus"})
+			return runTargets(ctx, []string{"build", "vet", "test", "dashboard", "python-tests", "lint", "race", "shuffle", "fuzz", "cover", "corpus"})
 		}},
 	}
 }
@@ -180,6 +183,35 @@ func sh(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+func pythonTests(ctx context.Context, _ []string) error {
+	candidates := []string{"python3", "python"}
+	if runtime.GOOS == "windows" {
+		candidates = []string{"python", "python3"}
+	}
+	const probe = "import sys; print(sys.version); sys.exit(0 if sys.version_info >= (3, 11) else 1)"
+	var failures []string
+	for _, name := range candidates {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			failures = append(failures, name+": not found on PATH")
+			continue
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		out, err := exec.CommandContext(probeCtx, path, "-c", probe).CombinedOutput()
+		cancel()
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v (%s)", name, err, strings.TrimSpace(string(out))))
+			continue
+		}
+		fmt.Printf("Python interpreter: %s (%s)\n", path, strings.TrimSpace(string(out)))
+		return sh(ctx, path, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_*.py")
+	}
+	return fmt.Errorf("python 3.11 or newer is required; install python or python3 on PATH: %s", strings.Join(failures, "; "))
 }
 
 func lint(ctx context.Context, _ []string) error {

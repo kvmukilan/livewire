@@ -11,6 +11,17 @@ import (
 )
 
 // These are deliberately synthetic validator inputs, not release evidence.
+func syntheticLabCadence(version string, cases int) (int, time.Duration) {
+	if !UsesStatelessReproduce(version) {
+		return 3, time.Hour
+	}
+	interval := 4 * time.Minute
+	if cases == 1 {
+		interval = time.Minute
+	}
+	return int(2*time.Hour/interval) + 1, interval
+}
+
 func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
 	return labValidatorFixtureVersion(t, "1.0.0")
 }
@@ -80,14 +91,28 @@ func labValidatorFixtureVersion(t *testing.T, version string) (Manifest, Validat
 				var transcript bytes.Buffer
 				encoder := json.NewEncoder(&transcript)
 				artifact := addEvidence("synthetic.json", []byte(`{"synthetic":"validator fixture only"}`))
-				cases := ApplicationLabCases
+				cases := ApplicationLabCasesForVersion(version)
 				if suite == "packet" {
 					cases = PacketLabCases
 				}
-				for _, c := range cases {
-					run.Cases = append(run.Cases, LabCaseResult{Name: c, Passes: 3, FirstAt: start, LastAt: start.Add(7200 * time.Second), RequestsObserved: 6, ResponsesVerified: 6, CleanupVerified: true, RepeatedProcessPasses: 3})
-					for round := 1; round <= 3; round++ {
-						at := start.Add(time.Duration(round-1) * time.Hour)
+				rounds, interval := syntheticLabCadence(version, len(cases))
+				spacing := time.Duration(0)
+				if UsesStatelessReproduce(version) {
+					spacing = interval / time.Duration(len(cases))
+				}
+				for i, c := range cases {
+					first := start.Add(time.Duration(i) * spacing)
+					last := first.Add(2 * time.Hour)
+					run.Cases = append(run.Cases, LabCaseResult{Name: c, Passes: rounds, FirstAt: first, LastAt: last, RequestsObserved: rounds * 2, ResponsesVerified: rounds * 2, CleanupVerified: true, RepeatedProcessPasses: rounds})
+					if c == "tls-handshake" {
+						result := &run.Cases[len(run.Cases)-1]
+						result.RequestsObserved, result.ResponsesVerified, result.HandshakesObserved = 0, 0, rounds*2
+					}
+					run.Finished = last.Add(time.Second)
+				}
+				for round := 1; round <= rounds; round++ {
+					for i, c := range cases {
+						at := start.Add(time.Duration(round-1)*interval + time.Duration(i)*spacing)
 						e := labEvent{Case: c, Command: command, Round: round, Repeat: 2, Started: at, Finished: at, Requests: 2, Responses: 2, CleanupVerified: true}
 						if suite == "application" {
 							e.Before = labCounts{Requests: (round - 1) * 2, Responses: (round - 1) * 2}
@@ -96,11 +121,21 @@ func labValidatorFixtureVersion(t *testing.T, version string) (Manifest, Validat
 							e.Output, e.CLIReport = artifact.Path, artifact.Path
 							if UsesStatelessReproduce(version) {
 								e.Output = addEvidence(fmt.Sprintf("%s-%d-output.txt", c, round), []byte("synthetic CLI output")).Path
-								for i, report := range syntheticApplicationReports(version, e) {
-									data, err := json.Marshal(report)
-									if err != nil {
-										t.Fatal(err)
+								var reports [][]byte
+								if c == "tls-handshake" {
+									reports, e.PeerEvents = syntheticTLSHandshakeReports(t, version, e)
+									e.Before, e.After = labCounts{}, labCounts{}
+									e.VerifiedResponses, e.Requests, e.Responses, e.HandshakesObserved = 0, 0, 0, 2
+								} else {
+									for _, report := range syntheticApplicationReports(version, e) {
+										data, err := json.Marshal(report)
+										if err != nil {
+											t.Fatal(err)
+										}
+										reports = append(reports, data)
 									}
+								}
+								for i, data := range reports {
 									ref := addEvidence(fmt.Sprintf("%s-%d-report-%d.json", c, round, i), data)
 									e.CLIReports = append(e.CLIReports, ref.Path)
 								}

@@ -55,6 +55,7 @@ type Capture struct {
 	PCAPNG      bool
 	MixedLinks  bool
 	PrimaryLink wire.LinkType
+	tlsKeyLog   []byte // sensitive PCAPNG metadata, deliberately unexported
 }
 
 type recordReader interface {
@@ -98,6 +99,10 @@ func Load(r io.Reader, limits Limits) (Capture, error) {
 	}
 	var total int64
 	for {
+		if nr, ok := rd.(*NgReader); ok {
+			// A following DSB shares the budget with packets already retained.
+			nr.limits.MaxCaptureData = limits.MaxCaptureData - total
+		}
 		rec, err := rd.Read()
 		if err == io.EOF {
 			break
@@ -108,7 +113,11 @@ func Load(r io.Reader, limits Limits) (Capture, error) {
 		if len(out.Records) >= limits.MaxRecords {
 			return Capture{}, fmt.Errorf("%w: record count exceeds %d", ErrLimit, limits.MaxRecords)
 		}
-		if int64(len(rec.Data)) > limits.MaxCaptureData-total {
+		var secretBytes int64
+		if nr, ok := rd.(*NgReader); ok {
+			secretBytes = int64(len(nr.tlsKeyLog))
+		}
+		if int64(len(rec.Data)) > limits.MaxCaptureData-total-secretBytes {
 			return Capture{}, fmt.Errorf("%w: decoded packet data exceeds %d bytes", ErrLimit, limits.MaxCaptureData)
 		}
 		total += int64(len(rec.Data))
@@ -117,6 +126,10 @@ func Load(r io.Reader, limits Limits) (Capture, error) {
 	out.PrimaryLink = rd.LinkType()
 	if nr, ok := rd.(*NgReader); ok {
 		out.MixedLinks = nr.Mixed()
+		if int64(len(nr.tlsKeyLog)) > limits.MaxCaptureData-total {
+			return Capture{}, fmt.Errorf("%w: packet and decryption metadata exceed %d bytes", ErrLimit, limits.MaxCaptureData)
+		}
+		out.tlsKeyLog = nr.TLSKeyLog()
 	}
 	return out, nil
 }
