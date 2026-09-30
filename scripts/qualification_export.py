@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -85,6 +86,56 @@ def allowed(reference, suite, command):
     if reference in {case + '.pcap' for case in cases}:
         return True
     return any(re.fullmatch(re.escape(command + '-' + case) + r'-[0-9]{5}\.(?:report\.json|cli\.log|firewall\.txt|tcpdump\.log|independent\.pcap|actual\.pcap)', reference) for case in cases)
+
+
+def handoff_raw(run, suite, command, uid, gid):
+    """Return a finished sudo-owned raw run to its private scratch owner.
+
+    This does not publish evidence or relax report permissions. Every entry is
+    checked before mutation; directory-relative, no-follow opens prevent links
+    from redirecting privileged ownership changes outside this flat lab tree.
+    """
+    require(sys.platform == 'linux' and os.geteuid() == 0, 'raw handoff requires Linux root')
+    require(uid > 0 and gid >= 0, 'raw handoff requires an unprivileged owner')
+    require((suite == 'packet' and command == 'live') or (suite == 'stateless' and command in ('reproduce', 'replay')), 'invalid raw handoff suite')
+    run = Path(run)
+    require(run.is_absolute() and run.name == 'run' and str(run) == str(run.resolve()), 'raw handoff path must be canonical and unlinked')
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    parent = os.open('/', flags)
+    directory = None
+    try:
+        for part in run.parent.parts[1:]:
+            child = os.open(part, flags, dir_fd=parent)
+            os.close(parent)
+            parent = child
+        owner = os.fstat(parent)
+        require(owner.st_uid == uid and owner.st_gid == gid and stat.S_IMODE(owner.st_mode) in (0o700, 0o711, 0o755), 'raw scratch must be owned by the sudo caller and not writable by others')
+        directory = os.open(run.name, flags, dir_fd=parent)
+        require(os.fstat(directory).st_uid == 0, 'raw run must be root-owned')
+        names = os.listdir(directory)
+        require(len(names) <= 100000, 'raw handoff has too many files')
+        checked = {}
+        for name in names:
+            require(name == command + '.run.json' or allowed(name, suite, command), 'unexpected raw handoff entry')
+            info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_size <= 64 << 20, 'raw handoff requires bounded regular single-link files')
+            checked[name] = (info.st_dev, info.st_ino)
+        os.fchmod(directory, 0o700)
+        for name, identity in checked.items():
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            try:
+                info = os.fstat(descriptor)
+                require((info.st_dev, info.st_ino) == identity and stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_size <= 64 << 20, 'raw handoff entry changed')
+                os.fchmod(descriptor, 0o600)
+                os.fchown(descriptor, uid, gid)
+            finally:
+                os.close(descriptor)
+        require(set(os.listdir(directory)) == set(checked), 'raw handoff inventory changed')
+        os.fchown(directory, uid, gid)
+    finally:
+        if directory is not None:
+            os.close(directory)
+        os.close(parent)
 
 
 def inspect_credential_field(key, value):
@@ -208,6 +259,43 @@ def export_run(run, output, metadata, qualifying):
     stage.rename(output)
 
 
+def retain_diagnostic_log(output, log):
+    """Unsafe output is omitted in full, not redacted into possible key fragments."""
+    require(log.name in ('validation.log', 'handoff.log'), 'unexpected diagnostic log')
+    detail = {'schemaVersion': 1, 'qualifying': False, 'available': False, 'retained': False, 'limitBytes': 128 << 10}
+    if log.is_file():
+        detail.update(available=True, originalBytes=log.stat().st_size)
+        with log.open('rb') as stream:
+            raw = stream.read(detail['limitBytes'] + 1)
+        detail['truncated'] = len(raw) > detail['limitBytes']
+        if detail['truncated']:
+            raw = raw[:detail['limitBytes']]
+            raw = raw[:raw.rfind(b'\n') + 1]
+        try:
+            safe_contents(raw, log.name)
+        except (ValueError, UnicodeError):
+            detail['omittedReason'] = 'private material or invalid text'
+        else:
+            with (output / log.name).open('xb') as stream:
+                stream.write(raw)
+            detail.update(retained=True, retainedBytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+    write_json(output / (log.stem + '-diagnostic.json'), detail)
+
+
+def failure_diagnostics(run, output, metadata, validation_log):
+    """Missing reports/permissions must not hide bounded, screened tool logs."""
+    try:
+        export_run(run, output, metadata, qualifying=False)
+    except Exception:
+        require(not output.exists(), 'incomplete diagnostic export exists')
+        output.mkdir(parents=True)
+        write_json(output / 'failure.json', metadata)
+    retain_diagnostic_log(output, validation_log)
+    retain_diagnostic_log(output, validation_log.with_name('handoff.log'))
+    lines = [digest(path) + '  ' + path.relative_to(output).as_posix() for path in sorted(output.rglob('*')) if path.is_file() and path.name != 'SHA256SUMS']
+    (output / 'SHA256SUMS').write_text('\n'.join(lines) + '\n', encoding='utf-8', newline='\n')
+
+
 def stop_owned(process, windows):
     """Attempt cooperative cleanup; unavailable Windows consoles still stop."""
     if process.poll() is not None:
@@ -278,7 +366,9 @@ def run_job(args):
     go_version = output(['go', 'version'])
     require(go_version == 'go version go1.26.7 ' + native.replace('-', '/'), 'native pinned Go1.26.7 required')
     require(not scratch.exists(), 'scratch directory already exists')
-    scratch.mkdir(parents=True)
+    # tcpdump may drop to its dedicated user while recording synthetic raw
+    # traffic. Keep scratch traversable; CLI reports remain private at 0600.
+    scratch.mkdir(parents=True, mode=0o755)
     binary = scratch / ('livewire.exe' if os.name == 'nt' else 'livewire')
     meta = {'schemaVersion': 1, 'started': now(), 'commit': args.commit, 'version': args.version, 'suite': args.suite, 'command': args.command, 'sourceDigest': args.source, 'binarySHA256': args.binary, 'platform': native, 'goVersion': go_version, 'runnerImage': os.getenv('ImageOS', ''), 'runnerImageVersion': os.getenv('ImageVersion', ''), 'kernel': platform.release(), 'githubRunId': os.getenv('GITHUB_RUN_ID', ''), 'githubRunAttempt': os.getenv('GITHUB_RUN_ATTEMPT', ''), 'githubJob': os.getenv('GITHUB_JOB', ''), 'githubRepository': os.getenv('GITHUB_REPOSITORY', ''), 'workflowCommit': os.getenv('GITHUB_WORKFLOW_SHA', '')}
     run = scratch / 'run'
@@ -299,7 +389,15 @@ def run_job(args):
                 validation_test, validation_env = 'TestRecordedPacketLabTranscript', {'LIVEWIRE_PACKET_LAB_SMOKE': str(run)}
             else:
                 validation_test, validation_env = 'TestRecordedStatelessLabTranscript', {'LIVEWIRE_STATELESS_LAB_SMOKE': str(run), 'LIVEWIRE_STATELESS_LAB_COMMAND': args.command}
-        meta['exitCode'] = execute(argv, root, env, scratch / 'runner.log', 8700)
+        try:
+            meta['exitCode'] = execute(argv, root, env, scratch / 'runner.log', 8700)
+        finally:
+            # The root CLI deliberately writes reports as 0600. Return only
+            # this owned raw run to the caller before unprivileged validation,
+            # including interrupted/failed runs that need safe diagnostics.
+            if args.suite != 'application' and run.exists() and os.geteuid() != 0:
+                handoff = ['sudo', '-n', sys.executable, str(Path(__file__).resolve()), '--handoff-raw', str(run), '--suite', args.suite, '--command', args.command]
+                require(execute(handoff, root, env, scratch / 'handoff.log', 120) == 0, 'private raw evidence ownership handoff failed')
         require(source_digest(root) == args.source and digest(binary) == args.binary, 'source or binary changed during lab')
         meta['validationExitCode'] = execute(['go', 'test', './internal/qualification', '-count=1', '-run', '^' + validation_test + '$', '-timeout=10m', '-v'], root, {**env, **validation_env}, scratch / 'validation.log', 660)
         validation_log = (scratch / 'validation.log').read_text(encoding='utf-8')
@@ -314,13 +412,7 @@ def run_job(args):
         meta.update(finished=now(), failureType=type(error).__name__, interrupted=isinstance(error, KeyboardInterrupt), qualifying=False)
         # Error text can contain input/secret data, so only its type is exported
         # unless it is already covered by the bound safe report artifacts.
-        diagnostic = args.diagnostic.resolve()
-        try:
-            export_run(run, diagnostic, meta, qualifying=False)
-        except Exception:
-            require(not diagnostic.exists(), 'incomplete diagnostic export exists')
-            diagnostic.mkdir(parents=True)
-            write_json(diagnostic / 'failure.json', meta)
+        failure_diagnostics(run, args.diagnostic.resolve(), meta, scratch / 'validation.log')
         raise
 
 
@@ -328,6 +420,15 @@ def main():
     def terminate(_signum, _frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, terminate)
+    if len(sys.argv) > 1 and sys.argv[1] == '--handoff-raw':
+        parser = argparse.ArgumentParser(description='Private raw lab ownership handoff; no evidence publication')
+        parser.add_argument('--handoff-raw', type=Path, required=True)
+        parser.add_argument('--suite', choices=('packet', 'stateless'), required=True)
+        parser.add_argument('--command', choices=('live', 'reproduce', 'replay'), required=True)
+        args = parser.parse_args()
+        require(os.getenv('SUDO_UID', '').isdigit() and os.getenv('SUDO_GID', '').isdigit(), 'raw handoff requires sudo caller identity')
+        handoff_raw(args.handoff_raw, args.suite, args.command, int(os.environ['SUDO_UID']), int(os.environ['SUDO_GID']))
+        return
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--scratch', type=Path, required=True)
