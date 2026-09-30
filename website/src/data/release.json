@@ -1,13 +1,25 @@
 {
-  "version": "1.0.1",
-  "docsRef": "v1.0.1",
+  "version": "1.1.0",
+  "docsRef": "v1.1.0",
   "repository": "https://github.com/kvmukilan/livewire",
-  "contract": "legacy-dual-application",
-  "packetCommand": "replay",
-  "qualificationPath": "qualification/v1.0.1/README.md",
+  "contract": "live-stateful-reproduce-stateless",
+  "packetCommand": "reproduce",
+  "qualificationPath": "qualification/v1.1.0/README.md",
   "binaries": [
-    { "label": "Windows x64", "platform": "windows", "file": "livewire-1.0.1-windows-amd64.zip" },
-    { "label": "Linux x64", "platform": "linux", "file": "livewire-1.0.1-linux-amd64" },
-    { "label": "Linux ARM64", "platform": "linux", "file": "livewire-1.0.1-linux-arm64" }
+    {
+      "label": "Windows x64",
+      "platform": "windows",
+      "file": "livewire-1.1.0-windows-amd64.zip"
+    },
+    {
+      "label": "Linux x64",
+      "platform": "linux",
+      "file": "livewire-1.1.0-linux-amd64"
+    },
+    {
+      "label": "Linux ARM64",
+      "platform": "linux",
+      "file": "livewire-1.1.0-linux-arm64"
+    }
   ]
 }

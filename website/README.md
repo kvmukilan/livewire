@@ -38,15 +38,19 @@ added by the test runner.
 
 The only release metadata is `src/data/release.json`. Promote it only after the
 release and artifacts have been verified. `packetCommand` and `contract` keep
-published command behavior distinct from the planned corrected contract. The
-initial published v1.0.1 metadata deliberately uses `replay` for stateless packet
-examples because that binary's `reproduce` is application replay.
+published command behavior explicit. In v1.1.0, `live` creates fresh sessions,
+`reproduce` sends recorded packets, and `replay` is its compatibility alias.
+The historical v1.0.x `reproduce` command used application replay; migrate those
+workflows to `live`. Never promote these metadata before verifying the release.
 
-Five operator guides are imported from the immutable `docsRef` tag by
+Six operator guides are imported from the immutable `docsRef` tag by
 `npm run docs:sync`. The explicit allowlist is in `scripts/sync-docs.mjs`; the
 generated Markdown and SHA-256 provenance are committed. Builds do not fetch or
 silently import in-flight repository documentation. Never add captures, key logs,
-private fixtures, or the qualification evidence tree to the site.
+private fixtures, or the qualification evidence tree to the site. The TLS capture
+guide distinguishes handshake-only replay without secrets from application
+replay with embedded TLSK secrets or an explicit matching key log. A fresh
+handshake is not an application response match.
 
 ## Vercel
 
