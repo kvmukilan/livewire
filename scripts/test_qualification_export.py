@@ -122,6 +122,23 @@ class ExportTests(unittest.TestCase):
             exporter.export_run(self.run, self.base / 'diagnostic', self.meta, False)
         self.assertFalse((self.base / 'diagnostic').exists())
 
+    def test_keylog_hidden_in_json_or_pcap_cannot_export(self):
+        original = copy.deepcopy(self.report)
+        keylog = b'CLIENT_RANDOM ' + b'a'*64 + b' ' + b'b'*96
+        samples = [
+            ('reproduce-mixed-frames-00002.report.json', b'{"debug":"\\u0043LIENT_RANDOM ' + b'a'*64 + b' ' + b'b'*96 + b'"}'),
+            ('mixed-frames.pcap', bytes.fromhex('d4c3b2a1') + b'fixture bytes\x00' + keylog),
+        ]
+        for name, payload in samples:
+            with self.subTest(name=name):
+                self.report = copy.deepcopy(original)
+                self.add(name, payload)
+                self.reject()
+
+    def test_application_capture_fixtures_never_match_export_allowlist(self):
+        for name in ('fixtures/http1-tls/fixture.pcap', 'fixtures/http1-tls/fixture.pcapng', 'fixtures/http1-tls/keylog.txt', 'attempts/000001-http1-tls/capture.pcap'):
+            self.assertFalse(exporter.allowed(name, 'application', 'live'))
+
     def test_no_console_cancellation_still_kills_owned_windows_tree(self):
         process = mock.Mock(pid=12345)
         process.poll.side_effect = [None, None]
