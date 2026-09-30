@@ -112,9 +112,12 @@ func assessCapture(recs []*pcapio.Record, flows []*engine.Flow) preflightReport 
 				seen[key] = true
 			}
 		}
-		if dissect.DetectSSH(clientPayload) || dissect.DetectTLS(clientPayload).IsTLS {
+		if dissect.DetectTLS(clientPayload).IsTLS {
 			encrypted++
-			add("blocker", "encrypted-flow", fmt.Sprintf("flow %d is TLS/SSH; captured ciphertext cannot reproduce a fresh authenticated session", i), 20)
+			add("warning", "encrypted-flow", fmt.Sprintf("flow %d is TLS; the replay plan validates public ClientHello metadata for a fresh handshake and matching secrets for application replay", i), 20)
+		} else if dissect.DetectSSH(clientPayload) {
+			encrypted++
+			add("blocker", "encrypted-flow", fmt.Sprintf("flow %d is SSH; captured ciphertext cannot reproduce a fresh authenticated session", i), 20)
 		}
 		// Use reconstructed streams, not packet arrival order: retransmissions,
 		// split object headers and server-originated authentication all matter.

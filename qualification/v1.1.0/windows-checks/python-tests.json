@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "python-tests"
+  ],
+  "started": "2026-09-30T18:32:03.090657Z",
+  "finished": "2026-09-30T18:32:05.200616Z",
+  "exitCode": 0,
+  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "sourceDigestAfter": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "platform": "windows-amd64"
+}

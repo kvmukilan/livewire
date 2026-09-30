@@ -1,8 +1,12 @@
 package hoststack
 
 import (
+	"errors"
 	"net/netip"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -92,5 +96,62 @@ func TestRuleValidation(t *testing.T) {
 	}
 	if _, err := Arm(Rule{TargetIP: netip.MustParseAddr("10.0.0.1")}); err == nil {
 		t.Fatal("expected error for missing target port")
+	}
+}
+
+type retrySuppressor struct {
+	failed     error
+	failures   int32
+	calls      atomic.Int32
+	active     atomic.Int32
+	overlapped atomic.Bool
+}
+
+func (s *retrySuppressor) Arm() error       { return nil }
+func (s *retrySuppressor) Describe() string { return "retry fixture" }
+func (s *retrySuppressor) Disarm() error {
+	if s.active.Add(1) != 1 {
+		s.overlapped.Store(true)
+	}
+	defer s.active.Add(-1)
+	call := s.calls.Add(1)
+	runtime.Gosched()
+	if call <= s.failures {
+		return s.failed
+	}
+	return nil
+}
+
+func TestGuardReleaseRetriesFailuresAndSerializesConcurrentCallers(t *testing.T) {
+	failure := errors.New("OS rule deletion failed")
+	s := &retrySuppressor{failed: failure, failures: 3}
+	g := &Guard{s: s, armed: true}
+	if err := g.Release(); !errors.Is(err, failure) {
+		t.Fatalf("first release: %v", err)
+	}
+	if !g.armed {
+		t.Fatal("failed deletion was recorded as disarmed")
+	}
+	var wait sync.WaitGroup
+	results := make(chan error, 64)
+	for i := 0; i < cap(results); i++ {
+		wait.Add(1)
+		go func() { defer wait.Done(); results <- g.Release() }()
+	}
+	wait.Wait()
+	close(results)
+	failures := 1
+	for err := range results {
+		if errors.Is(err, failure) {
+			failures++
+		} else if err != nil {
+			t.Fatalf("unexpected release error: %v", err)
+		}
+	}
+	if failures != 3 || s.calls.Load() != 4 || s.overlapped.Load() || g.armed {
+		t.Fatalf("failures=%d calls=%d concurrent=%v armed=%v", failures, s.calls.Load(), s.overlapped.Load(), g.armed)
+	}
+	if err := g.Release(); err != nil || s.calls.Load() != 4 {
+		t.Fatalf("successful cleanup not idempotent: %v, %d", err, s.calls.Load())
 	}
 }

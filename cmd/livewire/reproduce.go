@@ -11,13 +11,11 @@ import (
 	"net"
 	"net/netip"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/adapters"
@@ -27,22 +25,16 @@ import (
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/replayintent"
+	"github.com/kvmukilan/livewire/internal/secureexec"
 )
 
-// cmdReproduce is the peer-facing, (almost) zero-flag entry point: give it a
-// capture and it walks you through reproducing the issue on your device — asking
-// only for your device's address and which network connection to use, with the
-// right answers pre-selected — then prints a plain-language verdict.
-//
-// With -n it replays more than once and reports how often the issue appears,
-// because a fault that shows up one time in five is the common field case and a
-// single replay cannot tell the difference between "fixed" and "intermittent".
-func cmdReproduce(args []string) (retErr error) {
-	return cmdCaptureReplay("reproduce", args)
+// cmdReproduce injects captured packets without application or transport state.
+func cmdReproduce(args []string) error {
+	return cmdStatelessReplay("reproduce", args)
 }
 
-// cmdCaptureReplay gives live and reproduce the same fresh-session execution
-// contract while retaining their own help and diagnostics.
+// cmdCaptureReplay executes fresh application sessions for live, with its own
+// help, target validation, response comparison and diagnostics.
 func cmdCaptureReplay(command string, args []string) (retErr error) {
 	o, err := parseCaptureReplayFlags(command, args)
 	if err != nil {
@@ -53,6 +45,7 @@ func cmdCaptureReplay(command string, args []string) (retErr error) {
 		return err
 	}
 	recs := capture.Records
+	o.embeddedKeyLog = capture.TLSKeyLog()
 	profile, registry, err := resolveReproduceIntent(&o)
 	if err != nil {
 		return err
@@ -109,6 +102,7 @@ func cmdCaptureReplay(command string, args []string) (retErr error) {
 		executionFlags: o.executionFlags,
 		captureDigest:  captureDigest,
 		capture:        o.capture, iface: o.iface, target: o.target, keylog: o.keylog, serverName: o.serverName, ca: o.ca,
+		keylogData: o.keylogData, keylogSource: o.keylogSource,
 		insecure: o.insecure, strict: o.strict, wire: inspection.Mode == "wire", user: o.sshUser, password: o.sshPass, privateKey: o.sshKey, hostKey: o.sshHostKey,
 		commands: o.sshCommands, expects: o.sshExpects, timeout: o.timeout, responseTimeout: o.responseTimeout, expectFault: o.expectFault, report: o.report, times: o.times, gap: o.gap, stopWhenDifferent: o.stopWhenDifferent,
 		variables: o.variables, rulePacks: o.rulePacks, sessions: o.sessions, inspection: inspection,
@@ -151,6 +145,9 @@ type reproduceOptions struct {
 	expectFault     string
 	variables       map[string]string
 	keylog          string
+	keylogData      []byte
+	embeddedKeyLog  []byte
+	keylogSource    string
 	serverName      string
 	ca              string
 	sshUser         string
@@ -173,7 +170,7 @@ func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, e
 	var pcapFlag string
 	inputHelp := "input capture file (or use its positional path)"
 	if command == "live" {
-		inputHelp = "legacy TCP controls unless explicit secure inputs are supplied; prefer a positional capture"
+		inputHelp = "TLS and explicit secure inputs use fresh sessions; other captures retain legacy TCP controls"
 	}
 	fs.StringVar(&pcapFlag, flagIn, "", inputHelp)
 	fs.StringVar(&o.iface, flagIface, "", "network connection for packet-based replay (asks when required)")
@@ -205,8 +202,8 @@ func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, e
 	fs.Var(&variables, "set", "set a run variable (repeatable name=value; secret names are redacted from reports)")
 	var rulePacks fileFlags
 	fs.Var(&rulePacks, "rules", "JSON adapter rule pack (repeatable)")
-	fs.StringVar(&o.keylog, "keylog", "", "matching NSS key log for TLS/FTPS (never auto-consumed or logged)")
-	fs.StringVar(&o.serverName, "server-name", "", "TLS certificate DNS name (default: target host)")
+	fs.StringVar(&o.keylog, "keylog", "", "explicit matching NSS key log for TLS/FTPS (overrides embedded PCAPNG secrets; never logged)")
+	fs.StringVar(&o.serverName, "server-name", "", "TLS certificate name (handshake-only default: captured SNI, then target host)")
 	fs.StringVar(&o.ca, "ca", "", "optional PEM CA bundle for TLS/FTPS verification")
 	fs.BoolVar(&o.insecure, "insecure-skip-verify", false, "explicitly disable TLS certificate verification (lab only)")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Second, "fresh TLS, FTPS, or SSH connection timeout")
@@ -224,11 +221,13 @@ func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, e
 	fs.Usage = func() {
 		fmt.Printf("usage: livewire %s <capture.pcap> -t <device-ip> [options]\n", command)
 		fmt.Println("\nReplay application requests through fresh connections and compare live responses.")
-		fmt.Println("The OS maintains TCP state. TLS uses -keylog to recover captured requests,")
-		fmt.Println("then opens a fresh certificate-verified TLS session. No -mode is needed.")
+		fmt.Println("The OS maintains TCP state. Replay opens a fresh certificate-verified TLS session.")
+		fmt.Println("Embedded PCAPNG secrets or -keylog recover captured application requests;")
+		fmt.Println("without secrets, only the fresh TLS handshake runs and application replay stays incomplete.")
+		fmt.Println("No -mode is needed.")
 		fmt.Println("Use check -details to find session IDs; -session <id> -dry-run previews without sending.")
 		fmt.Println("For intermittent issues add -n 5; -under-load preserves supported captured pacing.")
-		fmt.Println("Stateless captured-packet injection: livewire replay -in <capture> -i <connection>.")
+		fmt.Println("Stateless captured-packet injection: livewire reproduce -in <capture> -i <connection>.")
 		if command == "live" {
 			fmt.Println("Legacy live -in controls remain available: livewire live -in <capture> -h.")
 		}
@@ -340,13 +339,21 @@ func defaultReplayMode(mode, profile string) string {
 // fresh secure sessions, which changes what the later phases may claim.
 func inspectReproduce(o *reproduceOptions, recs []*pcapio.Record, registry *replay.Registry) (*replayintent.Inspection, bool, error) {
 	var selectedKeyLog []byte
-	if o.keylog != "" && o.mode != "wire" && detectProtocolRoute(recs).kind != protocolTLS {
+	if o.keylog != "" && o.mode != "wire" {
 		var err error
 		// #nosec G703 -- the local CLI explicitly selects a keylog path; it is not a remotely supplied or rooted-server path.
 		selectedKeyLog, err = os.ReadFile(o.keylog)
 		if err != nil {
 			return nil, false, err
 		}
+	}
+	if o.mode != "wire" {
+		var err error
+		o.keylogData, o.keylogSource, err = secureexec.SelectTLSKeyLog(o.embeddedKeyLog, selectedKeyLog, o.keylog != "")
+		if err != nil {
+			return nil, false, err
+		}
+		selectedKeyLog = o.keylogData
 	}
 	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: selectedKeyLog, Mode: o.mode, Profile: o.profile, Sessions: o.sessions, UDPIdle: o.udpIdle}, registry)
 	if err != nil {
@@ -396,6 +403,9 @@ func refuseUnsupportedFlags(o *reproduceOptions, inspection *replayintent.Inspec
 				return fmt.Errorf("-response-timeout requires a framed application adapter for TCP; the stateful packet engine uses bounded retransmission timers")
 			}
 		}
+	}
+	if secureRoute && inspection.Route.Kind == replayintent.TLS && len(o.keylogData) == 0 && inspection.Mode != "wire" && inspection.Mode != "transport" {
+		unsupported = append(unsupported, "strict", "response-timeout", "expect-fault", "stop-when-different", "set", "rules", "scenario", "state-dir", "resume")
 	}
 	if inspection.Mode == "wire" {
 		unsupported = []string{"t", "to", "target", "strict", "actual-out", "set", "gap", "stop-when-different", "keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "exact-tcp"}
@@ -535,7 +545,7 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	if o.strict {
 		verify = engine.VerifyStrict
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := commandSignalContext(context.Background())
 	defer stop()
 	ctx, cancel := o.executionFlags.context(ctx)
 	defer cancel()
@@ -547,6 +557,7 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	ctx = replay.WithExecution(ctx, exec)
 	live := liveOpts{
 		ctx:    ctx,
+		cancel: cancel,
 		target: deviceIP.String(), iface: iface, seed: 1, noGuard: o.noGuard,
 		profile: profile.Name, verify: verify, adaptive: profile.Adaptive, pace: profile.Pace, rawL4: profile.RawL4,
 		variables: o.variables, responseTimeout: o.responseTimeout,
@@ -647,11 +658,11 @@ func (r *genericReproduceRun) attempt(i int) iterate.Tally {
 		defer r.mu.Unlock()
 		switch {
 		case r.runs.Repeats():
-			fmt.Printf("  [attempt %d] %s\n", i+1, line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  [attempt %d] %s\n", i+1, line)
 		case idx < 0 || len(r.plan.Entries) == 1:
-			fmt.Printf("  %s\n", line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  %s\n", line)
 		default:
-			fmt.Printf("  [session %d] %s\n", idx, line)
+			writeCommandProgress(os.Stdout, r.live.cancel, "  [session %d] %s\n", idx, line)
 		}
 	}
 	if !r.quiet && r.runs.Repeats() {

@@ -1,0 +1,238 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": true,
+  "attempts": 3,
+  "captureDigest": "sha256:0d9379ed1398d212e7b7ccf8a1b3bd9ba94b6869c8e3d923d8ab01ad807bb905",
+  "flows": null,
+  "iface": "",
+  "intent": "application",
+  "limitations": [
+    "tcp-0: semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+  ],
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 0,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 3,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 0,
+      "sameAsRecording": 3,
+      "unverified": 0,
+      "wireOnly": 0
+    },
+    "status": "matched",
+    "unverified": 0,
+    "verdict": "same",
+    "wireOnly": 0
+  },
+  "paced": false,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 8,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "functional",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "modbus-tcp",
+        "capabilities": {
+          "incremental": true,
+          "recovery": "read-only restart",
+          "stateful": true
+        },
+        "driver": "semantic-tcp",
+        "fidelity": "semantic",
+        "fingerprint": "a04df44376d9",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "application messages decoded and dynamic fields prepared by modbus-tcp"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+        ]
+      }
+    ],
+    "packets": 8,
+    "profile": "functional"
+  },
+  "selectedPackets": 8,
+  "sessions": [
+    {
+      "adapter": "modbus-tcp",
+      "attempt": 1,
+      "cleanup": "complete",
+      "comparedResponses": 2,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 2,
+      "fidelity": "semantic",
+      "fingerprint": "a04df44376d9",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 2,
+      "packetCount": 8,
+      "protocol": "tcp",
+      "received": 2,
+      "sent": 2,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:54038",
+      "timing": {
+        "liveResponseMs": 1.0124,
+        "maxLiveResponseMs": 1.0124,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.0124,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 1
+      },
+      "transformations": [
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    },
+    {
+      "adapter": "modbus-tcp",
+      "attempt": 2,
+      "cleanup": "complete",
+      "comparedResponses": 2,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 2,
+      "fidelity": "semantic",
+      "fingerprint": "a04df44376d9",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 2,
+      "packetCount": 8,
+      "protocol": "tcp",
+      "received": 2,
+      "sent": 2,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:54038",
+      "timing": {
+        "liveResponseMs": 1.4457,
+        "maxLiveResponseMs": 1.4457,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.4457,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 1
+      },
+      "transformations": [
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    },
+    {
+      "adapter": "modbus-tcp",
+      "attempt": 3,
+      "cleanup": "complete",
+      "comparedResponses": 2,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 2,
+      "fidelity": "semantic",
+      "fingerprint": "a04df44376d9",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 2,
+      "packetCount": 8,
+      "protocol": "tcp",
+      "received": 2,
+      "sent": 2,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:54038",
+      "timing": {
+        "liveResponseMs": 1.2994,
+        "maxLiveResponseMs": 1.2994,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.2994,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 1
+      },
+      "transformations": [
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "captured packet timing not preserved",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "lenient",
+  "version": "1.1.0",
+  "when": "2026-09-30T18:47:43Z"
+}

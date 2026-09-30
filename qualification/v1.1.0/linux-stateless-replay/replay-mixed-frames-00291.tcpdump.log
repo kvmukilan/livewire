@@ -1,0 +1,5 @@
+libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
+tcpdump: listening on vs32b66aac86, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+66 packets captured
+66 packets received by filter
+0 packets dropped by kernel

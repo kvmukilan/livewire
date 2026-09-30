@@ -34,7 +34,7 @@ func TestIntentPreflightRejectsInvalidOrStaleRunsWithoutStarting(t *testing.T) {
 		{"/api/plan", map[string]any{"pcap": "tls.pcap", "secure": map[string]any{"keylog": "../secrets.log"}}, "invalid"},
 		{"/api/run", map[string]any{"pcap": "tls.pcap", "mode": "application", "targetIP": "127.0.0.1:443", "secure": map[string]any{"ca": "missing.pem"}}, ""},
 		{"/api/run", map[string]any{"pcap": "tls.pcap", "mode": "application", "targetIP": "127.0.0.1:443", "secure": map[string]any{"privateKey": "missing.key"}}, ""},
-		{"/api/run", map[string]any{"pcap": "tls.pcap", "mode": "application", "profile": "timing", "targetIP": "127.0.0.1:443"}, "functional profile"},
+		{"/api/run", map[string]any{"pcap": "tls.pcap", "mode": "application", "profile": "timing", "targetIP": "127.0.0.1:443"}, "ClientHello"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.endpoint+tc.want, func(t *testing.T) {

@@ -8,7 +8,9 @@ package tlsreplay
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"strings"
 )
@@ -50,6 +52,57 @@ func ParseKeyLog(r io.Reader) (*KeyLog, error) {
 		m[label] = secret
 	}
 	return kl, sc.Err()
+}
+
+// ParseKeyLogStrict validates embedded capture secrets without silently
+// discarding malformed lines or accepting conflicting values for one key.
+// Diagnostics deliberately contain no key material or client random.
+func ParseKeyLogStrict(data []byte) (*KeyLog, error) {
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 4096), 1<<20)
+	seen := map[string][]byte{}
+	lines := 0
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		f := strings.Fields(line)
+		if len(f) != 3 {
+			return nil, fmt.Errorf("embedded TLS secrets contain a malformed NSS entry")
+		}
+		random, err := hex.DecodeString(f[1])
+		if err != nil || len(random) != 32 {
+			return nil, fmt.Errorf("embedded TLS secrets contain an invalid client random")
+		}
+		secret, err := hex.DecodeString(f[2])
+		if err != nil {
+			return nil, fmt.Errorf("embedded TLS secrets contain invalid secret encoding")
+		}
+		valid := false
+		switch f[0] {
+		case "CLIENT_RANDOM":
+			valid = len(secret) == 48
+		case "CLIENT_HANDSHAKE_TRAFFIC_SECRET", "SERVER_HANDSHAKE_TRAFFIC_SECRET", "CLIENT_TRAFFIC_SECRET_0", "SERVER_TRAFFIC_SECRET_0", "CLIENT_EARLY_TRAFFIC_SECRET", "EARLY_EXPORTER_SECRET", "EXPORTER_SECRET":
+			valid = len(secret) == 32 || len(secret) == 48
+		}
+		if !valid {
+			return nil, fmt.Errorf("embedded TLS secrets contain an unsupported label or invalid secret length")
+		}
+		id := f[0] + "/" + strings.ToLower(f[1])
+		if previous, ok := seen[id]; ok && !bytes.Equal(previous, secret) {
+			return nil, fmt.Errorf("embedded TLS secrets contain conflicting entries")
+		}
+		seen[id] = secret
+		lines++
+	}
+	if err := sc.Err(); err != nil {
+		return nil, fmt.Errorf("embedded TLS secrets exceed the NSS line limit")
+	}
+	if lines == 0 {
+		return nil, fmt.Errorf("embedded TLS secrets contain no usable NSS entries")
+	}
+	return ParseKeyLog(bytes.NewReader(data))
 }
 
 // Secret returns the secret for a client random and label, if present.

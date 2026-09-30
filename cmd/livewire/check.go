@@ -12,6 +12,7 @@ import (
 	"github.com/kvmukilan/livewire/internal/engine"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/replayintent"
+	"github.com/kvmukilan/livewire/internal/secureexec"
 	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
@@ -38,7 +39,7 @@ func cmdCheck(args []string) error {
 		fmt.Println("usage: livewire check <capture.pcap>")
 		fmt.Println("   or: livewire check -in <capture.pcap> [-details]")
 		fmt.Println("\nLook at a capture without touching the network: what traffic it holds, and")
-		fmt.Println("whether livewire can replay it faithfully. Run this before 'reproduce' if")
+		fmt.Println("whether livewire can replay it faithfully. Run this before 'live' if")
 		fmt.Println("you want to know what you were sent.")
 		printFlags(fs, flagIn, flagDetails, "json", "session")
 	}
@@ -74,10 +75,11 @@ func cmdCheck(args []string) error {
 	// Pass two: can it be replayed. Read the records again rather than holding
 	// both representations, since assessment needs parsed records and the scan
 	// above needs only counts.
-	recs, _, err := loadRecords(path)
+	capture, _, err := loadCaptureSnapshot(path)
 	if err != nil {
 		return err
 	}
+	recs := capture.Records
 	assessment := assessCapture(recs, engine.ExtractFlows(recs))
 	printPreflight(assessment)
 
@@ -95,6 +97,10 @@ func cmdCheck(args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+	keys, _, err = secureexec.SelectTLSKeyLog(capture.TLSKeyLog(), keys, *keylog != "")
+	if err != nil {
+		return err
 	}
 	inspection, err := replayintent.Inspect(recs, replayintent.Options{KeyLog: keys, Mode: defaultReplayMode(*mode, string(profile)), Profile: string(profile), Sessions: selectedSessions, UDPIdle: *udpIdle}, registry)
 	if err != nil {

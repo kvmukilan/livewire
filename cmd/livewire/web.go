@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/webui"
@@ -38,6 +36,8 @@ func cmdWeb(args []string) error {
 	if !*unsafeListen && !isLoopbackListenAddr(*addr) {
 		return fmt.Errorf("refusing non-loopback dashboard address %q without -unsafe-listen", *addr)
 	}
+	ctx, stop := commandSignalContext(context.Background())
+	defer stop()
 	srv, err := webui.NewServerWithConfig(webui.Config{Dir: *dir, ListenAddr: *addr, UnsafeListen: *unsafeListen, Version: version})
 	if err != nil {
 		return err
@@ -52,13 +52,14 @@ func cmdWeb(args []string) error {
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
 		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10,
 	}
-	fmt.Printf("livewire dashboard on http://%s  (pcap dir: %s)\n", *addr, *dir)
-	fmt.Println("live replay needs the same privileges as the CLI (Administrator/root for RST suppression)")
-	if *unsafeListen {
-		fmt.Println("WARNING: dashboard authentication is not configured; network clients with the session page can control privileged replay")
+	if _, err := fmt.Printf("livewire dashboard on http://%s  (pcap dir: %s)\nlive replay needs the same privileges as the CLI (Administrator/root for RST suppression)\n", listener.Addr(), *dir); err != nil {
+		return errors.Join(err, srv.Shutdown(context.Background()), listener.Close())
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+	if *unsafeListen {
+		if _, err := fmt.Println("WARNING: dashboard authentication is not configured; network clients with the session page can control privileged replay"); err != nil {
+			return errors.Join(err, srv.Shutdown(context.Background()), listener.Close())
+		}
+	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- httpServer.Serve(listener) }()
 	var serveErr error
@@ -71,7 +72,9 @@ func cmdWeb(args []string) error {
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return errors.Join(serveErr, httpServer.Shutdown(shutdownCtx), srv.Shutdown(shutdownCtx))
+	// Cancel replay and close privileged resources before waiting for HTTP
+	// handlers to drain. Late handlers cannot create work after Server.Shutdown.
+	return errors.Join(serveErr, srv.Shutdown(shutdownCtx), httpServer.Shutdown(shutdownCtx))
 }
 
 func isLoopbackListenAddr(addr string) bool {

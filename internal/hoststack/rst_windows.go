@@ -23,15 +23,22 @@ const (
 // invalidHandle is INVALID_HANDLE_VALUE, WinDivertOpen's error return.
 var invalidHandle = ^uintptr(0)
 
+// Narrow OS call interfaces keep cleanup failure paths testable without
+// installing a privileged WinDivert driver.
+type winDivertLibrary interface{ Release() error }
+type winDivertProcedure interface {
+	Call(...uintptr) (uintptr, uintptr, error)
+}
+
 // winDivertSuppressor drops host RSTs to the target via the WinDivert driver,
 // loaded only by absolute executable-directory path with restricted dependency
 // search flags. Livewire stays cgo-free and builds without WinDivert present.
 type winDivertSuppressor struct {
 	rule   Rule
 	filter string
-	dll    *windows.DLL
+	dll    winDivertLibrary
 	open   *windows.Proc
-	closeP *windows.Proc
+	closeP winDivertProcedure
 	handle uintptr
 }
 
@@ -84,21 +91,21 @@ func (s *winDivertSuppressor) Arm() error {
 }
 
 func (s *winDivertSuppressor) Disarm() error {
-	var errs []error
 	if s.handle != invalidHandle {
 		r, _, callErr := s.closeP.Call(s.handle)
-		s.handle = invalidHandle
 		if r == 0 {
-			errs = append(errs, fmt.Errorf("hoststack: WinDivertClose failed: %v", callErr))
+			// Keep the handle and its DLL alive so a later Release can retry.
+			return fmt.Errorf("hoststack: WinDivertClose failed: %w", callErr)
 		}
+		s.handle = invalidHandle
 	}
 	if s.dll != nil {
 		if err := s.dll.Release(); err != nil {
-			errs = append(errs, err)
+			return fmt.Errorf("hoststack: release WinDivert DLL: %w", err)
 		}
 		s.dll = nil
 	}
-	return errors.Join(errs...)
+	return nil
 }
 
 func (s *winDivertSuppressor) Describe() string {

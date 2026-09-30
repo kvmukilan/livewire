@@ -1,6 +1,8 @@
 # Livewire Operator Guide
 
-This is the version 1 guide. Start with [Replay workflow](WORKFLOW.md)
+This guide describes the 1.1.0 command contract. When using a 1.0.1 binary, use the
+[1.0.1 operator guide](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/DOCUMENTATION.md)
+with that binary. Start with [Replay workflow](WORKFLOW.md)
 for fresh live sessions, session selection, and offline preview.
 
 This guide starts with commands that work. Use the Windows or Linux walkthrough
@@ -17,10 +19,16 @@ Two-sided:  Livewire client NIC --> DUT --> Livewire server NIC
              captured client actor       captured server actor
 ```
 
-Use one of the two primary commands for a live target: `reproduce <capture>` for
-the guided path or `live <capture>` to play captured application requests through fresh connections. No mode flag
-is needed for either command. `replay` sends stateless captured packets. Use `lab` only when the DUT must sit between
-two simulated endpoints.
+The two primary commands have different purposes: `live <capture>` plays
+application requests through fresh stateful connections, while
+`reproduce <capture> -i <interface>` sends the recorded packets statelessly.
+Neither needs a mode flag. `replay` remains a stateless compatibility alias.
+Use `lab` when the DUT must sit between two simulated endpoints.
+
+In 1.0.x, `reproduce` also invoked the application workflow. From 1.1 onward,
+replace it with `live` in application scripts. Stateless reproduction does not
+adapt addresses, sequence numbers, TLS records or application identifiers and
+never claims response equivalence. See [command migration](V1_FOLLOWUP.md).
 
 ## Quick navigation
 
@@ -44,9 +52,10 @@ this guide from beginning to end.
 
 - Use an isolated lab and a target you are authorized to test. A capture can
   contain destructive application operations.
-- Choose `-mode application`, `transport`, or `wire` explicitly. Use
-  `-session <id> -dry-run` to preview the intended exchange before execution.
-  Application pacing can use the `timing` profile for supported plaintext protocols.
+- Use positional `live <capture>` for fresh application sessions or `reproduce`
+  for stateless packets; neither needs a mode flag. Add `-session <id> -dry-run`
+  to preview the intended exchange before execution. Application pacing can use
+  the `timing` profile for supported plaintext and TLS protocols.
 - Capture both directions, without snap-length truncation, and include the TCP
   handshake when possible.
 - For packet-level one-sided replay, `-t` is an IP and the port comes from the
@@ -78,16 +87,16 @@ copy-paste commands to:
 4. inspect the capture, select sessions, and choose application or transport intent;
 5. use `rstdrop` only for an external packet injector.
 
-The important rule is that `live` and `reproduce` already manage RST
-suppression. A separate `rstdrop` process is not needed for either command.
+Stateful packet routes in `live` already manage RST suppression. A separate
+`rstdrop` process is not needed alongside them. Stateless `reproduce` sends
+captured frames without maintaining a peer TCP session.
 
 Minimal example from an Administrator PowerShell:
 
 ```powershell
 .\livewire.exe ifaces
 $Iface = '\Device\NPF_{PASTE_GUID_HERE}'
-.\livewire.exe reproduce .\issue.pcap -i $Iface -t 192.168.1.50
-# Fresh application replay: .\livewire.exe live .\issue.pcap -i $Iface -t 192.168.1.50
+.\livewire.exe live .\issue.pcap -i $Iface -t 192.168.1.50
 ```
 
 The remaining Windows sections cover building from source, capture creation,
@@ -200,32 +209,33 @@ Read the coverage table before continuing:
 ### 2.5 Run the first live replay
 
 ```powershell
-.\bin\livewire.exe reproduce $Capture `
+.\bin\livewire.exe live $Capture `
   -t $TargetIP `
   -i $Iface `
   -profile functional `
-  -report "${Run}.report.json" `
-  -actual-out "${Run}.actual.pcap"
+  -report "${Run}.report.json"
 ```
 
-`Ctrl-C` cancels the run and releases the interface and RST guard. Inspect the
-result without additional tools:
+`Ctrl-C` cancels the run and releases any owned interface and RST guard. Socket
+application routes do not use either. Inspect the result without additional tools:
 
 ```powershell
 $Report = Get-Content "${Run}.report.json" -Raw | ConvertFrom-Json
 $Report.sessions | Format-Table sessionId, protocol, driver, fidelity, completed, verified, matched
 $Report.limitations
-Get-Item "${Run}.actual.pcap", "${Run}.report.json"
+Get-Item "${Run}.report.json"
 ```
 
 The run is successful only when the relevant session completed and its
 verification result matches the fidelity you requested. A wire-only or
 unverified completion is not application equivalence.
+Packet routes can also publish `-actual-out` evidence. Socket replay does not
+fabricate a PCAP; capture its traffic independently when needed.
 
 ### 2.6 Re-run for a timing or TCP problem
 
 `-profile timing` and `-profile transport` are what this guide uses because it
-names the fidelity model directly. `reproduce` also accepts `-under-load` and
+names the fidelity model directly. `live` also accepts `-under-load` and
 `-exact-tcp` for exactly the same two profiles; the peer-facing docs use those
 names. Either spelling is fine.
 
@@ -235,19 +245,17 @@ behaved the same. See [§15](#15-command-reference).
 
 ```powershell
 # Preserve captured timing and concurrent flow starts.
-.\bin\livewire.exe reproduce $Capture -t $TargetIP -i $Iface `
-  -profile timing -report "${Run}.timing.report.json" `
-  -actual-out "${Run}.timing.actual.pcap"
+.\bin\livewire.exe live $Capture -t $TargetIP -i $Iface `
+  -profile timing -report "${Run}.timing.report.json"
 
 # Preserve segmentation, flags, retransmissions, ordering, and timing where valid.
-.\bin\livewire.exe reproduce $Capture -t $TargetIP -i $Iface `
+.\bin\livewire.exe live $Capture -t $TargetIP -i $Iface `
   -profile transport -report "${Run}.transport.report.json" `
   -actual-out "${Run}.transport.actual.pcap"
 
 # Stop the affected session at its first structural difference.
-.\bin\livewire.exe reproduce $Capture -t $TargetIP -i $Iface `
-  -profile functional -strict -report "${Run}.strict.report.json" `
-  -actual-out "${Run}.strict.actual.pcap"
+.\bin\livewire.exe live $Capture -t $TargetIP -i $Iface `
+  -profile functional -strict -report "${Run}.strict.report.json"
 ```
 
 `-under-load` is a guided alias for timing behavior. `-exact-tcp` selects the
@@ -339,54 +347,55 @@ RUN="$PWD/runs/issue"
 ./bin/livewire check -in "$CAPTURE" -profile functional -json "${RUN}.analysis.json"
 ```
 
-Resolve blockers before transmission. TLS and SSH captures need their
-specialized retermination commands; malformed or truncated data cannot be
-recovered by replay.
+Resolve blockers before transmission. `live` routes TLS and SSH captures through
+fresh secure sessions when their required inputs are supplied; see
+[secure captures](#10-ftp-tls-and-ssh-captures). Malformed or truncated data
+cannot be recovered by replay.
 
 ### 3.5 Run the first live replay
 
 ```bash
-sudo ./bin/livewire reproduce "$CAPTURE" \
+sudo ./bin/livewire live "$CAPTURE" \
   -t "$TARGET_IP" \
   -i "$IFACE" \
   -profile functional \
-  -report "${RUN}.report.json" \
-  -actual-out "${RUN}.actual.pcap"
+  -report "${RUN}.report.json"
 ```
 
-The reliable default is `sudo`: AF_PACKET needs `CAP_NET_RAW`, and the temporary
-`iptables` or `ip6tables` RST rule needs `CAP_NET_ADMIN`. After the run, return
-artifact ownership to the current user if needed:
+Packet routes need privileges: AF_PACKET needs `CAP_NET_RAW`, and a stateful TCP
+route's temporary `iptables` or `ip6tables` RST rule needs `CAP_NET_ADMIN`.
+Socket-based application routes need neither capability and can omit `sudo` and
+`-i`. After an elevated run, return artifact ownership to the current user if needed:
 
 ```bash
-sudo chown "$(id -u):$(id -g)" "${RUN}.report.json" "${RUN}.actual.pcap"
+sudo chown "$(id -u):$(id -g)" "${RUN}.report.json"
 
 sed -n '1,220p' "${RUN}.report.json"
-ls -lh "${RUN}.report.json" "${RUN}.actual.pcap"
+ls -lh "${RUN}.report.json"
 ```
 
-`Ctrl-C` cancels the run. Livewire removes the RST rule and closes the interface
-on success, error, or cancellation.
+`Ctrl-C` cancels the run. Livewire removes any owned RST rule and closes the
+interface on success, error, or cancellation. Packet routes can also publish
+`-actual-out` evidence; socket replay needs an independent capture for wire bytes.
 
 ### 3.6 Re-run with other fidelity profiles
 
 ```bash
-sudo ./bin/livewire reproduce "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
-  -profile timing -report "${RUN}.timing.report.json" \
-  -actual-out "${RUN}.timing.actual.pcap"
+sudo ./bin/livewire live "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
+  -profile timing -report "${RUN}.timing.report.json"
 
-sudo ./bin/livewire reproduce "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
+sudo ./bin/livewire live "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
   -profile transport -report "${RUN}.transport.report.json" \
   -actual-out "${RUN}.transport.actual.pcap"
 
-sudo ./bin/livewire reproduce "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
-  -profile functional -strict -report "${RUN}.strict.report.json" \
-  -actual-out "${RUN}.strict.actual.pcap"
+sudo ./bin/livewire live "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
+  -profile functional -strict -report "${RUN}.strict.report.json"
 ```
 
 ## 4. When the live port differs from the capture
 
-`reproduce -t` changes the target IP, not its ports. Rewrite the capture first
+For plaintext and packet routes, `live -t` changes the target IP, not its ports.
+Secure TLS/FTPS/SSH routes accept `host:port` directly. For other routes, rewrite the capture first
 when the live service uses a different port. This example changes port 502 to
 1502 in both directions and repairs checksums:
 
@@ -637,7 +646,7 @@ two-second wait. Wire mode deliberately does not apply that gate.
 
 | Profile | Use it for | What it claims |
 |---|---|---|
-| `functional` | First run; application behavior | Semantic adapter when available, otherwise adaptive transport |
+| `functional` | First run; application behavior | Supported semantic adapters or fresh secure sessions; no implicit fallback for unknown TCP in default `live` |
 | `timing` | Races, bursts, overlap, timeout problems | Functional behavior plus captured timing and concurrency |
 | `transport` | Retransmission, flag, ordering, segmentation problems | Captured transport behavior where a live peer permits it |
 | `wire` | Exact frame stimulus for a transparent DUT | Captured frame timing only; no live adaptation or response equivalence |
@@ -648,6 +657,9 @@ completed, but never that the response matched the recording.
 
 There is no silent stateful-to-wire fallback. The plan and report identify the
 driver and achieved fidelity for every session or raw lane.
+Advanced `live -mode auto` retains compatibility routing to adaptive transport
+for unrecognized TCP. Stateless `reproduce` has its own captured-timing and rate
+options; it does not accept these profiles or perform response verification.
 
 ## 9. Runtime substitutions and proprietary protocols
 
@@ -655,7 +667,7 @@ Pass `-set name=value` repeatedly. On PowerShell, quote values containing JSON
 or spaces:
 
 ```powershell
-.\bin\livewire.exe reproduce $Capture -t $TargetIP -i $Iface `
+.\bin\livewire.exe live $Capture -t $TargetIP -i $Iface `
   -set http.host=device.example `
   -set 'http.header.X-Lab-Run=run-42' `
   -set 'http.body={"mode":"diagnostic"}' `
@@ -667,7 +679,7 @@ or spaces:
 Linux:
 
 ```bash
-sudo ./bin/livewire reproduce "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
+sudo ./bin/livewire live "$CAPTURE" -t "$TARGET_IP" -i "$IFACE" \
   -set http.host=device.example \
   -set http.header.X-Lab-Run=run-42 \
   -set 'http.body={"mode":"diagnostic"}' \
@@ -685,7 +697,7 @@ correlation fields, volatile ranges, and copy-from-live substitutions:
 
 ```text
 livewire check -in issue.pcap -rules vendor.json
-livewire reproduce issue.pcap -t 192.168.1.50 -i <interface> -rules vendor.json
+livewire live issue.pcap -t 192.168.1.50 -i <interface> -rules vendor.json
 ```
 
 Rule packs cannot execute scripts or invent cryptographic state. Those cases
@@ -695,13 +707,13 @@ need a compiled Go adapter.
 
 ### FTP and FTPS
 
-FTP and FTPS control/data sessions are coordinated automatically by both primary
-commands. The planner recognizes `PASV`, `EPSV`, `PORT`, and `EPRT`, assigns each
+FTP and FTPS control/data sessions are coordinated automatically by `live`.
+The planner recognizes `PASV`, `EPSV`, `PORT`, and `EPRT`, assigns each
 negotiated data session by endpoint and chronology, and blocks ambiguous groups.
 `ftp-replay` remains a protocol-specific compatibility alias.
 
 ```text
-livewire reproduce issue.pcap -t ftp.example:21 \
+livewire live issue.pcap -t ftp.example:21 \
   -set ftp.user=lab -set ftp.password=secret -strict
 livewire live secure.pcap -t ftp.example:990 \
   -keylog sslkeys.log -server-name ftp.example -ca lab-ca.pem
@@ -715,7 +727,7 @@ opens a fresh listener and rewrites the advertised endpoint; set
 digest, and reply class. Explicit FTPS upgrades the existing control connection
 after a successful `AUTH TLS`; implicit FTPS begins with TLS. `PBSZ` and `PROT`
 are honored and every protected data socket negotiates fresh verified TLS.
-Captured TLS ciphertext is never replayed.
+This fresh-session route never transmits captured TLS ciphertext.
 
 Captured TLS or SSH ciphertext is never sent by automatic mode. The unified
 orchestrator asks for the requirements needed to construct a fresh session. In
@@ -723,15 +735,27 @@ non-interactive runs it stops before network activity and names the exact flags.
 
 ### TLS 1.2 and 1.3
 
-Provide the matching NSS `SSLKEYLOGFILE`. Livewire decrypts supported AEAD
-records, prepares the detected inner protocol, and opens a fresh verified TLS
-connection. An adjacent key log or `SSLKEYLOGFILE` environment value may be
-suggested, but is never consumed without affirmative operator selection.
+Use `live <capture> -t <host:port>` to establish fresh verified TLS from a
+complete captured ClientHello. No external keylog or request file is needed
+for that handshake. Without TLS secrets, application replay remains incomplete
+and unverified, with no application bytes sent.
+
+Matching TLS secrets embedded in PCAPNG or explicitly supplied with `-keylog`
+allow Livewire to decrypt supported AEAD records, prepare the detected inner
+protocol and replay captured application messages on a fresh connection.
+An explicit keylog takes priority over embedded secrets. Supplied secrets that
+cannot decrypt the selected exchange fail before sending. An adjacent keylog
+or `SSLKEYLOGFILE` environment value is never consumed without explicit selection.
+See [TLS directly from a capture](TLS_CAPTURE_REPLAY.md).
+
+The examples below use an external keylog for HTTP application replay. When the
+capture embeds matching secrets, omit only `-keylog`; application variables
+such as `-set http.host=...` still require decrypted application messages.
 
 Windows:
 
 ```powershell
-.\bin\livewire.exe reproduce $Capture `
+.\bin\livewire.exe live $Capture `
   -keylog .\secrets\sslkeys.log `
   -t device.example:443 `
   -server-name device.example `
@@ -743,7 +767,7 @@ Windows:
 Linux:
 
 ```bash
-./bin/livewire reproduce "$CAPTURE" \
+./bin/livewire live "$CAPTURE" \
   -keylog ./secrets/sslkeys.log \
   -t device.example:443 \
   -server-name device.example \
@@ -765,7 +789,7 @@ ciphertext is never interpreted as the original command text.
 Windows:
 
 ```powershell
-.\bin\livewire.exe reproduce $Capture `
+.\bin\livewire.exe live $Capture `
   -t device.example:22 `
   -user lab `
   -key .\secrets\id_ed25519 `
@@ -844,13 +868,21 @@ job.
 
 ## 13. Reports and support bundles
 
-One-sided replay writes the explicit `-report` JSON and `-actual-out` PCAP.
-Two-sided lab replay writes the explicit `-report` JSON and `-evidence` PCAPNG.
-Reports include the capture digest, replay plan, adapter versions,
-transformations, redacted variables, per-session results, and limitations.
+`live` writes a JSON report. Its packet routes can publish an `-actual-out`
+PCAP; socket replay does not fabricate packet evidence, and fresh secure routes
+reject `-actual-out`. Capture the live traffic independently when needed.
+Stateless `reproduce` and `replay` write transmission counts to an explicit
+`-report`, including preview JSON when combined with `-dry-run`; they do not
+accept `-actual-out` or compare responses. Two-sided `lab` writes the explicit
+`-report` JSON and `-evidence` PCAPNG.
 
-Create a shareable metadata-only bundle. Packet bytes are referenced by name,
-size, and SHA-256 but are not embedded:
+Application/transport reports include the capture digest, replay plan, adapter
+versions, transformations, redacted variables, per-session results, and
+limitations. Secure routes use redacted protocol-specific reports.
+
+Create a shareable metadata-only bundle. When packet evidence exists, reference
+it by name, size, and SHA-256 without embedding its bytes. Omit `-evidence` for
+a report-only run:
 
 Windows:
 
@@ -927,16 +959,21 @@ Capture the original SYN and SYN-ACK when possible.
 
 ### The capture is TLS, SSH, or authenticated DNP3
 
-- TLS/FTPS needs the matching key log: add `-keylog <file>` to `reproduce` or
-  positional `live`. A discovered key log is suggested, never silently read.
+- TLS opens a fresh verified handshake from the capture's ClientHello with
+  `live <capture> -t <host:port>` or `live -in <capture> -t <host:port>`.
+  Application replay needs matching embedded PCAPNG TLS secrets or explicit
+  `-keylog <file>`; without them it remains incomplete and unverified. FTPS
+  requires recoverable control/data messages. Nearby external key logs are
+  never silently read. See [TLS capture replay](TLS_CAPTURE_REPLAY.md).
 - SSH needs `-user`, exactly one of `-pass`/`-key`, a pinned `-host-key`, and at
   least one explicit `-cmd`. Captured SSH ciphertext is never treated as a
   command script.
 - DNP3 Secure Authentication needs a purpose-built adapter.
 - Unknown opaque sessions are blocked. Livewire never guesses plaintext or
   fresh cryptographic state and never falls back to wire injection automatically.
-- Raw injection requires `-wire`; the older explicitly selected `-profile wire`
-  remains a compatibility spelling for scripts that already use it.
+- Use `reproduce <capture> -i <interface>` for raw packet injection. Advanced
+  `live -wire` and `live -profile wire` remain compatibility spellings. None
+  turns captured ciphertext into a fresh secure application session.
 
 ## 15. Command reference
 
@@ -952,8 +989,8 @@ commands` lists the complete catalog.
 
 | Command | Purpose |
 |---|---|
-| `reproduce` | Guided protocol-aware replay, secure retermination, verification, and evidence |
-| `live` | Fresh application sessions plus historical advanced `live -in` controls |
+| `live` | Stateful application replay through fresh connections, secure retermination and response comparison |
+| `reproduce` | Stateless captured-packet transmission without connection state or reply checking |
 
 ### Advanced
 
@@ -963,16 +1000,16 @@ commands` lists the complete catalog.
 | `capture` | Record an interface into PCAP |
 | `ifaces` | List usable interfaces and exact Windows Npcap device names |
 | `web` | Serve the embedded local dashboard |
-| `live -in ...` | Historical TCP-only state-machine controls and dry runs, unchanged for compatibility |
+| `live -in ...` | Fresh sessions for recognized TLS or explicit secure inputs; historical TCP controls and dry runs for other captures |
 | `lab` | Coordinated two-sided replay through a DUT |
-| `replay` | Explicit stateless frame injection |
+| `replay` | Compatibility alias for stateless `reproduce` |
 | `rewrite` | Apply static MAC/IP/port/TTL/VLAN/sequence edits |
 | `convert` | Convert PCAPNG to classic PCAP, optionally reassembling fragments |
 | `ftp-replay` | Protocol-specific compatibility alias for the FTP/FTPS driver |
 | `tls-replay` | Protocol-specific compatibility alias for the TLS driver |
 | `ssh-replay` | Protocol-specific compatibility alias for the SSH driver |
 | `bundle` | Create a redacted metadata-only support ZIP |
-| `rstdrop` | Hold host-RST suppression open for an external injector (`reproduce` and `live` arm it themselves) |
+| `rstdrop` | Hold host-RST suppression open for an external injector (`live` manages it for stateful packet routes) |
 | `version` | Print the version |
 
 ### Older names, still supported
@@ -990,51 +1027,57 @@ The same idea keeps the same name on every command that has it.
 |---|---|---|
 | `-in` | the capture file | `reproduce`, `check`, `live`, `replay`, `rewrite`, `convert`, `lab`, `ftp-replay`, `tls-replay`, `ssh-replay` |
 | `-i` | which network connection to use | `reproduce`, `capture`, `live`, `replay` |
-| `-t` | the device to talk to | `reproduce`, `live`, `ftp-replay`, `tls-replay`, `ssh-replay`, `rstdrop` |
-| `-n` | how many: attempts for a replay, packets for `capture` | `reproduce`, `live`, `replay`, `capture` |
+| `-t` | the live device to talk to | `live`, `ftp-replay`, `tls-replay`, `ssh-replay`, `rstdrop` |
+| `-n` | fresh attempts for `live`, unchanged packet passes for `reproduce`/`replay`, packets for `capture` | `reproduce`, `live`, `replay`, `capture` |
 | `-o` | where to write | `capture`, `convert`, `rewrite`, `bundle` |
-| `-live` | actually send on the wire rather than simulate | `live` |
-| `-details` | show the expert tables rather than the plain-language summary | `reproduce`, `check` |
+| `-live` | actually send on the wire rather than simulate | legacy `live -in` |
+| `-details` | show the expert tables rather than the plain-language summary | `live`, `check` |
 
-`reproduce`, positional `live`, and `check` accept a bare capture. The primary
-`live` form requires it first; historical `live -in ...` keeps its exact parser.
+`live`, `reproduce`, `replay` and `check` accept a positional capture, including
+flags on either side. Recognized TLS or explicit secure inputs route `live -in`
+through fresh sessions; other captures retain the historical parser and controls.
 
 Superseded spellings — `-to`, `-on`, `-iface`, `-target`, `-out`, `-loop`,
 `-count`, `-ip`, `-times`, `-iterations`, `-dry-run` — remain accepted wherever
-they previously worked, so existing scripts and older copies of these docs keep
-running. They are omitted from the default help to keep the visible surface
+they previously worked, except for the explicit 1.1 `reproduce` contract
+correction: migrate application options to `live`. Aliases are omitted from the default help to keep the visible surface
 small; `livewire <command> -all-flags` lists every option a command accepts and
 marks the compatibility aliases.
 
 ### Repeating a replay
 
-`-n <count>` on `reproduce` and `live` replays the whole plan that many times and
+Stateless `reproduce -n <count>` sends the same selected frames on each pass and
+reports transmission counts, without comparing responses. `-n 0` continues
+until interrupted. It does not create a new connection for each pass.
+
+`-n <count>` on `live` replays the whole plan that many times and
 reports how often the device behaved the same, which is the useful measurement
 for an intermittent fault. The dashboard exposes the same control as an
 *Attempts* field on the one-sided run form.
 
 - Attempts run sequentially, separated by `-gap` (default 1s).
-- Generic packet-level attempts use a fresh client port and ISN. An identical TCP four-tuple
+- Stateful packet TCP attempts use a fresh client port and ISN. An identical TCP four-tuple
   re-sent immediately is a stale duplicate as far as the peer's TCP stack is
   concerned, so it would be reset and misreported as a failure to reproduce. The
   substitution is recorded in the report's `transformations`.
-- For a generic plan, one report and one evidence PCAP cover the whole run. Each `sessions[]` and
-  `flows[]` entry carries an `attempt` number, and the document gains `attempts`
+- For a generic plan, one report covers the whole run; packet routes can also
+  publish an evidence PCAP. Socket routes do not fabricate one. Each `sessions[]`
+  and `flows[]` entry carries an `attempt` number, and the document gains `attempts`
   plus an `outcome` object holding the per-attempt counts, whether the device was
   `consistent`, and an `intermittent` flag.
 - TLS, FTPS, and SSH attempts each negotiate a fresh authenticated connection
   and write a separate redacted attempt report, followed by an outcome tally.
-- A single run's report is byte-for-byte what it was before this feature: the
-  attempt fields are omitted entirely.
+- A single-attempt report omits the repetition-only attempt fields.
 - `-stop-when-different` ends the run at the first attempt that diverges, for
   when one failing sample is all you need. Ctrl-C stops cleanly and still writes
   a report covering the attempts that ran.
-- `live -n` requires an on-wire replay; repeating the deterministic dry run is
-  refused rather than silently producing identical passes.
+- Non-TLS legacy `live -in ... -n` requires an on-wire replay when requesting
+  more than one attempt; repeating its deterministic simulation is refused. Positional
+  `live ... -dry-run` previews the plan without executing any attempts.
 
 Run `livewire <command> -h` for the common flags, or `-all-flags` for all of them.
 
-## 16. Deliberate 0.9 boundaries
+## 16. Current boundaries
 
 - No distributed replay agents.
 - No TRex-scale throughput target.

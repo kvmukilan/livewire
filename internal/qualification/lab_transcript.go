@@ -25,6 +25,8 @@ type labEvent struct {
 	Before             labCounts `json:"before"`
 	After              labCounts `json:"after"`
 	VerifiedResponses  int       `json:"verifiedResponses"`
+	HandshakesObserved int       `json:"handshakesObserved,omitempty"`
+	PeerEvents         []string  `json:"peerEvents,omitempty"`
 	CLIReport          string    `json:"cliReport"`
 	CLIReports         []string  `json:"cliReports"`
 	Output             string    `json:"output"`
@@ -44,6 +46,9 @@ type labCounts struct {
 }
 
 func validateLabTranscript(run LabRun, base string) error {
+	if !labCommandAllowed(run.Version, run.Suite, run.Command) {
+		return fmt.Errorf("lab command does not match the release contract")
+	}
 	if run.Suite == "stateless" {
 		return validateStatelessTranscript(run, base)
 	}
@@ -72,7 +77,10 @@ func validateLabTranscript(run LabRun, base string) error {
 	}
 	totals := map[string]LabCaseResult{}
 	rounds := map[string]int{}
+	usedArtifacts := map[string]bool{}
 	packetCleanup := false
+	continuity := LabContinuity{Version: run.Version}
+	handshakeProof := TLSHandshakeLabVerifier{Version: run.Version}
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	scanner.Buffer(make([]byte, 4096), 4<<20)
 	for line := 1; scanner.Scan(); line++ {
@@ -94,7 +102,7 @@ func validateLabTranscript(run LabRun, base string) error {
 				if packetCleanup {
 					return fmt.Errorf("packet execution after cleanup")
 				}
-				if (event.Command != "live" && event.Command != "reproduce") || event.Case == "" || event.Error != "" || event.Repeat < 2 || event.Round < 1 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !event.CleanupVerified {
+				if !labCommandAllowed(run.Version, "packet", event.Command) || event.Case == "" || event.Error != "" || event.Repeat < 2 || event.Round < 1 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !event.CleanupVerified {
 					return fmt.Errorf("invalid packet execution at transcript line %d", line)
 				}
 			default:
@@ -109,14 +117,21 @@ func validateLabTranscript(run LabRun, base string) error {
 			return fmt.Errorf("invalid successful execution at transcript line %d", line)
 		}
 		prior := totals[event.Case]
+		if err := continuity.Observe(event.Case, event.Started, event.Finished); err != nil {
+			return err
+		}
 		if !prior.LastAt.IsZero() && event.Started.Before(prior.LastAt) {
 			return fmt.Errorf("overlapping executions for %s", event.Case)
 		}
 		requests, responses := event.Requests, event.Responses
+		handshake := UsesStatelessReproduce(run.Version) && run.Suite == "application" && event.Case == "tls-handshake"
+		if !handshake && event.HandshakesObserved != 0 {
+			return fmt.Errorf("non-handshake case has handshake observation counts")
+		}
 		if run.Suite == "application" {
 			requests = event.After.Requests - event.Before.Requests
 			responses = event.VerifiedResponses
-			if event.Before.Errors != 0 || event.After.Errors != 0 || event.After.ActiveConnections != 0 || event.Before.ActiveConnections != 0 || event.After.Responses-event.Before.Responses < event.Repeat {
+			if event.Before.Errors != 0 || event.After.Errors != 0 || event.After.ActiveConnections != 0 || event.Before.ActiveConnections != 0 || !handshake && event.After.Responses-event.Before.Responses < event.Repeat {
 				return fmt.Errorf("peer failure or cleanup missing for %s", event.Case)
 			}
 			if _, err := read(event.Output, ""); err != nil {
@@ -130,13 +145,37 @@ func validateLabTranscript(run LabRun, base string) error {
 				return fmt.Errorf("incomplete CLI reports for %s", event.Case)
 			}
 			seen := map[string]bool{}
+			var reports [][]byte
 			for _, path := range paths {
 				if seen[path] {
 					return fmt.Errorf("duplicate CLI report for %s", event.Case)
 				}
 				seen[path] = true
-				if _, err := read(path, ""); err != nil {
+				data, err := read(path, "")
+				if err != nil {
 					return err
+				}
+				reports = append(reports, data)
+			}
+			if UsesStatelessReproduce(run.Version) {
+				for _, path := range append(append([]string{}, paths...), event.Output) {
+					if usedArtifacts[path] {
+						return fmt.Errorf("reused application execution artifact %q", path)
+					}
+					usedArtifacts[path] = true
+				}
+				if handshake {
+					observed, err := handshakeProof.Check(event.Started, event.Finished, event.Repeat, event.PeerEvents, reports)
+					if err != nil {
+						return err
+					}
+					if event.HandshakesObserved != observed || event.VerifiedResponses != 0 || event.Requests != 0 || event.Responses != 0 || requests != 0 || event.After.Responses-event.Before.Responses != 0 {
+						return fmt.Errorf("TLS handshake observations differ from peer or claim application responses")
+					}
+				} else {
+					if err := validateApplicationCLIReports(run.Version, event, reports); err != nil {
+						return err
+					}
 				}
 			}
 		} else {
@@ -160,7 +199,7 @@ func validateLabTranscript(run LabRun, base string) error {
 				return err
 			}
 		}
-		if requests < event.Repeat || (event.Case != "wire" && event.Case != "transport-tcp" && responses < event.Repeat) || responses < 0 {
+		if !handshake && (requests < event.Repeat || (event.Case != "wire" && event.Case != "transport-tcp" && responses < event.Repeat) || responses < 0) {
 			return fmt.Errorf("missing independent observations for %s", event.Case)
 		}
 		if prior.Passes == 0 {
@@ -171,6 +210,7 @@ func validateLabTranscript(run LabRun, base string) error {
 		prior.RepeatedProcessPasses++
 		prior.RequestsObserved += requests
 		prior.ResponsesVerified += responses
+		prior.HandshakesObserved += event.HandshakesObserved
 		prior.CleanupVerified = true
 		totals[event.Case] = prior
 		rounds[event.Case] = event.Round
@@ -186,7 +226,7 @@ func validateLabTranscript(run LabRun, base string) error {
 	}
 	for _, c := range run.Cases {
 		observed := totals[c.Name]
-		if c.Name != observed.Name || c.Passes != observed.Passes || c.Failures != 0 || c.RequestsObserved != observed.RequestsObserved || c.ResponsesVerified != observed.ResponsesVerified || c.RepeatedProcessPasses != observed.RepeatedProcessPasses || !c.CleanupVerified || !c.FirstAt.Equal(observed.FirstAt) || !c.LastAt.Equal(observed.LastAt) {
+		if c.Name != observed.Name || c.Passes != observed.Passes || c.Failures != 0 || c.RequestsObserved != observed.RequestsObserved || c.ResponsesVerified != observed.ResponsesVerified || c.HandshakesObserved != observed.HandshakesObserved || c.RepeatedProcessPasses != observed.RepeatedProcessPasses || !c.CleanupVerified || !c.FirstAt.Equal(observed.FirstAt) || !c.LastAt.Equal(observed.LastAt) {
 			return fmt.Errorf("%s summary differs from execution transcript", c.Name)
 		}
 	}

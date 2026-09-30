@@ -21,7 +21,7 @@ func main() {
 	flag.StringVar(&o.SourceRoot, "source-root", ".", "source root bound into evidence")
 	flag.StringVar(&o.Output, "out", "", "new private evidence directory")
 	flag.StringVar(&o.Version, "version", buildinfo.Version, "expected binary version")
-	flag.StringVar(&o.Command, "command", "reproduce", "front door: live or reproduce")
+	flag.StringVar(&o.Command, "command", "live", "application front door: live (reproduce supported only for historical pre-1.1 versions)")
 	flag.StringVar(&o.Environment, "environment", "", "software-lab environment description")
 	flag.DurationVar(&o.Duration, "duration", 2*time.Hour, "minimum span of successful checks for every case")
 	flag.DurationVar(&o.Interval, "interval", time.Second, "pause between complete matrix rounds")

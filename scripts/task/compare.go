@@ -248,10 +248,13 @@ func compareOne(ctx context.Context, label, executable, output string, body []by
 	}
 	replay := []string{"reproduce", plain, "-t", "127.0.0.1", "-report", filepath.Join(output, label+"-replay.json")}
 	if label == "current" {
+		// Historical binaries used reproduce for application replay. The current
+		// command contract reserves reproduce for stateless captured packets.
+		replay[0] = "live"
 		commands = append(commands,
-			command{"gzip-replay", append(replay, "-mode", "application")},
-			command{"selected-preview", []string{"reproduce", mixed, "-mode", "application", "-session", "tcp-0", "-dry-run"}},
-			command{"selected-replay", []string{"reproduce", mixed, "-mode", "application", "-session", "tcp-0", "-t", "127.0.0.1", "-report", filepath.Join(output, "current-selected.json")}},
+			command{"gzip-replay", replay},
+			command{"selected-preview", []string{"live", mixed, "-session", "tcp-0", "-dry-run"}},
+			command{"selected-replay", []string{"live", mixed, "-session", "tcp-0", "-t", "127.0.0.1", "-report", filepath.Join(output, "current-selected.json")}},
 		)
 	} else {
 		commands = append(commands, command{"gzip-replay", append(replay, "-i", "comparison-no-packet-interface")})

@@ -6,11 +6,23 @@ field problems on SCADA and
 industrial equipment (Modbus, DNP3) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
 FTPS, TLS, SSH, and ordinary TCP, UDP, and ICMP.
 
-The **1.0** line adds live TCP flow control, protocol maintenance, durable replay
+Support depends on the protocol variant and captured context. HTTP/2/3
+application replay, TLS client-certificate authentication (mTLS), MQTT enhanced
+authentication, and DNP3 Secure Authentication are unsupported. TLS application
+replay needs matching captured secrets; SSH needs authentication, a pinned host
+key and explicit commands. Token renewal is not universal. A capture does not
+restore device configuration or internal state, and matching responses alone
+does not prove the original fault reproduced. See the
+[protocol limits](docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+
+The **1.x** line includes live TCP flow control, protocol maintenance, durable replay
 progress, and explicit reset/timeout observations. Its release uses
 [software-lab qualification](docs/V1_QUALIFICATION.md); physical NIC/device and
 human-pilot qualification remain separate. Binaries, checksums, and provenance attestations are on the
 [Releases page](https://github.com/kvmukilan/livewire/releases).
+
+The [website and version-pinned guides](https://kvmukilan.github.io/livewire/)
+cover installation, the two replay workflows and secure captures.
 
 ## Install
 
@@ -32,37 +44,51 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 ```sh
 livewire check issue.pcap                      # what is in the capture, can it be replayed
 livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
-livewire reproduce issue.pcap -t 192.168.1.50  # replay it against your device
+livewire reproduce issue.pcap -i eth0          # stateless replay of the recorded packets
 livewire web                                   # the same workflow in a browser
 ```
 
-`reproduce` asks for anything it still needs, with the right answer
-pre-selected, and reports matching checked responses, differences, or an
-incomplete/unverified exchange. It saves a shareable report next to the capture.
+**`live` is stateful.** It creates fresh application connections, lets the OS
+maintain TCP state, and adapts supported protocol state to live responses. It
+reports checked response matches, differences, or incomplete exchanges, and
+saves a shareable report next to the capture.
 
-`live` and `reproduce` use fresh application sessions by default; no extra mode
-choice is needed. The OS maintains TCP state and supported adapters update
-application state from live responses. For stateless packet injection, use
-`livewire replay -in issue.pcap -i <connection>`: it sends captured bytes in
-capture order without establishing TCP/TLS sessions or checking replies.
+**`reproduce` is stateless.** It sends the recorded frames in capture order,
+including both recorded directions, using captured timing or an explicit rate.
+It does not establish TCP/TLS sessions or check responses. Use `-dry-run` to
+preview and `-report packets.json` to retain transmission counts. `replay` is
+a compatibility alias for this same packet sender. Neither primary command
+requires a mode choice.
 
-For a TLS capture, use
-`livewire live tls.pcap -keylog sslkeys.log -t device.example:443`.
-The matching key log recovers the original requests; Livewire sends them over
-a new certificate-verified TLS connection. A capture containing only encrypted
-records cannot reveal those requests without matching decryption material.
+**Upgrading from 1.0.x:** application commands formerly written as
+`reproduce capture.pcap -t ...` must use `live capture.pcap -t ...` in 1.1.
+Application-only options on `reproduce` are rejected with migration guidance.
+See the [command migration](docs/V1_FOLLOWUP.md).
+
+For a TLS capture, use `livewire live tls.pcap -t device.example:443`.
+Livewire establishes fresh TCP and certificate-verified TLS state from the
+captured ClientHello's public SNI, ALPN and supported modern versions. If the
+PCAPNG contains matching TLS secrets, it also recovers the recorded application
+requests and replays them through the supported protocol adapter. When no TLS
+secrets are present, the result explicitly says
+**handshake completed; application replay incomplete**.
+An optional `-keylog sslkeys.log` supplies matching secrets and takes priority
+over embedded secrets. Supplied or embedded secrets that are malformed or do
+not decrypt the selected exchange fail before sending; they do not silently
+fall back to a handshake. New TLS keys cannot decrypt an old encrypted exchange.
+See [TLS directly from a capture](docs/TLS_CAPTURE_REPLAY.md) for the boundaries.
 Private CAs use `-ca device-ca.pem`; `-server-name` sets the verified server name
 when connecting by IP. `live -in` with explicit secure inputs such as `-keylog`
-also uses fresh sessions. Without secure inputs, historical `live -in` retains
-its original TCP simulation/packet controls.
+also uses fresh sessions. Recognized TLS uses fresh sessions with either form;
+other captures retain historical `live -in` simulation/packet controls.
 
 When you need to be precise about what is replayed:
 
 ```sh
 livewire check issue.pcap -details                                        # list the sessions
-livewire reproduce issue.pcap -session tcp-0 -dry-run   # preview, send nothing
-livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50
-livewire reproduce issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
+livewire live issue.pcap -session tcp-0 -dry-run   # preview, send nothing
+livewire live issue.pcap -session tcp-0 -t 192.168.1.50
+livewire live issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
 livewire compare issue.pcap issue.actual.pcap                             # where did it diverge
 ```
 
@@ -73,13 +99,14 @@ captured TCP behavior, repeated attempts, and durable progress. Matching checked
 responses alone does not prove that the original device fault recurred.
 
 To check a response timeout explicitly, use
-`livewire reproduce issue.pcap -t 192.168.1.50 -response-timeout 5s -expect-fault timeout`.
+`livewire live issue.pcap -t 192.168.1.50 -response-timeout 5s -expect-fault timeout`.
 This applies to TCP/TLS application replay and records the fault separately from
 response equivalence. MQTT keepalives and DNP3 fragment confirmations are serviced
 during replay; unsupported authentication and DNP3 object layouts stop with an
 explanation. See the [reliability guide](docs/RELIABILITY_IMPLEMENTATION.md) for
-protocol limits and recovery rules. Historical commands and flag aliases remain
-available throughout 1.x.
+protocol limits and recovery rules. Historical command names and other flag
+aliases remain available; application-style `reproduce` calls require the
+explicit 1.1 migration described above.
 
 ## Documentation
 

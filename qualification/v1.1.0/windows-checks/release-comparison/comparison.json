@@ -1,0 +1,67 @@
+{
+  "0.7.0": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "f60fccb4189a5aff98cf5b29a5414d9d93b920cc047265489213cd6cef393887"
+    },
+    "gzip-replay": {
+      "exitCode": 0,
+      "outputSHA256": "bb4ccae4cdc132a1c1cfe3472d95d46316a92bfa9220af04a0c2efa666ced59d"
+    },
+    "help": {
+      "exitCode": 2,
+      "outputSHA256": "58cef9bac79eebebffd3bf7e1ece43f2c6e96e0a8a1c8d1b683e26b679b63aff"
+    },
+    "localhostRequests": 1,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "b23308f00950bd1e0ab1ddbcab286e33c789046c567ab82ed1bcd5826a9788d2"
+    }
+  },
+  "0.8.0": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "6b990fa9ecef593e44371812e59d27ab563b840b58fc8b7d52c46efc94fb3092"
+    },
+    "gzip-replay": {
+      "exitCode": 1,
+      "outputSHA256": "10a353dc24b69320b1001163b14c2503a33357178c5a12d07857f85dbeb6b81a"
+    },
+    "help": {
+      "exitCode": 0,
+      "outputSHA256": "4da9aad82f51b09f09f6d59f3ce96a525f5de4d7b139eb1c9e52a046ea523711"
+    },
+    "localhostRequests": 0,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "c5ce8ac4de88c28a8e449cbd4d7d857a6ffe4e9722196edec03e686496d644bb"
+    }
+  },
+  "current": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "96a78f24853cf4c1528d486b953cc7c37fd8f926a22b9f1a650b6d031a27904e"
+    },
+    "gzip-replay": {
+      "exitCode": 0,
+      "outputSHA256": "d3a755d91864704e8508cf3d6a150b58e6fafce1a0529f4912686544171ff7d4"
+    },
+    "help": {
+      "exitCode": 0,
+      "outputSHA256": "c6861b682916b90e430cdbe093071be9773e141be0cedb130f8c435869f74fdb"
+    },
+    "localhostRequests": 2,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "72983a7ae6d65e4cfb7c0635d595d0f4d0e11f50b22804da8e323828d840b728"
+    },
+    "selected-preview": {
+      "exitCode": 0,
+      "outputSHA256": "bfaccdb7860b71dbd88a65a90fb726db716c738190048279fef2beb3860fa2e2"
+    },
+    "selected-replay": {
+      "exitCode": 0,
+      "outputSHA256": "541533bc26b332d8676cd03560f974493bdf8f0b7bcdfda8abbdd043d6250e33"
+    }
+  }
+}

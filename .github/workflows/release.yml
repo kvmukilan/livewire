@@ -68,7 +68,7 @@ jobs:
           go-version: "1.26.7"
           cache: true
       - run: go run ./scripts/task lint race shuffle fuzz cover
-      - run: python3 -m unittest discover -s scripts -p test_replaylab_raw.py
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
   release:
     name: Verify and publish release

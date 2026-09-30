@@ -31,7 +31,7 @@ func TestCLIReportUsesOriginalSnapshotDuringReplay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := runBinary(t, buildBinary(t), "reproduce", path, "--mode", "application", "--session", "tcp-0", "-t", "127.0.0.1")
+	out, err := runBinary(t, buildBinary(t), "live", path, "--mode", "application", "--session", "tcp-0", "-t", "127.0.0.1")
 	if err != nil {
 		t.Fatal(err, out)
 	}
@@ -57,7 +57,7 @@ func TestCLIDisconnectedTargetCannotClaimMatch(t *testing.T) {
 	}))
 	defer server.Close()
 	path := writeIntentHTTP(t, uint16(server.Listener.Addr().(*net.TCPAddr).Port), body, false)
-	out, err := runBinary(t, buildBinary(t), "reproduce", path, "--mode", "application", "-t", "127.0.0.1")
+	out, err := runBinary(t, buildBinary(t), "live", path, "--mode", "application", "-t", "127.0.0.1")
 	// Reproduce preserves its report-oriented exit policy. The report, rather
 	// than exit zero, must identify this attempt as incomplete.
 	if err != nil {

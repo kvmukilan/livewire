@@ -51,7 +51,7 @@ func TestFrontDoorsObserveFaultWithoutClaimingMatch(t *testing.T) {
 	for _, command := range []struct {
 		name string
 		run  func([]string) error
-	}{{"reproduce", cmdReproduce}, {"live", cmdLive}} {
+	}{{"live", cmdLive}} {
 		for _, kind := range []string{"reset", "timeout"} {
 			t.Run(command.name+"/"+kind, func(t *testing.T) {
 				listener, err := net.Listen("tcp", "127.0.0.1:0")

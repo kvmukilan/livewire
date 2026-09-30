@@ -52,15 +52,16 @@ func (s *iptablesSuppressor) Disarm() error {
 	if !s.armed {
 		return nil
 	}
-	s.armed = false
 	// Delete the same rule; ignore "doesn't exist" so double-cleanup is safe.
 	if out, err := s.run(s.bin, iptablesArgs(s.rule, "-D")...); err != nil {
 		msg := strings.ToLower(string(out))
 		if strings.Contains(msg, "no chain") || strings.Contains(msg, "does a matching rule exist") || strings.Contains(msg, "bad rule") {
+			s.armed = false
 			return nil
 		}
 		return fmt.Errorf("hoststack: removing RST-drop rule failed (%s): %w", strings.TrimSpace(string(out)), err)
 	}
+	s.armed = false
 	return nil
 }
 

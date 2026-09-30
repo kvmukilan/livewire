@@ -91,33 +91,26 @@ func TestProtocolOrchestratorRoutesCaptures(t *testing.T) {
 	}
 }
 
-func TestUnifiedTLSNamesMissingKeyLogWithoutSending(t *testing.T) {
-	path := writeProtocolStub(t, t.TempDir(), "tls", 443, []byte{22, 3, 3, 0, 1, 0})
+func TestUnifiedTLSRequiresTargetAndCompleteClientHello(t *testing.T) {
+	cert, ca := testTLSCertificate(t)
+	events, keys := captureHTTPOverTLS(t, cert)
+	path, _, _ := writeTLSFixture(t, t.TempDir(), events, keys, ca)
 	bin := buildBinary(t)
-	withoutTarget, err := runBinary(t, bin, "reproduce", path, "-keylog", "keys.log")
+	withoutTarget, err := runBinary(t, bin, "live", path)
 	if err == nil || !strings.Contains(withoutTarget, "-t <host:port>") {
 		t.Fatalf("TLS missing target should name the exact flag; err=%v\n%s", err, withoutTarget)
 	}
-	for _, command := range []string{"reproduce", "live"} {
-		out, err := runBinary(t, bin, command, path, "-t", "127.0.0.1:443")
-		if err == nil {
-			t.Fatalf("%s unexpectedly succeeded:\n%s", command, out)
-		}
-		if !strings.Contains(out, "-keylog <file>") {
-			t.Errorf("%s did not name the exact missing input:\n%s", command, out)
-		}
-		for _, explanation := range []string{"fresh TLS handshake", "cannot decrypt the recorded session", "TLS key logging enabled"} {
-			if !strings.Contains(out, explanation) {
-				t.Errorf("%s omitted TLS recovery guidance %q:\n%s", command, explanation, out)
-			}
-		}
+	incomplete := writeProtocolStub(t, t.TempDir(), "tls", 443, []byte{22, 3, 3, 0, 1, 0})
+	out, err := runBinary(t, bin, "live", incomplete, "-t", "127.0.0.1:443")
+	if err == nil || !strings.Contains(out, "ClientHello") {
+		t.Fatalf("incomplete ClientHello not rejected offline: %v %s", err, out)
 	}
 }
 
 func TestUnifiedFTPSNamesMissingKeyLogWithoutSending(t *testing.T) {
 	path := writeProtocolStub(t, t.TempDir(), "ftps", 990, []byte{22, 3, 3, 0, 1, 0})
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1:990")
+	out, err := runBinary(t, bin, "live", path, "-t", "127.0.0.1:990")
 	if err == nil || !strings.Contains(out, "FTPS needs the matching NSS key log") {
 		t.Fatalf("FTPS missing-input error was not actionable; err=%v\n%s", err, out)
 	}
@@ -126,7 +119,7 @@ func TestUnifiedFTPSNamesMissingKeyLogWithoutSending(t *testing.T) {
 func TestUnifiedSSHRequiresExplicitOperationsAndPinnedHost(t *testing.T) {
 	path := writeProtocolStub(t, t.TempDir(), "ssh", 22, []byte("SSH-2.0-device\r\n"))
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1:22", "-user", "operator", "-pass", "secret", "-cmd", "show status")
+	out, err := runBinary(t, bin, "live", path, "-t", "127.0.0.1:22", "-user", "operator", "-pass", "secret", "-cmd", "show status")
 	if err == nil {
 		t.Fatalf("SSH without host pin unexpectedly succeeded:\n%s", out)
 	}
@@ -153,7 +146,7 @@ func TestNonInteractiveSSHNamesEachMissingRequirement(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			args := append([]string{"reproduce", path, "-t", "127.0.0.1:22"}, tc.args...)
+			args := append([]string{"live", path, "-t", "127.0.0.1:22"}, tc.args...)
 			out, err := runBinary(t, bin, args...)
 			if err == nil || !strings.Contains(out, tc.want) {
 				t.Fatalf("missing requirement should name %q; err=%v\n%s", tc.want, err, out)
@@ -235,7 +228,7 @@ func TestUnknownOpaqueSessionDoesNotFallbackToTCPOrWire(t *testing.T) {
 	}
 	path := writeProtocolStub(t, t.TempDir(), "opaque", 44444, opaque)
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1")
+	out, err := runBinary(t, bin, "live", path, "-t", "127.0.0.1")
 	if err == nil {
 		t.Fatalf("unknown opaque capture unexpectedly ran:\n%s", out)
 	}
@@ -263,7 +256,7 @@ func TestDNP3SecureAuthenticationBlocksBeforeInterfaceSelection(t *testing.T) {
 				UserData: []byte{0xc1, 0xc1, 0x83, 120, 1, 0},
 			}.Encode()
 			path := writeProtocolStub(t, t.TempDir(), "dnp3-sa", 20000, frame)
-			out, err := runBinary(t, bin, "reproduce", path, "-t", "127.0.0.1")
+			out, err := runBinary(t, bin, "live", path, "-t", "127.0.0.1")
 			if err == nil {
 				t.Fatalf("DNP3 Secure Authentication unexpectedly ran:\n%s", out)
 			}

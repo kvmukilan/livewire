@@ -118,6 +118,7 @@ type Fidelity string
 
 const (
 	FidelitySemantic  Fidelity = "semantic"
+	FidelityHandshake Fidelity = "handshake"
 	FidelityTransport Fidelity = "transport"
 	FidelityTiming    Fidelity = "timing"
 	FidelityWire      Fidelity = "wire"

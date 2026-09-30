@@ -1,86 +1,132 @@
 # Version 1 qualification scope
 
-Version 1 uses the `software-lab` qualification profile. The release gate binds
-the reviewed evidence to the source digest and the exact Windows amd64 and Linux
-amd64 executable hashes. Physical NIC/device qualification and the uncoached
-human pilot remain separate work; software-lab evidence does not assert either.
+Version 1 uses the `software-lab` qualification profile. The gate binds all
+evidence to the reviewed CLI source digest and exact Windows/Linux amd64
+executable hashes. Physical NIC/device and human-pilot qualification are
+separate; software-lab evidence does not assert either.
 
-For v1.0.1, the application and datagram cases exercise command defaults without
-an explicit mode. The release additionally requires a separate Linux two-hour
-`replay` run with a mixed-protocol capture, independent frame byte/order/count
-checks, accurate transmission counts and no response-verification claim.
-Historical v1.0.0 retains its original six-run gate and immutable evidence.
+## Version 1.1 command contract
 
-The application matrix runs both `live <capture>` and `reproduce <capture>`
-against independent local HTTP/1, DNS/TCP, Modbus/TCP, MQTT 3.1.1, MQTT 5, DNP3,
-TLS application, FTP, explicit/implicit FTPS, and SSH peers. FTP cases exercise
-uploads and downloads, with newly negotiated data connections and decrypted
-capture data re-encrypted on fresh TLS sessions. MQTT peers check keepalive,
-both identifier namespaces and QoS handshakes. DNP3 peers change fragmentation
-and demand confirmations before sending the next fragment.
+`live` establishes stateful application sessions. `reproduce` sends the
+recorded packets statelessly, and `replay` remains its compatibility alias.
+These commands require different evidence: successful application comparison
+cannot be inferred from raw transmission, and recorded packets cannot establish
+a new TLS session merely because their bytes were sent.
 
-| Application cases | Independent peer checks |
+| Required two-hour run | Platform | What is checked |
+|---|---|---|
+| Application `live` | Windows amd64 | 16 application cases with checked live responses, plus a separately checked TLS connection-only case |
+| Application `live` | Linux amd64 | The same 17 cases against independent protocol peers |
+| Advanced packet `live` | Linux amd64 | Live datagram/echo and TCP behavior; explicit wire compatibility |
+| Stateless `reproduce` | Linux amd64 | Exact captured frame bytes, order and counts; unverified application outcome |
+| Stateless compatibility `replay` | Linux amd64 | The same packet contract through the retained alias |
+
+Every required case must have successful executions spanning at least two hours.
+Each CLI process repeats the selected exchange or capture, with independently
+checked output and cleanup. Reports retain actual commands, executable/source
+hashes, start/end times, failure counts and hash-bound captures/transcripts.
+Short smoke tests and interrupted runs cannot satisfy the gate. Repeated-process
+soaks do not claim one process remained alive for two hours.
+
+Version 1.1 also checks activity throughout the recorded span. An execution
+must finish within two minutes, the next execution must start within one minute,
+and each case must run again within five minutes. The producer stops on a
+continuity failure before crediting the affected execution; the independent
+transcript validator checks these limits again. Sleeping or suspended hosts,
+backward clock changes and long idle gaps cannot qualify through elapsed wall
+time alone. A failed run needs a new output directory and a fresh full soak.
+
+Historical v1.0.0 retains its six-run rules and v1.0.1 its seven-run rules.
+Their published evidence and manifests remain unchanged. Version 1.1 records
+must exercise the corrected commands; older application `reproduce` results
+cannot qualify stateless reproduction.
+
+## Application protocols
+
+The application matrix uses the public `live <capture>` default without a mode
+flag. Peers check actual requests and live protocol state:
+
+| Cases | Independent peer checks |
 |---|---|
-| HTTP/1, HTTP/1 over TLS | Live login cookie, subsequent authenticated request, split replies |
-| DNS/TCP, DNS over TLS | Two pipelined questions and replies returned in the opposite order |
-| Modbus/TCP, Modbus over TLS | Read function/address/count and reordered transaction replies |
-| MQTT 3.1.1 and MQTT 5, each plaintext and TLS | Timed keepalives, bidirectional QoS 2, packet identifiers, MQTT 5 aliases and limits |
-| DNP3, DNP3 over TLS | Changed transport/application fragmentation, unsolicited traffic and confirmations |
-| FTP, explicit FTPS, implicit FTPS | Fresh passive data connections, upload/download byte counts and SHA256, verified TLS identity |
+| HTTP/1, HTTP/1 over TLS | Live login cookie, authenticated follow-up request, split replies |
+| DNS/TCP, DNS over TLS | Pipelined questions and replies in the opposite order |
+| Modbus/TCP, Modbus over TLS | Function/address/count and reordered transaction replies |
+| MQTT 3.1.1 and MQTT 5, plaintext and TLS | Keepalives, bidirectional QoS 2, identifiers, aliases and limits |
+| DNP3, DNP3 over TLS | Changed fragmentation, unsolicited traffic and confirmations |
+| FTP, explicit FTPS, implicit FTPS | Fresh control/data connections, upload/download counts and digests, verified TLS |
 | SSH | Fresh pinned host identity, explicit command outputs and exit status |
+| TLS connection only | Captured SNI/ALPN and supported version selection, fresh ClientHello randomness, verified handshake and zero application bytes |
 
-TLS soak captures use TLS 1.2 and fresh peers negotiate TLS 1.3. Captured TLS 1.3
-to fresh TLS 1.2, HTTP/1.1 ALPN, secure `live -in` dispatch, and active FTP
-protection/role handling have separate regression tests; those are not
-additional two-hour matrix combinations. Custom rule packs and IPv6 TCP/UDP
-also have regression coverage rather than additional two-hour matrix cases.
+The HTTP/1 TLS application fixture embeds its TLS secrets in PCAPNG and requires
+no separate key-log file. Other TLS application cases exercise explicit key-log
+input. The connection-only case has no decryption secrets: successful TLS setup
+is counted separately as a handshake observation, while the CLI must report
+application replay incomplete and unverified, with no compared responses. It
+cannot satisfy the checks for any of the 16 application replay cases. Together
+the five runs require 43 platform/suite/command/case combinations.
 
-The Linux packet matrix uses owned network namespaces and virtual Ethernet
-links for DNS/UDP, generic UDP, ICMPv4/v6, adaptive TCP, captured TCP and wire
-injection. Independent traffic captures and server assertions check the actual
-CLI executions. Adaptive TCP executions include packet loss, delay and reordering.
-These tests exercise Linux software networking, not physical devices or Windows
-Npcap behavior on a physical NIC.
+TLS soak captures use TLS 1.2 while fresh peers negotiate TLS 1.3. The opposite
+version direction, HTTP/1.1 ALPN, secure `live -in`, active FTP roles and
+protection, custom rules and IPv6 TCP/UDP have separate regression coverage.
+HTTP/2/3 application replay and TLS client-certificate authentication remain
+outside the supported CLI scope. Unknown security and unsupported protocol
+forms must stop before an application send.
 
-Each required matrix case must have successful executions spanning at least
-two hours for each command. Each process repeats the exchange, checks report
-evidence and server counters, and verifies released connections. Short smoke
-tests cannot satisfy this gate. Reports retain the tested protocol combinations,
-environment, executable hash, source digest, failures and cleanup evidence.
+## Packet and stateless protocols
 
-Historical v1.0.0 HTTP checks exercised 840 repetitions of five captured sessions in
-one CLI process for each command on each platform. Each ran for about 70 minutes
-and verified 8,400 responses with fresh per-connection cookies and complete
-cleanup. [Results and reproduction instructions](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/long-process-http/README.md)
-retain resource observations separately from the required two-hour matrices.
+Owned Linux namespaces and virtual Ethernet links exercise DNS/UDP, generic
+UDP, ICMPv4/v6, adaptive TCP, captured TCP and explicit advanced wire replay.
+Adaptive TCP tests include packet loss, delay and reordering. These checks use
+Linux software networking, not physical devices or Windows Npcap fault scenarios.
 
-The release also requires native Windows and Linux automated checks. The
-existing `physical` profile retains its device, driver, browser and human-pilot
-requirements. To validate the profile declared by a manifest:
+The stateless fixture includes representative recorded frames for supported
+application families and transports, including HTTP/1, DNS, Modbus, MQTT,
+DNP3, FTP/data, FTPS/TLS ciphertext, SSH, TCP/UDP, ICMPv4/v6 and an unknown
+EtherType. Independent captures must match every transmitted frame, in order,
+for every pass. Reports must record the actual invoked command and
+`verified: false`. This establishes byte transmission across protocol fixtures,
+not valid fresh sessions or successful server operations. Pacing is scheduled
+from the capture; network timing is not claimed identical to the recording.
+
+## Automated checks and qualification status
+
+Native Windows/Linux checks cover build, vet, tests, dashboard state,
+static/vulnerability analysis, race, shuffle, fuzz, coverage, corpus, protocol
+faults, recovery/cleanup, loader limits and published-version comparisons.
+Current completion evidence belongs in [RELEASE_AUDIT.md](RELEASE_AUDIT.md).
+The changed 1.1 source is not qualified by the prior version's passing runs.
+
+The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
+retains its seven completed matrices, and [v1.0.0](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
+retains its original six. Their additional single-process HTTP checks remain
+historical results rather than a memory-leak guarantee for new builds.
+
+Validate the current release checkout with verified artifacts present:
 
 ```sh
-go run ./scripts/qualify validate -version 1.0.1 -artifacts dist/v1.0.1 qualification/stable.json
+GOTOOLCHAIN=go1.26.7 go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/stable.json
 ```
-
-For v1.0.1, all seven required runs completed with zero failures and verified
-cleanup. Each of the 79 platform/suite/command/case combinations exceeded two
-hours, across 17,015 CLI processes and 51,045 replay iterations. The
-[current evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
-retains exact spans, counts, source/binary hashes and independent final audits.
-These are repeated-process soaks; they do not claim one process stayed alive
-for two hours.
-
-The [historical v1.0.0 evidence](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
-retains its completed six-run qualification unchanged. Those prior runs do not
-qualify the changed v1.0.1 source.
 
 ## Repeat the software labs
 
-Use the v1.0.1 source checkout and checksum-verified release binaries under
-`dist/v1.0.1`. Each invocation requires a new output directory. The examples
-run `live`; repeat with `-command reproduce` and a different `-out` directory
-to exercise the other command. Omitting `-cases` runs the complete application
-matrix. Build and run the lab executable directly so it receives cancellation.
+The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.1.0/.github/workflows/qualification.yml)
+runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
+with the full candidate commit, reviewed source digest, version and frozen
+Windows/Linux amd64 executable hashes. It checks out that commit, builds with
+Go 1.26.7 using the release flags, and refuses a mismatched binary before running
+the lab. An independent Go transcript check must actually run and pass before
+the workflow exports qualifying evidence. Cancellation, continuity failures or
+cleanup failures produce diagnostics instead of a passing bundle.
+
+Artifacts contain allowlisted reports, transcripts, synthetic packet evidence,
+checksums and workflow/toolchain provenance. Application fixture captures,
+embedded TLS secrets, key logs, private keys and executables are excluded.
+Download and independently revalidate the exact artifacts before adding them to
+the release manifest; workflow success alone does not complete release review.
+
+Use the exact release checkout and checksum-verified binaries. Every run needs
+a fresh output directory. Build and run the lab executable directly so it
+receives cancellation. Omitting `-cases` runs every application case.
 
 Windows PowerShell:
 
@@ -89,51 +135,44 @@ $env:GOTOOLCHAIN = 'go1.26.7'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
-./coverage/replaylab.exe -binary ./dist/v1.0.1/livewire-1.0.1-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab.exe -binary ./dist/v1.1.0/livewire-1.1.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 Linux shell:
 
 ```sh
 mkdir -p coverage
-chmod +x dist/v1.0.1/livewire-1.0.1-linux-amd64
+chmod +x dist/v1.1.0/livewire-1.1.0-linux-amd64
 GOTOOLCHAIN=go1.26.7 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
-./coverage/replaylab -binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab -binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
-The Linux packet lab requires root, Python 3, `iproute2`, `iptables`, and
-`tcpdump`, with network namespaces, virtual Ethernet, IPv6 enabled in the
-namespaces, and the kernel's `netem` queue discipline available. Ensure the
-Linux release binary is executable. The lab creates
-its own namespaces and interfaces, removes only those resources, and runs
-both commands when `--command` is omitted. For the unchanged v1.0.1 source:
+The packet harness requires root, Python 3, `iproute2`, `iptables`, `tcpdump`,
+IPv6, network namespaces, virtual Ethernet and `netem`. It creates and cleans
+only its own interfaces/namespaces. Set `SOURCE_DIGEST` to the source digest
+from the exact release's reviewed manifest before running these commands:
 
 ```sh
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest 8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb --version 1.0.1 --duration 7200 --round-gap 20 --netem
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.0.1/livewire-1.0.1-linux-amd64" --output "$PWD/coverage/lab-linux-stateless" --source-digest 8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb --version 1.0.1 --command replay --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command live --duration 7200 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command reproduce --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command replay --duration 7200 --round-gap 20
 ```
 
-These commands create private captures and test key material as well as reports.
-The committed qualification bundle contains only the reviewed evidence listed
-by its reports; it excludes application fixtures, TLS key logs, and private keys.
-Changing the source or binary requires new qualification records. The separate
-[long-process HTTP instructions](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/long-process-http/README.md)
-repeat the additional single-process checks.
+Application labs create private capture keys and credentials. Publish only
+reviewed allowlisted evidence; never publish fixture key logs or private keys.
+Changing CLI source or executable bytes requires fresh qualification.
 
-## Replay boundaries
+## Remaining boundaries
 
-- Application replay uses new OS-managed TCP connections. TLS is decrypted
-  offline and re-terminated with fresh keys and verified peer identity.
-- The adaptive packet engine tracks live acknowledgments, negotiated MSS and
-  windows, outstanding bytes and FIN completion. Its flight budget is bounded;
-  it does not implement a full congestion-control algorithm or TIME_WAIT stack.
-- Captured transport and wire modes deliberately preserve packet stimuli and
-  have different verification limits from application replay.
-- Unknown DNP3 object layouts and secure authentication are blocked when their
-  safety cannot be established. Unsupported encryption requires explicit inputs
-  or a safe stop. No saved socket or credential state is restored on resume.
-- `-expect-fault reset|timeout` observes a response-read fault separately from
-  a completed matching exchange. Device crashes or other field faults still
-  require independent target-side evidence.
-- Linux arm64 is cross-built. Physical NICs, actual industrial devices, Windows
-  driver fault behavior, and human-pilot usability are outside this profile.
+- Software peers do not establish physical NIC, industrial-device or Windows
+  driver fault qualification. Native arm64 execution and uncoached human pilots
+  remain separate requirements.
+- Matching responses alone do not establish a device crash or another field
+  fault. Retain independent target-side logs and the relevant starting state.
+- Fresh application TCP does not reproduce captured packet loss/segmentation.
+  Stateless packets do not negotiate a new connection. Advanced transport
+  retains documented limits on TCP adaptation and recovery.
+- Durable application resume never restores sockets, TLS state, authentication
+  tokens or credentials. Uncertain writes require an explicit recovery contract.
+- Website usability checks and dashboard API tests are separate from physical
+  replay qualification. Record any actual visual/browser testing explicitly.

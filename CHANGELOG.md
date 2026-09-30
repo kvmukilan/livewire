@@ -2,6 +2,57 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.1.0] - 2026-10-01
+
+Correct the primary command contract: **`live` is stateful application replay;
+`reproduce` is stateless captured-packet replay.** `replay` remains a
+compatibility alias for `reproduce`. Neither primary command requires a mode.
+
+**Migration from 1.0.x:** use `live` for former application commands such as
+`reproduce capture.pcap -t device`. Application-only options on `reproduce`
+are rejected before capture loading or network access, with migration guidance.
+Existing versioned releases and evidence remain unchanged.
+
+- Route `reproduce` through the checked stateless sender, preserving recorded
+  bytes, both directions, capture order and selected pacing. Require an explicit
+  interface to send; keep dry runs free of network activity.
+- Accept positional capture paths and historical `-in` for stateless commands.
+  Reports name the invoked command and always retain `verified: false`.
+- Keep fresh TCP/TLS, live protocol state, response comparison and durable
+  application recovery under `live`. Preserve historical `live -in` dry runs
+  for non-TLS captures; recognized TLS takes the fresh-session route with
+  either capture spelling.
+- Align command help, operator guides and dashboard labels with the two purposes.
+- Establish a fresh, verified TLS connection directly from a complete captured
+  ClientHello, without an HTTP request file or external key log. Preserve public
+  SNI/ALPN and supported version selection, generate fresh connection keys, and
+  report application replay incomplete when captured plaintext is unavailable.
+- Read matching TLS secrets embedded in PCAPNG for captured application replay
+  without a separate key-log file. Bound and validate secret blocks, retain
+  immutable input snapshots, exclude secrets from reports, and reject malformed
+  or conflicting embedded keys before sending.
+- Cancel guarded replay safely when command output closes, remove temporary RST
+  rules before final output, and prevent dashboard rule creation during shutdown.
+  Retain failed cleanup ownership so retries cannot falsely report success;
+  serialize concurrent guard releases on Windows and Linux.
+- Require fresh stateful `live` and stateless `reproduce`/`replay` qualification,
+  including independent mixed-protocol frame captures. Earlier application
+  `reproduce` results cannot qualify the corrected command.
+- Reject qualification runs containing suspend or idle gaps. Add five GitHub
+  hosted two-hour jobs pinned to the candidate commit, source and executable
+  hashes, with independent transcript validation and bounded evidence export.
+- Add the static product/documentation website, with local fonts, accessible
+  navigation, version-pinned downloads and explicit TLS/qualification boundaries.
+
+The [qualification record](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/README.md)
+gives the software-lab scope, measured results and publication gates. Stateless
+TLS bytes can be sent without decryption keys, but they cannot establish a new
+TLS application session. Fresh TLS application replay requires matching capture
+key material, embedded in PCAPNG or explicitly supplied. Connection-only TLS
+observations never count as captured application matches. Client-certificate
+authentication, full Modbus Security and physical-device qualification are not
+claimed.
+
 ## [1.0.1] - 2026-09-30
 
 Fresh application sessions are now the default for `live`, `reproduce` and
