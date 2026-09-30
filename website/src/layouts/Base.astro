@@ -1,0 +1,46 @@
+---
+import { sitePath } from '../data/site';
+import '@fontsource/ibm-plex-sans/latin-400.css';
+import '@fontsource/ibm-plex-sans/latin-500.css';
+import '@fontsource/ibm-plex-sans/latin-600.css';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '../styles/global.css';
+import { navigation, release, releaseURL, source, routePath } from '../data/site';
+interface Props { title: string; description: string; noindex?: boolean; }
+const { title, description, noindex = false } = Astro.props;
+const pathname = Astro.url.pathname;
+const path = routePath(pathname);
+const canonical = Astro.site ? new URL(pathname, Astro.site) : undefined;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101820" />
+    <title>{title === 'Livewire' ? 'Livewire — Put your packet capture back to work' : `${title} · Livewire`}</title>
+    <meta name="description" content={description} />
+    {(noindex || !Astro.site || import.meta.env.VERCEL_ENV === 'preview') && <meta name="robots" content="noindex" />}
+    {canonical && <link rel="canonical" href={canonical} />}
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title === 'Livewire' ? 'Livewire — Put your packet capture back to work' : `${title} · Livewire`} />
+    <meta property="og:description" content={description} />
+    {canonical && <meta property="og:url" content={canonical} />}
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" type="image/svg+xml" href={sitePath("/favicon.svg")} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="header-inner wrap">
+        <a class="wordmark" href={sitePath("/")} aria-label="Livewire home"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M2 15h5l3-9 6 17 3-10h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>livewire<span class="logo-dot">.</span></a>
+        <nav class="desktop-nav" aria-label="Primary"><a href={sitePath("/workflows/")} aria-current={path.startsWith('/workflows') ? 'page' : undefined}>Workflows</a><a href={sitePath("/protocols/")} aria-current={path.startsWith('/protocols') ? 'page' : undefined}>Protocols</a><a href={sitePath("/secure-replay/")} aria-current={path.startsWith('/secure-replay') ? 'page' : undefined}>Secure replay</a><a href={sitePath("/releases/")} aria-current={path.startsWith('/releases') ? 'page' : undefined}>Releases</a></nav>
+        <a class="header-github" href={release.repository}>GitHub <span aria-hidden="true">↗</span></a>
+        <a class="button button-small" href={sitePath("/install/")}>Get Livewire <span aria-hidden="true">↓</span></a>
+        <details class="mobile-menu"><summary aria-label="Open navigation"><span>Menu</span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 5h14M2 9h14M2 13h14" stroke="currentColor" stroke-width="1.5"/></svg></summary><nav aria-label="Mobile">{navigation.map(item => <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</a>)}<a href={release.repository}>GitHub ↗</a></nav></details>
+      </div>
+    </header>
+    <main id="main" tabindex="-1"><slot /></main>
+    <footer class="site-footer wrap"><div><a class="wordmark" href={sitePath("/")}>livewire<span class="logo-dot">.</span></a><p>Recorded traffic. Live answers.</p><span class="footer-small">Open source · MIT licensed · Runs locally</span></div><nav aria-label="Footer"><a href={sitePath("/install/")}>Install</a><a href={sitePath("/troubleshooting/")}>Troubleshooting</a><a href={source('SECURITY.md')}>Security</a><a href={release.repository}>Source code ↗</a><a href={releaseURL}>v{release.version}</a></nav><p class="footer-note">A developer tool for testing systems you operate.<br />No captures or credentials are uploaded to this site.</p></footer>
+  </body>
+</html>

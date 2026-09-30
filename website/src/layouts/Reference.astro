@@ -1,0 +1,11 @@
+---
+import { sitePath } from '../data/site';
+import Guide from './Guide.astro';
+import { release, source } from '../data/site';
+interface Props { frontmatter: { title: string; description: string; sourcePath: string; sourceRef: string; }; }
+const { frontmatter } = Astro.props;
+---
+<Guide title={frontmatter.title} description={frontmatter.description} eyebrow={`VERSIONED REFERENCE / ${frontmatter.sourceRef}`}>
+  <div class="notice"><strong>Reference for {frontmatter.sourceRef}</strong>This is a reviewed snapshot of the operator documentation, imported from the release tag. {release.contract === 'legacy-dual-application' && <>In this release, <code>reproduce</code> still means application replay. The planned corrected contract is described in <a href={sitePath("/workflows/#versions")}>Workflows</a>.</>} <a href={source(frontmatter.sourcePath)}>View the original ↗</a></div>
+  <div class="reference-content"><slot /></div>
+</Guide>
