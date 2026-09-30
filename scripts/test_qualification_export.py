@@ -139,6 +139,26 @@ class ExportTests(unittest.TestCase):
         for name in ('fixtures/http1-tls/fixture.pcap', 'fixtures/http1-tls/fixture.pcapng', 'fixtures/http1-tls/keylog.txt', 'attempts/000001-http1-tls/capture.pcap'):
             self.assertFalse(exporter.allowed(name, 'application', 'live'))
 
+    def test_wire_actual_captures_are_allowed_only_for_packet_suite(self):
+        for name in ('wire.actual.pcap', 'wire.actual-1.pcap', 'wire.actual-16.pcap'):
+            self.assertTrue(exporter.allowed(name, 'packet', 'live'))
+            self.assertFalse(exporter.allowed(name, 'application', 'live'))
+            self.assertFalse(exporter.allowed(name, 'stateless', 'reproduce'))
+            self.assertFalse(exporter.allowed(name, 'stateless', 'replay'))
+        for name in ('wire.actual-0.pcap', 'wire.actual-01.pcap', 'wire.actual--1.pcap',
+                     'wire.actual-1.pcapng', 'udp.actual.pcap', 'nested/wire.actual.pcap',
+                     '../wire.actual.pcap', 'wire.actual.pcap.key'):
+            self.assertFalse(exporter.allowed(name, 'packet', 'live'))
+        with self.assertRaises(ValueError):
+            exporter.safe_contents(bytes.fromhex('d4c3b2a1') + b'\nPASS private-value\r\n', 'wire.actual.pcap')
+
+    def test_stateless_attempt_progress_keeps_ftp_credentials_blocked(self):
+        exporter.safe_contents(b'22 frames, one pass takes 420ms at the chosen rate\nattempt 1 complete (22 frames)\nattempt 2 complete (22 frames)\n', 'reproduce-mixed-frames-00001.cli.log')
+        for value in (b'PASS private-value\r\n', b'pass private-value\n', b'pass 1 complete (22 frames)\n'):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    exporter.safe_contents(value, 'reproduce-mixed-frames-00001.cli.log')
+
     def test_tls_secrets_source_allows_only_exact_public_provenance_enum(self):
         for value in ('none', 'embedded', 'external'):
             for document in ({'tlsSecretsSource': value}, {'outcome': {'tlsSecretsSource': value}}, {'encoded': json.dumps({'tlsSecretsSource': value})}):

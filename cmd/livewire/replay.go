@@ -255,7 +255,7 @@ func cmdStatelessReplayWithSender(command string, args []string, openSender func
 		if report != nil {
 			report.Passes = pass
 		}
-		fmt.Printf("pass %d complete (%d frames)\n", pass, len(recs))
+		fmt.Printf("attempt %d complete (%d frames)\n", pass, len(recs))
 	}
 	return nil
 }

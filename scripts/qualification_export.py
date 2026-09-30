@@ -79,6 +79,8 @@ def allowed(reference, suite, command):
         return bool(match and match[1] in APP_CASES)
     if reference in {'events.jsonl', 'peer.jsonl', 'peer-process.log'}:
         return True
+    if suite == 'packet' and re.fullmatch(r'wire\.actual(?:-[1-9][0-9]*)?\.pcap', reference):
+        return True
     cases = PACKET_CASES if suite == 'packet' else {'mixed-frames'}
     if reference in {case + '.pcap' for case in cases}:
         return True
