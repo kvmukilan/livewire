@@ -1,0 +1,10 @@
+---
+import { sitePath } from '../data/site';
+import { release } from '../data/site';
+---
+{release.contract === 'legacy-dual-application' && <aside class="notice version-notice" aria-label="Command version notice">
+  <strong>Commands are version-specific.</strong>
+  This guide runs on v{release.version}: <code>live</code> opens fresh sessions and <code>replay</code> sends recorded packets.
+  The next command contract names stateless replay <code>reproduce</code>, with <code>replay</code> as its alias.
+  In v{release.version}, <code>reproduce</code> still opens fresh application sessions. <a href={sitePath("/workflows/#versions")}>See the distinction →</a>
+</aside>}

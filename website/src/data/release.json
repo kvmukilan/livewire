@@ -1,0 +1,13 @@
+{
+  "version": "1.0.1",
+  "docsRef": "v1.0.1",
+  "repository": "https://github.com/kvmukilan/livewire",
+  "contract": "legacy-dual-application",
+  "packetCommand": "replay",
+  "qualificationPath": "qualification/v1.0.1/README.md",
+  "binaries": [
+    { "label": "Windows x64", "platform": "windows", "file": "livewire-1.0.1-windows-amd64.zip" },
+    { "label": "Linux x64", "platform": "linux", "file": "livewire-1.0.1-linux-amd64" },
+    { "label": "Linux ARM64", "platform": "linux", "file": "livewire-1.0.1-linux-arm64" }
+  ]
+}
