@@ -13,12 +13,27 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kvmukilan/livewire/internal/pcapio"
 	"github.com/kvmukilan/livewire/internal/replaylab"
 	"github.com/kvmukilan/livewire/internal/secureexec"
 	"github.com/kvmukilan/livewire/internal/wire"
 )
+
+func TestHandshakeIncompleteStatusPreservesContextFailure(t *testing.T) {
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	expired, expire := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer expire()
+	for _, ctx := range []context.Context{canceled, expired} {
+		j := &job{ctx: ctx}
+		j.finishResult(false, true, "context failed after handshake")
+		if j.snapshot()["applicationIncomplete"] == true {
+			t.Fatal("context failure became expected handshake-only limitation")
+		}
+	}
+}
 
 func TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets(t *testing.T) {
 	for _, embedded := range []bool{false, true} {
@@ -76,11 +91,26 @@ func TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets(t *testing.T) {
 			if !embedded && !strings.Contains(plan.Body.String(), "\"fidelity\":\"handshake\"") {
 				t.Fatalf("handshake-only preview missing: %s", plan.Body)
 			}
+			if embedded {
+				var preview struct {
+					Readiness struct{ Requirements []string }
+				}
+				if err := json.Unmarshal(plan.Body.Bytes(), &preview); err != nil {
+					t.Fatal(err)
+				}
+				requirements := strings.Join(preview.Readiness.Requirements, "; ")
+				if !strings.Contains(requirements, "embedded in PCAPNG or supplied with -keylog") || strings.Contains(requirements, "matching NSS key log (-keylog)") {
+					t.Fatalf("embedded TLS preview demands external-only keys: %s", requirements)
+				}
+			}
 			result := postJSON(t, handler, "/api/run", map[string]any{"pcap": filepath.Base(capture), "targetIP": target, "mode": "application", "profile": "functional", "verify": "lenient", "secure": map[string]any{"ca": filepath.Base(caPath), "timeoutSeconds": 3}})
 			if result.Code != http.StatusOK {
 				t.Fatalf("start: %d %s", result.Code, result.Body)
 			}
 			waitServerJob(t, s)
+			if got := s.job.snapshot()["applicationIncomplete"]; got != !embedded {
+				t.Fatalf("handshake-only application status = %v, want %v", got, !embedded)
+			}
 			paths, err := filepath.Glob(filepath.Join(dir, "secure-*.report.json"))
 			if err != nil || len(paths) != 1 {
 				t.Fatalf("reports: %v %v", paths, err)

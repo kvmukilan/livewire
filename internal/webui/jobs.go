@@ -22,16 +22,19 @@ import (
 
 // job is one operation (capture or replay) the dashboard polls. Only one runs at a time.
 type job struct {
-	mu        sync.Mutex
-	Kind      string     `json:"kind"`
-	Running   bool       `json:"running"`
-	Lines     []string   `json:"lines"`
-	Done      bool       `json:"done"`
-	OK        bool       `json:"ok"`
-	Summary   string     `json:"summary"`
-	Events    []jobEvent `json:"events"`
-	Artifacts []string   `json:"artifacts,omitempty"`
-	secrets   []string
+	mu      sync.Mutex
+	Kind    string   `json:"kind"`
+	Running bool     `json:"running"`
+	Lines   []string `json:"lines"`
+	Done    bool     `json:"done"`
+	OK      bool     `json:"ok"`
+	Summary string   `json:"summary"`
+	// ApplicationIncomplete identifies a fully finished handshake-only run,
+	// without treating cancellation or missing attempts as that expected limit.
+	ApplicationIncomplete bool       `json:"applicationIncomplete,omitempty"`
+	Events                []jobEvent `json:"events"`
+	Artifacts             []string   `json:"artifacts,omitempty"`
+	secrets               []string
 
 	stop   chan struct{}
 	ctx    context.Context
@@ -94,9 +97,14 @@ func (j *job) artifact(name string) {
 }
 
 func (j *job) finish(ok bool, summary string) {
+	j.finishResult(ok, false, summary)
+}
+
+func (j *job) finishResult(ok, applicationIncomplete bool, summary string) {
 	j.once.Do(func() {
 		j.mu.Lock()
 		j.Done, j.OK, j.Summary = true, ok, j.scrubLocked(summary)
+		j.ApplicationIncomplete = !ok && applicationIncomplete && j.ctx != nil && j.ctx.Err() == nil
 		j.mu.Unlock()
 	})
 }
@@ -142,6 +150,7 @@ func (j *job) snapshot() map[string]any {
 		"kind": j.Kind, "running": j.Running, "lines": lines,
 		"events": events, "artifacts": artifacts,
 		"done": j.Done, "ok": j.OK, "summary": j.Summary,
+		"applicationIncomplete": j.ApplicationIncomplete,
 	}
 }
 

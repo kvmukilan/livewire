@@ -223,7 +223,7 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			belongs := route.Session != nil && e.SessionID == route.Session.ID
 			if !belongs {
 				if route.Kind == FTP && NeedsKeyLog(route.Session) && len(opts.KeyLog) == 0 {
-					block("FTPS negotiation requires -keylog <file> to identify related data sessions before replay")
+					block("FTPS negotiation requires matching TLS secrets (embedded in PCAPNG or supplied with -keylog) to identify related data sessions before replay")
 				} else {
 					block("selected capture contains other exchanges; use --session <id> to select the intended exchange")
 				}
@@ -261,7 +261,7 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 					continue
 				}
 				if profile != replay.ProfileFunctional {
-					block("TLS application timing requires a matching key log; keylog-free TLS supports a fresh handshake only")
+					block("TLS application timing requires matching TLS secrets (embedded in PCAPNG or supplied with -keylog); without secrets only a fresh handshake is supported")
 					continue
 				}
 				e.Driver, e.Adapter = "tls-handshake", "tls-handshake"
@@ -279,7 +279,7 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 		if route.Kind == TLS && len(opts.KeyLog) == 0 {
 			r.Requirements = append(r.Requirements, "trusted certificate or explicit private CA", "optional matching NSS key log or embedded PCAPNG TLS secrets for application replay; otherwise fresh handshake only")
 		} else if route.Kind == TLS || route.Kind == FTP && NeedsKeyLog(route.Session) {
-			r.Requirements = append(r.Requirements, "matching NSS key log (-keylog)", "trusted certificate or explicit private CA")
+			r.Requirements = append(r.Requirements, "matching TLS secrets (embedded in PCAPNG or supplied with -keylog)", "trusted certificate or explicit private CA")
 		}
 		if route.Kind == SSH {
 			r.Requirements = append(r.Requirements, "username and password or private key", "pinned host key", "explicit command script")

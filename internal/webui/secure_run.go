@@ -87,11 +87,15 @@ func (s *Server) startSecureRun(w http.ResponseWriter, req adaptiveRunReq, diges
 		}
 		runs := iterate.Plan{Times: req.Attempts, Gap: gap}.Normalize()
 		ok := true
+		handshakesOnly := true
 		stamp := time.Now().UTC().Format("20060102T150405.000000000Z")
 		per := runs.Run(j.ctx, func(index int) iterate.Tally {
 			j.progress("attempt", "", fmt.Sprintf("Attempt %d of %d", index+1, runs.Times))
 			outcome, runErr := prepared.Run(j.ctx)
 			outcome.TLSSecretsSource = sec.keylogSource
+			if runErr != nil || outcome.Adapter != "tls-handshake" || !outcome.HandshakeCompleted || outcome.Completed || outcome.ApplicationReplayCompleted || outcome.Verified || outcome.Matched || outcome.Requests != 0 || outcome.Responses != 0 || outcome.ReasonCode != "captured_plaintext_unavailable" || outcome.Error != "" {
+				handshakesOnly = false
+			}
 			if !outcome.Completed {
 				ok = false
 			}
@@ -106,6 +110,7 @@ func (s *Server) startSecureRun(w http.ResponseWriter, req adaptiveRunReq, diges
 			if err := orchestration.WriteJSON(filepath.Join(s.dir, name), doc, runvars.NewRedactor(req.Variables, secrets...)); err != nil {
 				j.log(err.Error())
 				ok = false
+				handshakesOnly = false
 			} else {
 				j.artifact(name)
 			}
@@ -115,7 +120,7 @@ func (s *Server) startSecureRun(w http.ResponseWriter, req adaptiveRunReq, diges
 			return tally
 		})
 		summary := iterate.SummarizeContext(j.ctx, per, runs.Times)
-		j.finish(ok && j.ctx.Err() == nil, summary.Plain())
+		j.finishResult(ok && j.ctx.Err() == nil, handshakesOnly && runs.Times > 0 && len(per) == runs.Times, summary.Plain())
 	})
 	if err != nil {
 		writeErr(w, 409, err)
