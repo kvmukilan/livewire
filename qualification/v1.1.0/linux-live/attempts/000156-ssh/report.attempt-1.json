@@ -1,0 +1,81 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "captureDigest": "sha256:20eb3f522bb83fbacd1a23cf17ec436d3e27f0ea06f4c44ab30216180d429b57",
+  "kind": "ssh",
+  "limitations": [],
+  "outcome": {
+    "adapter": "ssh-reterminate",
+    "applicationReplayCompleted": true,
+    "commands": [
+      {
+        "index": 0,
+        "matched": true,
+        "outputBytes": 5,
+        "outputSha256": "sha256:b24d6d33736ecd5604a4b17bc9c6481039fac362bb7df044ef1c10a2bfd21db6"
+      },
+      {
+        "index": 1,
+        "matched": true,
+        "outputBytes": 4,
+        "outputSha256": "sha256:68d0a03fbd404489b987e7e17ae517b2b0250bee0e719d0438d7e41129f76609"
+      }
+    ],
+    "comparedResponses": 0,
+    "completed": true,
+    "expectedResponses": 0,
+    "matched": true,
+    "mismatches": 0,
+    "observedResponses": 2,
+    "peerIdentityChecked": true,
+    "protocolVersion": "SSHv2",
+    "requests": 2,
+    "responses": 2,
+    "status": "matched",
+    "tlsSecretsSource": "none",
+    "verificationScope": "application responses",
+    "verified": true
+  },
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "ssh-reterminate",
+        "driver": "ssh-reterminate",
+        "fidelity": "semantic",
+        "fingerprint": "92fddfa3b3d3",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "sessionId": "tcp-0",
+        "transport": "tcp"
+      }
+    ],
+    "packets": 8,
+    "profile": "functional"
+  },
+  "target": "127.0.0.1:34759",
+  "tool": "livewire",
+  "transformations": [
+    "fresh session executed using explicit replay intent and selected capture sessions"
+  ],
+  "variables": {},
+  "version": "1.1.0",
+  "when": "2026-09-30T19:43:30.43312188Z"
+}

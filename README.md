@@ -6,6 +6,15 @@ field problems on SCADA and
 industrial equipment (Modbus, DNP3) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
 FTPS, TLS, SSH, and ordinary TCP, UDP, and ICMP.
 
+Support depends on the protocol variant and captured context. HTTP/2/3
+application replay, TLS client-certificate authentication (mTLS), MQTT enhanced
+authentication, and DNP3 Secure Authentication are unsupported. TLS application
+replay needs matching captured secrets; SSH needs authentication, a pinned host
+key and explicit commands. Token renewal is not universal. A capture does not
+restore device configuration or internal state, and matching responses alone
+does not prove the original fault reproduced. See the
+[protocol limits](docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+
 The **1.x** line includes live TCP flow control, protocol maintenance, durable replay
 progress, and explicit reset/timeout observations. Its release uses
 [software-lab qualification](docs/V1_QUALIFICATION.md); physical NIC/device and
@@ -60,10 +69,13 @@ For a TLS capture, use `livewire live tls.pcap -t device.example:443`.
 Livewire establishes fresh TCP and certificate-verified TLS state from the
 captured ClientHello's public SNI, ALPN and supported modern versions. If the
 PCAPNG contains matching TLS secrets, it also recovers the recorded application
-requests and replays them through the supported protocol adapter. Otherwise,
-the result explicitly says **handshake completed; application replay incomplete**.
+requests and replays them through the supported protocol adapter. When no TLS
+secrets are present, the result explicitly says
+**handshake completed; application replay incomplete**.
 An optional `-keylog sslkeys.log` supplies matching secrets and takes priority
-over embedded secrets. New TLS keys cannot decrypt an old encrypted exchange.
+over embedded secrets. Supplied or embedded secrets that are malformed or do
+not decrypt the selected exchange fail before sending; they do not silently
+fall back to a handshake. New TLS keys cannot decrypt an old encrypted exchange.
 See [TLS directly from a capture](docs/TLS_CAPTURE_REPLAY.md) for the boundaries.
 Private CAs use `-ca device-ca.pem`; `-server-name` sets the verified server name
 when connecting by IP. `live -in` with explicit secure inputs such as `-keylog`

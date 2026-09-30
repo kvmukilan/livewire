@@ -1,0 +1,13 @@
+Replay intent: application; 5 selected packet(s), 1 explicitly excluded.
+Report destination: C:\Users\kvmuk\livewire\coverage\v1.1.0-windows-checks\release-comparison\current-gzip-arp.report.json
+
+Protocol coverage (functional profile):
+  session      fingerprint  proto   driver       fidelity     adapter          notes
+  raw-0        -            raw     none         blocked      -                EXCLUDED by session selection
+  tcp-0        31358e282131 tcp     semantic-tcp semantic     http/1           semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior
+  A fingerprint names an exchange by content; -session accepts it, or a unique prefix, in any copy of this capture.
+
+Replay route: generic
+Live replay will require:
+  - target device IP
+Dry run: no network connections opened and no packets sent.

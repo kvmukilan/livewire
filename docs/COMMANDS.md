@@ -3,8 +3,8 @@
 Every Livewire command, its options, and what its output means. The everyday
 workflow is in the [README](../README.md); install steps are in [SETUP.md](SETUP.md).
 
-This reference describes the upcoming 1.1.0 command contract. Downloads still
-provide 1.0.1 until release promotion; use its
+This reference describes the 1.1.0 command contract. When using a 1.0.1 binary,
+use its
 [version-pinned command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
 with that binary. In 1.0.1, `reproduce` invokes application replay; in 1.1 it is
 stateless packet replay.
@@ -57,7 +57,7 @@ for compatibility and also make no response-equivalence claim.
 | `-mode <intent>` | advanced compatibility override: application (default), transport, wire, or auto |
 | `-session <id>` | select an exchange from `check -details`; repeatable |
 | `-dry-run` | inspect selection, requirements, target, and output paths without sending |
-| `-in <file>` | selects the historical TCP dry-run/packet route unless explicit secure inputs select fresh sessions; use a positional capture for the normal application workflow |
+| `-in <file>` | recognized TLS or explicit secure inputs select fresh sessions; other captures retain historical TCP dry-run/packet controls; use a positional capture for the normal application workflow |
 | `-t <ip>` | your device's address |
 | `-i <name>` | network connection to replay on |
 | `-n <count>` | replay this many times and report how often it matched — see [below](#when-the-problem-only-happens-sometimes) |

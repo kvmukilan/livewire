@@ -4,8 +4,7 @@
 > copy-paste path from a bare PC to a first replay. This page covers the advanced
 > Windows commands once that is done.
 
-This guide describes the upcoming 1.1.0 command contract. Downloads still
-provide 1.0.1 until release promotion; use the
+This guide describes the 1.1.0 command contract. When using a 1.0.1 binary, use the
 [1.0.1 Windows guide](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WINDOWS-QUICKSTART.md)
 with that binary. In 1.0.1, `reproduce` is application replay and `replay` is the
 stateless command.

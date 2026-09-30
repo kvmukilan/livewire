@@ -14,7 +14,7 @@ What can run depends on what the capture contains:
 
 | Capture input | What Livewire executes | Report boundary |
 |---|---|---|
-| Complete public ClientHello, no matching secrets | Fresh TLS handshake using captured SNI, ALPN and supported TLS 1.2/1.3 offers | Handshake completed; application replay incomplete, unverified and unmatched |
+| Complete public ClientHello, no embedded or supplied TLS secrets | Fresh TLS handshake using captured SNI, ALPN and supported TLS 1.2/1.3 offers | Handshake completed; application replay incomplete, unverified and unmatched |
 | PCAPNG containing matching TLSK Decryption Secrets Blocks | Recover captured application messages, then replay them through a fresh TLS session and supported adapter | Application responses are compared according to the selected verification policy |
 | Capture plus explicit `-keylog session.keys` | Same application replay; explicit keylog takes priority over embedded secrets | Same application verification rules |
 
@@ -35,6 +35,22 @@ exchange from a mixed capture uses `-session <id>`, as shown by `check -details`
 livewire live issue.pcap -t 192.0.2.20:443 -ca device-ca.pem -n 5 -gap 1s
 livewire live issue.pcap -t device.example:443 -keylog session.keys
 ```
+
+For Modbus/TCP carried over TLS, a PCAPNG with matching embedded secrets needs
+no separate keylog file. For example, with a TLS service listening on port 1502:
+
+```sh
+livewire live modbus-tls.pcapng -t device.example:1502
+```
+
+Livewire recovers the captured Modbus requests, opens fresh verified TCP/TLS
+state, tracks live transaction identifiers and compares the checked responses.
+With an encrypted-only capture and no secrets, the same command establishes
+only the fresh TLS handshake; it does not recover or send Modbus function
+codes, register addresses or values. Application replay remains incomplete and
+unverified. Add `-ca device-ca.pem` for a private CA. TLS client-certificate
+authentication and the full Modbus Security standard are not claimed here.
+A peer requiring unsupported authentication can reject even the handshake.
 
 Each attempt establishes new state. Handshake-only execution sends no captured
 ciphertext or application bytes. It preserves available public SNI and ALPN,

@@ -7,13 +7,16 @@ physical-device qualification remains separate. The
 implementation snapshot; protocol behavior below includes subsequent fixes.
 Positional `live capture.pcap` uses the fresh-session orchestrator.
 `reproduce capture.pcap` is stateless packet transmission; `replay` is its
-compatibility alias. `live -in` with explicit secure inputs also uses the
-fresh-session orchestrator; without
-secure inputs, `live -in` retains its simulation default and transport driver. Application replay uses
-operating-system TCP; transport and wire execution retain their own drivers.
-Each TCP application attempt establishes fresh connection state. TLS captures are decrypted
-offline with explicitly supplied key material, then replayed over new verified
-TLS connections; captured TLS keys and ciphertext do not become the live session.
+compatibility alias. Recognized TLS or explicit secure inputs route `live -in`
+through the fresh-session orchestrator; other captures without secure inputs
+retain the historical simulation default and transport driver. Application replay
+uses operating-system TCP; transport and wire execution retain their own drivers.
+Each TCP application attempt establishes fresh connection state. Matching TLS
+secrets embedded in PCAPNG or explicitly supplied with `-keylog` recover captured
+application messages for new verified TLS connections. Without secrets, a
+complete captured ClientHello supports a fresh verified handshake only;
+application replay stays incomplete and unverified. Captured TLS keys and
+ciphertext do not become the live session.
 Compatibility commands remain available. From 1.0.x, move application-style
 `reproduce ... -t ...` commands to `live ... -t ...`; application flags on
 stateless `reproduce` are rejected before sending.
@@ -154,8 +157,8 @@ connections and verifies transfer direction, byte count, and SHA-256. Accepted
 `PROT C`/`PROT P` replies determine each transfer's protection, including switches
 within one session. Rejected requests do not change protection, and a live
 rejection of required `PROT P` cannot silently downgrade a transfer. Protected
-capture data is decrypted offline with its matching key log and sent or compared
-as plaintext over fresh verified TLS. In active mode, the FTP client remains the
+capture data is decrypted offline with matching embedded or explicit TLS secrets
+and sent or compared as plaintext over fresh verified TLS. In active mode, the FTP client remains the
 TLS client even though the server initiates TCP. Unmapped or ambiguous transfers,
 missing decryption material, and unsupported protection modes stop the replay.
 
