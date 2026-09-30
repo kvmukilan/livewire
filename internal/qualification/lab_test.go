@@ -12,6 +12,10 @@ import (
 
 // These are deliberately synthetic validator inputs, not release evidence.
 func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
+	return labValidatorFixtureVersion(t, "1.0.0")
+}
+
+func labValidatorFixtureVersion(t *testing.T, version string) (Manifest, ValidateOptions) {
 	t.Helper()
 	base := t.TempDir()
 	write := func(name string, value any) Evidence {
@@ -30,10 +34,10 @@ func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
 		return Evidence{Path: name, SHA256: sum}
 	}
 	proof := write("synthetic-proof.json", "synthetic validator fixture only")
-	doc := Manifest{SchemaVersion: 1, Version: "1.0.0", SourceDigest: "source", Profile: SoftwareLabProfile, SoftwareLab: &SoftwareLab{Limitations: []string{"No physical or human-pilot evidence"}}}
+	doc := Manifest{SchemaVersion: 1, Version: version, SourceDigest: "source", Profile: SoftwareLabProfile, SoftwareLab: &SoftwareLab{Limitations: []string{"No physical or human-pilot evidence"}}}
 	start := time.Unix(1700000000, 0).UTC()
 	for _, platform := range Platforms {
-		name := "livewire-1.0.0-" + platform
+		name := "livewire-" + version + "-" + platform
 		if platform == "windows-amd64" {
 			name += ".exe"
 		}
@@ -50,6 +54,9 @@ func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
 		}
 		for _, suite := range suites {
 			for _, command := range []string{"live", "reproduce"} {
+				if !labCommandAllowed(version, suite, command) {
+					continue
+				}
 				prefix := platform + "-" + suite + "-" + command
 				dir := filepath.Join(base, prefix)
 				if err := os.Mkdir(dir, 0700); err != nil {
@@ -87,6 +94,18 @@ func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
 							e.After = labCounts{Requests: round * 2, Responses: round * 2}
 							e.VerifiedResponses = 2
 							e.Output, e.CLIReport = artifact.Path, artifact.Path
+							if UsesStatelessReproduce(version) {
+								e.Output = addEvidence(fmt.Sprintf("%s-%d-output.txt", c, round), []byte("synthetic CLI output")).Path
+								for i, report := range syntheticApplicationReports(version, e) {
+									data, err := json.Marshal(report)
+									if err != nil {
+										t.Fatal(err)
+									}
+									ref := addEvidence(fmt.Sprintf("%s-%d-report-%d.json", c, round, i), data)
+									e.CLIReports = append(e.CLIReports, ref.Path)
+								}
+								e.CLIReport = e.CLIReports[0]
+							}
 						} else {
 							e.Event = "pass"
 							e.Report, e.ReportSHA256 = artifact.Path, artifact.SHA256
@@ -114,6 +133,34 @@ func labValidatorFixture(t *testing.T) (Manifest, ValidateOptions) {
 			checks.Checks[c] = true
 		}
 		doc.SoftwareLab.Checks = append(doc.SoftwareLab.Checks, write(platform+"-checks.json", checks))
+	}
+	if requiresStatelessLab(version) {
+		for _, command := range []string{"replay", "reproduce"} {
+			if !labCommandAllowed(version, "stateless", command) {
+				continue
+			}
+			frames := statelessTestFrames()
+			if UsesStatelessReproduce(version) {
+				frames = protocolStatelessTestFrames()
+			}
+			run, source, _ := statelessValidatorFixtureVersion(t, version, command, frames)
+			run.SourceDigest = doc.SourceDigest
+			run.BinarySHA256, _ = FileSHA256(filepath.Join(base, "livewire-"+version+"-linux-amd64"))
+			prefix := "linux-amd64-stateless-" + command
+			if err := os.Mkdir(filepath.Join(base, prefix), 0700); err != nil {
+				t.Fatal(err)
+			}
+			for _, ref := range run.Evidence {
+				data, err := os.ReadFile(filepath.Join(source, ref.Path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(base, prefix, ref.Path), data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			doc.SoftwareLab.Runs = append(doc.SoftwareLab.Runs, write(prefix+"/run.json", run))
+		}
 	}
 	return doc, ValidateOptions{Base: base, Version: doc.Version, SourceDigest: doc.SourceDigest, Artifacts: base}
 }

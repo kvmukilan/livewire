@@ -48,7 +48,7 @@ var commands = []command{
 	{name: "doctor", group: groupAdvanced, run: cmdDoctor,
 		summary: "check local prerequisites without sending traffic"},
 	{name: "reproduce", group: groupEveryday, run: cmdReproduce,
-		summary: "replay a recorded exchange on your device and say whether it behaved the same"},
+		summary: "send captured packets statelessly, preserving recorded bytes and order"},
 	{name: "live", group: groupEveryday, run: cmdLive,
 		summary: "play application requests through fresh live connections"},
 
@@ -64,8 +64,8 @@ var commands = []command{
 		summary: "open the browser dashboard"},
 	{name: "lab", group: groupAdvanced, run: cmdLab,
 		summary: "two-sided replay through a DUT with topology, faults, and PCAPNG evidence"},
-	{name: "replay", group: groupAdvanced, run: cmdReplay,
-		summary: "stateless send: blast a capture onto an interface at a set rate"},
+	{name: "replay", group: groupCompat, run: cmdReplay, replacement: "reproduce",
+		summary: "stateless captured-packet replay (compatibility alias for reproduce)"},
 	{name: "rewrite", group: groupAdvanced, run: cmdRewrite,
 		summary: "apply static edits (MAC/IP/port/TTL/VLAN/seq) to a capture"},
 	{name: "convert", group: groupAdvanced, run: cmdConvert,
@@ -84,11 +84,11 @@ var commands = []command{
 	{name: "analyze", group: groupCompat, run: cmdAnalyze, replacement: "check",
 		summary: "replayability assessment only (now part of 'check')"},
 	{name: "tls-replay", group: groupCompat, run: cmdTLSReplay, replacement: "live",
-		summary: "TLS-specific compatibility entry point (automatic in reproduce/live)"},
+		summary: "TLS-specific compatibility entry point (automatic in live)"},
 	{name: "ftp-replay", group: groupCompat, run: cmdFTPReplay, replacement: "live",
-		summary: "FTP/FTPS compatibility entry point (automatic in reproduce/live)"},
+		summary: "FTP/FTPS compatibility entry point (automatic in live)"},
 	{name: "ssh-replay", group: groupCompat, run: cmdSSHReplay, replacement: "live",
-		summary: "SSH-specific compatibility entry point (automatic in reproduce/live)"},
+		summary: "SSH-specific compatibility entry point (automatic in live)"},
 }
 
 func main() {

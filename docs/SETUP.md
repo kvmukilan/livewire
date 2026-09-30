@@ -4,8 +4,12 @@ Copy-paste instructions to get Livewire working on a machine that has nothing
 installed. Pick your operating system, run the blocks in order, then confirm with
 [Check it works](#check-it-works).
 
-Each download block starts with the release it fetches. The value there is the
-version 1 release. You can select another published version from the
+Each download block currently fetches the published **1.0.1** release. The
+upcoming **1.1.0** command correction is not yet published: in 1.0.1, `reproduce`
+still invokes application replay and `replay` is the stateless command. The
+download pins will change only after release promotion. Use the
+[1.0.1 command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
+with the downloaded binary. You can select another published version from the
 [Releases page](https://github.com/kvmukilan/livewire/releases).
 For replay intent and a preview before sending, start with [WORKFLOW.md](WORKFLOW.md).
 Once it runs, [COMMANDS.md](COMMANDS.md) explains every command.
@@ -89,18 +93,19 @@ packets is a privileged operation.
 
 ```powershell
 Set-Location C:\livewire
-.\livewire.exe reproduce .\issue.pcap -t 192.168.1.50
+.\livewire.exe live .\issue.pcap -t 192.168.1.50
 ```
 
 Replace `192.168.1.50` with your device's address and `issue.pcap` with the file
-you were sent. Livewire asks which network connection to use and pre-selects the
-right one — press Enter to accept it.
+you were sent. Socket-based application routes need no packet interface. If the
+selected route uses packets, Livewire asks which network connection to use and
+pre-selects a suitable one — press Enter to accept it.
 
 To skip that question, pass the connection with `-i`. Run `.\livewire.exe ifaces`
 to list them, and paste the whole `\Device\NPF_{...}` value:
 
 ```powershell
-.\livewire.exe reproduce .\issue.pcap -t 192.168.1.50 -i '\Device\NPF_{PASTE_GUID_HERE}'
+.\livewire.exe live .\issue.pcap -t 192.168.1.50 -i '\Device\NPF_{PASTE_GUID_HERE}'
 ```
 
 ---
@@ -129,15 +134,16 @@ uses `iptables`/`ip6tables`, which your distribution already has.
 ### 2. Replay a capture
 
 ```bash
-livewire reproduce issue.pcap -t 192.168.1.50
+livewire live issue.pcap -t 192.168.1.50
 ```
 
-Replace `192.168.1.50` with your device's address. Livewire asks which network
-connection to use and pre-selects the right one — press Enter to accept it. To
-skip the question, list them with `livewire ifaces` and pass one:
+Replace `192.168.1.50` with your device's address. Socket-based application routes
+need no packet interface. Packet routes ask which network connection to use and
+pre-select a suitable one — press Enter to accept it. To skip that question,
+list them with `livewire ifaces` and pass one:
 
 ```bash
-sudo livewire reproduce issue.pcap -t 192.168.1.50 -i eth0
+sudo livewire live issue.pcap -t 192.168.1.50 -i eth0
 ```
 
 ### Running without sudo
@@ -147,7 +153,7 @@ grant the two required capabilities:
 
 ```bash
 sudo setcap cap_net_raw,cap_net_admin+ep /usr/local/bin/livewire
-livewire reproduce issue.pcap -t 192.168.1.50 -i eth0
+livewire live issue.pcap -t 192.168.1.50 -i eth0
 ```
 
 Re-run `setcap` after replacing the binary — an upgrade clears it.
@@ -190,7 +196,7 @@ If that prints a packet summary and a replay assessment, you are ready.
 | `WinDivert.dll could not be loaded` *(Windows)* | Re-run step 3. `WinDivert.dll` and `WinDivert64.sys` must sit in the same folder as `livewire.exe`. |
 | `Access is denied` / nothing is sent *(Windows)* | Use an **Administrator** PowerShell. |
 | `operation not permitted` *(Linux)* | Put `sudo` in front, or apply the `setcap` line above. |
-| The connection resets immediately | RST suppression did not arm. On Windows check WinDivert and that you are elevated; on Linux check `iptables` is present. A reset from the *device* may be the real finding. |
+| The connection resets immediately | For a stateful packet TCP route, check RST suppression: WinDivert and elevation on Windows, `iptables` on Linux. Socket-based application routes do not use that guard. A reset from the *device* may be the real finding. |
 | `couldn't find a usable network connection` | Run `livewire ifaces` and pass one with `-i`. On Windows use the full `\Device\NPF_{...}` value, not a friendly name like `Ethernet 2`. |
 | `more than one network connection is possible` | Same fix — name one with `-i`. |
 | Windows blocks the download or the exe | The release is Authenticode-unsigned. Verify `SHA256SUMS` and the GitHub provenance attestation, then allow the unknown publisher only if both match. |
@@ -220,11 +226,12 @@ go build -o livewire.exe .\cmd\livewire
 .\livewire.exe version
 ```
 
-On Windows you still need the drivers from steps 2 and 3 above; point the setup
-script at your build directory with `-ExeDirectory`.
+On Windows, packet routes still need the relevant drivers from steps 2 and 3
+above; point the setup script at your build directory with `-ExeDirectory`.
+Socket-based application routes need neither driver.
 
 TLS, FTPS, and SSH retermination are included in the default build and are
-selected automatically by `reproduce <capture>` or `live <capture>`. TLS/FTPS
+selected automatically by positional `live <capture>`. TLS/FTPS
 needs an explicitly selected `-keylog`; unified SSH needs credentials, explicit
 `-cmd` operations, and a pinned `-host-key`. Protocol-specific replay commands
 remain available for older scripts. The build is pure Go — no cgo or C toolchain.

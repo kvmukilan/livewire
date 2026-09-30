@@ -58,8 +58,8 @@ type runEvent struct {
 // Run never marks a short smoke execution as a two-hour qualification. The
 // release gate independently checks every case's first/last successful times.
 func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr error) {
-	if o.Command != "live" && o.Command != "reproduce" {
-		return result, fmt.Errorf("lab command must be live or reproduce")
+	if o.Command != "live" && (o.Command != "reproduce" || qualification.UsesStatelessReproduce(o.Version)) {
+		return result, fmt.Errorf("application lab requires live; reproduce is stateless from v1.1.0")
 	}
 	if o.Duration < 0 || o.Interval < 0 {
 		return result, fmt.Errorf("lab durations cannot be negative")

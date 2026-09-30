@@ -7,8 +7,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/pcapio"
@@ -18,19 +16,7 @@ import (
 // v1.0.0 retains its original six-run gate. Later stable releases also exercise
 // the distinct stateless replay command; old evidence is not relabeled.
 func requiresStatelessLab(version string) bool {
-	parts := strings.Split(strings.SplitN(strings.TrimPrefix(version, "v"), "-", 2)[0], ".")
-	if len(parts) != 3 {
-		return true
-	}
-	numbers := [3]int{}
-	for i, part := range parts {
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 0 {
-			return true
-		}
-		numbers[i] = n
-	}
-	return numbers[0] > 1 || numbers[0] == 1 && (numbers[1] > 0 || numbers[2] >= 1)
+	return labVersionAtLeast(version, 1, 0, 1)
 }
 
 type statelessLabEvent struct {
@@ -43,7 +29,7 @@ type statelessLabEvent struct {
 }
 
 func validateStatelessTranscript(run LabRun, base string) error {
-	if run.Platform != "linux-amd64" || run.Command != "replay" || len(run.Cases) != 1 || run.Cases[0].Name != "mixed-frames" {
+	if run.Platform != "linux-amd64" || !labCommandAllowed(run.Version, "stateless", run.Command) || len(run.Cases) != 1 || run.Cases[0].Name != "mixed-frames" {
 		return fmt.Errorf("unexpected stateless run identity or case set")
 	}
 	files := map[string]Evidence{}
@@ -88,7 +74,7 @@ func validateStatelessTranscript(run LabRun, base string) error {
 			cleaned = true
 			continue
 		case "pass":
-			if cleaned || event.Command != "replay" || event.Case != "mixed-frames" || event.Error != "" || event.Round != observed.Passes+1 || event.Repeat < 2 || event.Repeat > 1000 || !event.CleanupVerified || event.Requests != 0 || event.Responses != 0 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !observed.LastAt.IsZero() && event.Started.Before(observed.LastAt) {
+			if cleaned || event.Command != run.Command || event.Case != "mixed-frames" || event.Error != "" || event.Round != observed.Passes+1 || event.Repeat < 2 || event.Repeat > 1000 || !event.CleanupVerified || event.Requests != 0 || event.Responses != 0 || event.Started.Before(run.Started) || event.Finished.After(run.Finished) || event.Finished.Before(event.Started) || !observed.LastAt.IsZero() && event.Started.Before(observed.LastAt) {
 				return fmt.Errorf("invalid stateless execution")
 			}
 		default:
@@ -107,6 +93,11 @@ func validateStatelessTranscript(run LabRun, base string) error {
 		if err != nil {
 			return err
 		}
+		if UsesStatelessReproduce(run.Version) {
+			if err := validateStatelessProtocolCoverage(fixture); err != nil {
+				return err
+			}
+		}
 		capture, err := read(event.IndependentCapture, event.CaptureSHA256)
 		if err != nil {
 			return err
@@ -120,16 +111,19 @@ func validateStatelessTranscript(run LabRun, base string) error {
 			return err
 		}
 		var outcome struct {
-			Tool, Version, Mode, Status, CaptureDigest, Error string
-			Completed                                         bool
-			Verified                                          *bool
-			Passes, FramesPerPass, FramesSent                 int
+			Tool, Version, Command, Mode, Status, CaptureDigest, Error string
+			Completed                                                  bool
+			Verified                                                   *bool
+			Passes, FramesPerPass, FramesSent                          int
 		}
 		if err := json.Unmarshal(report, &outcome); err != nil {
 			return err
 		}
 		if outcome.Tool != "livewire" || outcome.Version != run.Version || outcome.Mode != "wire" || outcome.Status != "wire" || !outcome.Completed || outcome.Verified == nil || *outcome.Verified || outcome.Error != "" || outcome.Passes != event.Repeat || outcome.FramesSent != frames || outcome.FramesPerPass != frames/event.Repeat || outcome.CaptureDigest != fmt.Sprintf("sha256:%x", sha256.Sum256(fixture)) {
 			return fmt.Errorf("stateless CLI outcome differs from independent frames or claims verification")
+		}
+		if UsesStatelessReproduce(run.Version) && outcome.Command != run.Command {
+			return fmt.Errorf("stateless CLI command differs from the invoked front door")
 		}
 		if _, err := read(event.Output, ""); err != nil {
 			return err

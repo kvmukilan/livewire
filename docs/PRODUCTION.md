@@ -20,8 +20,8 @@ livewire doctor
 livewire doctor -json -out-dir .
 livewire ifaces
 livewire check issue.pcap -details
-livewire reproduce issue.pcap -session tcp-0 -dry-run
-livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50 -report application.json
+livewire live issue.pcap -session tcp-0 -dry-run
+livewire live issue.pcap -session tcp-0 -t 192.168.1.50 -report application.json
 livewire bundle -report application.json -o application-support.zip
 ```
 
@@ -31,10 +31,10 @@ reply-equivalence claim. Inspect captured destinations before using it.
 
 ```sh
 livewire doctor -i eth1
-livewire reproduce issue.pcap -mode transport -session tcp-0 -dry-run
-livewire reproduce issue.pcap -mode transport -session tcp-0 -i eth1 -t 192.168.1.50 -report transport.json
-livewire reproduce issue.pcap -mode wire -session tcp-0 -dry-run
-livewire reproduce issue.pcap -mode wire -session tcp-0 -i eth1 -report wire.json
+livewire live issue.pcap -mode transport -session tcp-0 -dry-run
+livewire live issue.pcap -mode transport -session tcp-0 -i eth1 -t 192.168.1.50 -report transport.json
+livewire reproduce issue.pcap -session tcp-0 -dry-run
+livewire reproduce issue.pcap -session tcp-0 -i eth1 -report wire.json
 ```
 
 For a two-interface DUT, use `livewire help lab` and the topology examples in
@@ -50,7 +50,7 @@ livewire lab -in issue.pcap -client-iface eth1 -server-iface eth2 -topology topo
 livewire bundle -report dut.json -evidence dut.pcapng -o dut-support.zip
 ```
 
-Automatic inspection remains useful. `live` and `reproduce` use fresh application
+Automatic inspection remains useful. `live` uses fresh application
 sessions without a mode prompt. Advanced `-mode auto` retains v1.0.0 transport
 selection for unrecognized TCP. Never choose a different execution path merely
 to hide a blocker. Resolve missing security inputs or select the
@@ -75,7 +75,7 @@ the controlled replay, not by a successful doctor result.
 Reports add `status`: matched, different, incomplete, unverified, cancelled,
 or wire. Explicit wire dry-run reports use preview. Existing fields and exit
 codes remain available. Automation must inspect report status: the existing
-report-oriented `reproduce` exit policy can return zero after recording an
+report-oriented `live` exit policy can return zero after recording an
 incomplete attempt. Exit zero alone is not a pass/fail assertion. A cancelled
 repeated run retains completed-attempt counts; its overall status is cancelled. A send-only or unchecked exchange
 cannot establish a match. Errors during execution/cleanup override completion.
@@ -102,7 +102,8 @@ redacted metadata and digests, not captures, plaintext payloads, or private keys
 | Windows amd64 CLI/application replay | Native tests and loopback peers | Physical NIC/DUT qualification pending |
 | Linux amd64 | Native tests, loopback peers and isolated virtual Ethernet labs | Physical NIC/DUT qualification pending |
 | Linux arm64 | Cross-build only | Provisional until native execution |
-| HTTP/1, DNS/TCP, Modbus/TCP, MQTT 3.1.1/5, DNP3, plaintext/TLS, FTP/FTPS, SSH | Independent local peers and both-command application matrix | Qualify the actual DUT workflow |
+| HTTP/1, DNS/TCP, Modbus/TCP, MQTT 3.1.1/5, DNP3, plaintext/TLS, FTP/FTPS, SSH | Independent local peers through stateful `live` | Qualify the actual DUT workflow |
+| Stateless `reproduce` and compatibility `replay` | Exact packet bytes/order/count across protocol fixtures; no application comparison | Validate the actual interface and captured addresses |
 | DNS/UDP, UDP, ICMPv4/v6, stateful TCP, captured TCP, wire | Independent captures across virtual interfaces; adaptive TCP loss/reordering checks | Physical packet and cleanup checks required |
 | Two-interface field lab | Parser/model/backend tests | Physical DUT topology qualification required |
 | Dashboard | API and JavaScript state tests | Visual/keyboard checks pending |
@@ -135,7 +136,7 @@ go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.0.1 -artifacts dist/v1.0.1 qualification/physical-candidate.json
+go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -160,7 +161,7 @@ and recovery, not an exit-zero replay. Never disable a real interface or fill
 a real disk outside the dedicated test host/volume.
 
 On each platform, repeat the selected supported workflow for at least two hours.
-Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -t 192.168.1.50`
+Use `go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire live issue.pcap -t 192.168.1.50`
 on the selected lab host. Every attempt has separate transcripts; report-path
 arguments may contain `{attempt}` for unique filenames. The harness stops on
 an unexpected exit and leaves behavior/cleanup qualification pending review.

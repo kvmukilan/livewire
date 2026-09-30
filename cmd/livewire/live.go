@@ -34,7 +34,7 @@ func isTerminal(f *os.File) bool {
 }
 
 // cmdLive has a positional primary mode and an exact compatibility mode. A
-// positional capture uses the same fresh-session orchestration as reproduce;
+// positional capture uses fresh-session application orchestration;
 // the historical `live -in ...` form keeps its original TCP dry-run/on-wire
 // behavior unless explicit secure-session inputs select the common route.
 func cmdLive(args []string) error {

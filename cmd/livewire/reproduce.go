@@ -29,20 +29,13 @@ import (
 	"github.com/kvmukilan/livewire/internal/replayintent"
 )
 
-// cmdReproduce is the peer-facing, (almost) zero-flag entry point: give it a
-// capture and it walks you through reproducing the issue on your device — asking
-// only for your device's address and which network connection to use, with the
-// right answers pre-selected — then prints a plain-language verdict.
-//
-// With -n it replays more than once and reports how often the issue appears,
-// because a fault that shows up one time in five is the common field case and a
-// single replay cannot tell the difference between "fixed" and "intermittent".
-func cmdReproduce(args []string) (retErr error) {
-	return cmdCaptureReplay("reproduce", args)
+// cmdReproduce injects captured packets without application or transport state.
+func cmdReproduce(args []string) error {
+	return cmdStatelessReplay("reproduce", args)
 }
 
-// cmdCaptureReplay gives live and reproduce the same fresh-session execution
-// contract while retaining their own help and diagnostics.
+// cmdCaptureReplay executes fresh application sessions for live, with its own
+// help, target validation, response comparison and diagnostics.
 func cmdCaptureReplay(command string, args []string) (retErr error) {
 	o, err := parseCaptureReplayFlags(command, args)
 	if err != nil {
@@ -228,7 +221,7 @@ func parseCaptureReplayFlags(command string, args []string) (reproduceOptions, e
 		fmt.Println("then opens a fresh certificate-verified TLS session. No -mode is needed.")
 		fmt.Println("Use check -details to find session IDs; -session <id> -dry-run previews without sending.")
 		fmt.Println("For intermittent issues add -n 5; -under-load preserves supported captured pacing.")
-		fmt.Println("Stateless captured-packet injection: livewire replay -in <capture> -i <connection>.")
+		fmt.Println("Stateless captured-packet injection: livewire reproduce -in <capture> -i <connection>.")
 		if command == "live" {
 			fmt.Println("Legacy live -in controls remain available: livewire live -in <capture> -h.")
 		}

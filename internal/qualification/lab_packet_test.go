@@ -115,7 +115,19 @@ func TestRecordedPacketLabTranscript(t *testing.T) {
 	if base == "" {
 		t.Skip("set LIVEWIRE_PACKET_LAB_SMOKE to a recorded packet lab directory")
 	}
-	for _, command := range []string{"live", "reproduce"} {
+	data, err := os.ReadFile(filepath.Join(base, "live.run.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first LabRun
+	if err := json.Unmarshal(data, &first); err != nil {
+		t.Fatal(err)
+	}
+	commands := []string{"live"}
+	if !UsesStatelessReproduce(first.Version) {
+		commands = append(commands, "reproduce")
+	}
+	for _, command := range commands {
 		t.Run(command, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(base, command+".run.json"))
 			if err != nil {

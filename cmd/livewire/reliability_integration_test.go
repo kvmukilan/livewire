@@ -32,7 +32,7 @@ func TestApplicationResponseTimeoutAcrossFrontDoors(t *testing.T) {
 	for _, command := range []struct {
 		name string
 		run  func([]string) error
-	}{{"reproduce", cmdReproduce}, {"live", cmdLive}} {
+	}{{"live", cmdLive}} {
 		for _, budget := range []string{"40ms", "2s"} {
 			t.Run(command.name+"/"+budget, func(t *testing.T) {
 				path := filepath.Join(t.TempDir(), "result.json")
@@ -72,7 +72,7 @@ func TestCompletedReadResumeDoesNotResendAndAliasesAgree(t *testing.T) {
 	state := filepath.Join(dir, "state")
 	args := []string{capture, "-mode", "application", "-session", "tcp-0", "-t", "127.0.0.1", "-strict-exit"}
 	first := append(append([]string{}, args...), "-state-dir", state, "-report", filepath.Join(dir, "first.json"))
-	if e := cmdReproduce(first); e != nil {
+	if e := cmdLive(first); e != nil {
 		t.Fatal(e)
 	}
 	if requests.Load() != 1 {

@@ -4,6 +4,12 @@
 > copy-paste path from a bare PC to a first replay. This page covers the advanced
 > Windows commands once that is done.
 
+This guide describes the upcoming 1.1.0 command contract. Downloads still
+provide 1.0.1 until release promotion; use the
+[1.0.1 Windows guide](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WINDOWS-QUICKSTART.md)
+with that binary. In 1.0.1, `reproduce` is application replay and `replay` is the
+stateless command.
+
 This guide assumes the release ZIP has been extracted and `livewire.exe` is in
 the current folder. Use a lab target you are authorized to test: replaying a
 capture can repeat writes or other state-changing operations.
@@ -110,24 +116,28 @@ Npcap, WinDivert, or Administrator privileges.
 ## 5. Recommended guided replay
 
 ```powershell
-.\livewire.exe reproduce $Capture `
+.\livewire.exe live $Capture `
   -t $Target `
   -i $Iface `
   -profile functional `
-  -report .\issue.report.json `
-  -actual-out .\issue.actual.pcap
+  -report .\issue.report.json
 ```
 
-The target ports come from the capture. Start with `functional`; use `timing`,
-`transport`, or `wire` only when the issue requires that fidelity.
+The target ports come from the capture. Start with `functional`; use `timing`
+or `transport` only when the issue requires that fidelity. For stateless captured
+packets use `reproduce $Capture -i $Iface`, without `-t` or `-actual-out`.
 `-profile timing` and `-profile transport` can also be written `-under-load` and
 `-exact-tcp`, which is what the peer-facing instructions use.
+
+Packet routes can save `-actual-out` evidence. Socket routes do not fabricate
+wire PCAPs, and secure routes reject this option; capture traffic independently
+when wire evidence is needed.
 
 If the problem is intermittent rather than fidelity-dependent, replay it several
 times and read the rate instead:
 
 ```powershell
-.\livewire.exe reproduce $Capture -t $Target -i $Iface -n 5
+.\livewire.exe live $Capture -t $Target -i $Iface -n 5
 ```
 
 Each attempt opens a fresh connection, and the closing block reports how many of
@@ -173,14 +183,25 @@ Print packet-level rewrite and TX/RX information:
 .\livewire.exe live -in $Capture -i $Iface -t $Target -all -v
 ```
 
-`live` is the advanced TCP engine. Use `reproduce` for protocol-adaptive TCP,
-UDP, ICMP, HTTP, DNS, MQTT, Modbus, DNP3, and explicit wire lanes.
+The legacy `live -in` form exposes the TCP engine unless explicit secure inputs
+such as `-keylog` select fresh application replay. Positional `live <capture>`
+is the stateful application workflow for supported TCP, UDP, ICMP, HTTP, DNS,
+MQTT, Modbus, DNP3 and secure protocols. For stateless captured packets, use:
+
+```powershell
+.\livewire.exe reproduce $Capture -dry-run
+.\livewire.exe reproduce $Capture -i $Iface -report .\packets.json
+```
+
+Stateless replay sends both recorded directions unchanged, without opening a
+TCP/TLS session or checking responses. In 1.0.x, application replay used the
+`reproduce` spelling; migrate those commands to positional `live` in 1.1.
 
 ## 7. RST suppression
 
-`live` and `reproduce` automatically install and remove the temporary RST
-guard. Do not run `rstdrop` with them, and normally do not pass
-2 1`-no-rst-guard`.
+Stateful packet routes in `live` automatically install and remove the temporary
+RST guard. Do not run `rstdrop` alongside them, and normally do not pass
+`-no-rst-guard`. Stateless `reproduce` does not manage a peer TCP session.
 
 Use `rstdrop` only when another tool such as Scapy injects packets:
 

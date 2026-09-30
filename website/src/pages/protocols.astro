@@ -1,0 +1,21 @@
+---
+import Guide from '../layouts/Guide.astro';
+import { source, release } from '../data/site';
+const rows = [
+ ['HTTP/1', 'Fresh requests and checked responses', 'Dynamic response bindings need an explicit scenario; this is not a browser or an HTTP/2/3 replay engine.'],
+ ['DNS over TCP', 'Framed queries and response comparison', 'DNS over UDP uses a packet/datagram route and has different interface requirements.'],
+ ['Modbus TCP', 'Transaction-aware application replay', 'Use a dedicated device or test environment for state-changing operations.'],
+ ['DNP3', 'Supported application exchanges and fragment confirmations', 'Unsupported object layouts and Secure Authentication stop with an explanation.'],
+ ['MQTT 3.1.1 / 5', 'Fresh connect, identifier handling, maintenance', 'Keepalive handling is supported; enhanced authentication is not.'],
+ ['FTP / FTPS', 'Coordinated control and data transfers', 'Secure control/data recovery requires matching keys and complete transfer evidence.'],
+ ['TLS', 'Recover supported requests; reconnect with verified TLS', 'Requires matching key material and a supported inner protocol.'],
+ ['SSH', 'Explicit commands on a fresh authenticated session', 'Requires credentials and a pinned host key; ciphertext does not reveal commands.'],
+ ['Generic TCP', 'Advanced stateful packet engine or explicit packet replay', 'No automatic application semantics. The raw engine is not a complete OS TCP stack.'],
+ ['UDP / ICMP', 'Datagram / echo routes or stateless replay', 'Packet privileges and an appropriate interface are required for raw routes.'],
+];
+---
+<Guide title="Protocol support" description="Choose a supported application workflow, or deliberately work at the packet level. Each path has a different evidence boundary." sections={[{id:'matrix',label:'Support matrix'},{id:'transport',label:'Transport boundaries'},{id:'qualification',label:'What was qualified'}]}>
+  <h2 id="matrix">Application and packet workflows</h2><p>Support is scoped to the exchange and its captured evidence. Detection alone does not guarantee that a recording contains enough material to recreate a complete application session.</p><div class="table-scroll" tabindex="0" role="region" aria-label="Protocol support matrix"><table><thead><tr><th>Protocol</th><th>Replay path</th><th>Important boundary</th></tr></thead><tbody>{rows.map(row => <tr>{row.map(cell => <td>{cell}</td>)}</tr>)}</tbody></table></div>
+  <h2 id="transport">TCP state belongs to the live connection</h2><p>Application replay uses the OS TCP stack to manage live sequence numbers, acknowledgments, retransmission, and receive windows. Supported adapters manage application identifiers and maintenance traffic above that connection.</p><p>The advanced packet engine tracks live acknowledgment state, bounded retransmissions, receive ordering, and flow control. It does not claim every behavior of a general-purpose OS TCP stack. Stateless replay instead preserves recorded frame bytes; it makes no live connection-state claim.</p>
+  <h2 id="qualification">Inspect the evidence, not a badge</h2><p>The v{release.version} release has public software-lab qualification records for Windows and Linux x64. Those records separate application, raw packet, and stateless replay cases, including secure application cases and fault handling.</p><div class="notice"><strong>Hardware qualification is a separate step.</strong>Software-lab evidence does not establish performance or behavior on your physical NIC, industrial device, firewall, or network topology. Native ARM64 execution and human browser testing are not implied by a cross-built artifact.</div><p><a href={source(release.qualificationPath)}>Open the qualification record ↗</a> · <a href="/reference/reliability/">Read implementation boundaries →</a></p>
+</Guide>

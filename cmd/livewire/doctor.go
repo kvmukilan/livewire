@@ -78,7 +78,7 @@ func runDoctor(args []string, out io.Writer, deps doctorDeps) error {
 			if nic.Flags&net.FlagUp == 0 {
 				r.Findings = append(r.Findings, doctorFinding{"interface-down", "blocker", "Selected interface is down", "Enable the adapter and connect the lab cable, then rerun livewire doctor -i <interface>."})
 			} else {
-				r.Findings = append(r.Findings, doctorFinding{"interface-up", "info", "Selected OS interface is up", "Preview the capture with livewire reproduce <capture> -mode <intent> -dry-run."})
+				r.Findings = append(r.Findings, doctorFinding{"interface-up", "info", "Selected OS interface is up", "Preview the capture with livewire live <capture> -mode <intent> -dry-run."})
 			}
 		}
 		if !found && runtime.GOOS != "windows" {
@@ -90,7 +90,7 @@ func runDoctor(args []string, out io.Writer, deps doctorDeps) error {
 	} else {
 		r.Findings = append(r.Findings, doctorFinding{"output-writable", "info", "Temporary output creation, write, sync, and cleanup succeeded", "Keep enough disk space for reports and packet evidence; this check does not reserve space."})
 	}
-	r.Findings = append(r.Findings, doctorFinding{"qualification-boundary", "info", "Local checks do not prove driver access, target reachability, or DUT behavior", "Review livewire reproduce <capture> -mode <intent> -dry-run before a controlled lab replay."})
+	r.Findings = append(r.Findings, doctorFinding{"qualification-boundary", "info", "Local checks do not prove driver access, target reachability, or DUT behavior", "Review livewire live <capture> -mode <intent> -dry-run before a controlled lab replay."})
 	for _, f := range r.Findings {
 		if f.Severity == "blocker" {
 			r.Ready = false
