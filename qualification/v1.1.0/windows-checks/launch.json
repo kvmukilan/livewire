@@ -1,0 +1,14 @@
+{
+  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "commit": "3d681f0b359129ebc6a86198e91a539f8ec52bfc",
+  "platform": "windows-amd64",
+  "started": "2026-09-30T18:29:53.632818Z",
+  "goEnvironment": {
+    "GOAMD64": "v1",
+    "GOARCH": "amd64",
+    "GOEXPERIMENT": "",
+    "GOFLAGS": "",
+    "GOOS": "windows"
+  },
+  "goVersion": "go version go1.26.7 windows/amd64"
+}

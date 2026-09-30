@@ -26,8 +26,8 @@ var vocabulary = []struct {
 	aliases   []string
 }{
 	{"reproduce",
-		[]string{flagIn, flagIface, flagTarget, flagCount, flagDetails, "gap", "stop-when-different", "wire", "keylog", "user", "host-key", "cmd"},
-		[]string{"on", "iface", "to", "target", "times", "iterations"}},
+		[]string{flagIn, flagIface, flagCount, "pps", "mbps", "multiplier", "topspeed", "dry-run", "report"},
+		[]string{"iface", "loop", "times", "iterations"}},
 	{"check", []string{flagIn, flagDetails, "json"}, nil},
 	{"capture", []string{flagIface, flagOut, flagCount}, []string{"iface", "out", "count"}},
 	{"live",
@@ -116,8 +116,9 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 		{name: "convert -out", args: []string{"convert", "-in", pcap, "-out", filepath.Join(dir, "a.pcap")}, notWant: "are required"},
 		{name: "rewrite -out", args: []string{"rewrite", "-in", pcap, "-out", filepath.Join(dir, "b.pcap")}, notWant: "are required"},
 		{name: "capture -iface and -out", args: []string{"capture", "-iface", "no-such-device-xyz", "-out", filepath.Join(dir, "c.pcap")}, notWant: "are required"},
-		// Without the alias the address is empty and fails to parse.
-		{name: "rstdrop -ip", args: []string{"rstdrop", "-ip", "192.0.2.1", "-port", "502"}, notWant: "invalid -t"},
+		// Invalid port bounds the test before it can arm a host firewall rule.
+		// Reaching this diagnostic proves the address alias parsed successfully.
+		{name: "rstdrop -ip", args: []string{"rstdrop", "-ip", "192.0.2.1", "-port", "-1"}, want: "invalid -port"},
 		// Without the alias there is no interface, so it asks for one.
 		{name: "replay -iface", args: []string{"replay", "-in", pcap, "-iface", "no-such-device-xyz"}, notWant: "-i is required"},
 		// Without the alias -iface is ignored, live stays in dry-run mode and
@@ -127,8 +128,8 @@ func TestAliasesFeedTheCanonicalFlag(t *testing.T) {
 		// if it were ignored the count would stay at its default of 1 and pass.
 		{name: "replay -loop", args: []string{"replay", "-in", pcap, "-loop", "-1"}, want: "cannot be negative"},
 		// Likewise for the two -n spellings on reproduce.
-		{name: "reproduce -times", args: []string{"reproduce", pcap, "-times", "0"}, want: "-n must be at least 1"},
-		{name: "reproduce -iterations", args: []string{"reproduce", pcap, "-iterations", "0"}, want: "-n must be at least 1"},
+		{name: "reproduce -times", args: []string{"reproduce", pcap, "-times", "-1"}, want: "cannot be negative"},
+		{name: "reproduce -iterations", args: []string{"reproduce", pcap, "-iterations", "-1"}, want: "cannot be negative"},
 		{name: "live -times", args: []string{"live", "-in", pcap, "-times", "0"}, want: "-n must be at least 1"},
 	}
 	for _, c := range cases {
@@ -305,7 +306,7 @@ func TestBinarySurface(t *testing.T) {
 			topic string
 			want  []string
 		}{
-			{topic: "examples", want: []string{"-n 5", "-keylog", "livewire replay -in"}},
+			{topic: "examples", want: []string{"-n 5", "-keylog", "livewire reproduce -in"}},
 			{topic: "troubleshoot", want: []string{"livewire ifaces", "Administrator", "Npcap"}},
 			{topic: "protocols", want: []string{"TLS and FTPS", "DNP3 Secure Authentication", "-wire"}},
 			{topic: "diagnose", want: []string{"assessment.json", "-n 5", "support.zip"}},
@@ -415,8 +416,8 @@ func TestBinarySurface(t *testing.T) {
 		}
 	})
 
-	t.Run("-n below 1 is rejected", func(t *testing.T) {
-		if out, err := runBinary(t, bin, "reproduce", pcap, "-n", "0"); err == nil {
+	t.Run("live -n below 1 is rejected", func(t *testing.T) {
+		if out, err := runBinary(t, bin, "live", pcap, "-n", "0"); err == nil {
 			t.Errorf("-n 0 should fail:\n%s", out)
 		}
 	})
@@ -458,7 +459,7 @@ func TestBinarySurface(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, shown := range []string{"-in", "-t", "-i", "-n", "-details"} {
+		for _, shown := range []string{"-in", "-i", "-n", "-pps", "-dry-run", "-report"} {
 			if !strings.Contains(out, shown) {
 				t.Errorf("reproduce help should show %s:\n%s", shown, out)
 			}
@@ -474,7 +475,7 @@ func TestBinarySurface(t *testing.T) {
 	})
 
 	t.Run("all-flags lists the hidden ones and marks aliases", func(t *testing.T) {
-		out, err := runBinary(t, bin, "reproduce", "-"+allFlagsName)
+		out, err := runBinary(t, bin, "live", "-"+allFlagsName)
 		if err != nil {
 			t.Fatalf("reproduce -%s failed: %v\n%s", allFlagsName, err, out)
 		}

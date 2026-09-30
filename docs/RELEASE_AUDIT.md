@@ -1,122 +1,25 @@
-# Livewire 1.0.1 release audit
+# Livewire v1.1.0 release audit
 
-The frozen Windows and Linux automated gates and all seven required two-hour
-software-lab runs completed successfully. The runs cover 79 case combinations,
-17,015 CLI processes and 51,045 replay iterations, with zero failures and
-independently verified cleanup. Final manifest validation, final CI and
-publication verification remain enforced release gates; their completion is
-recorded by the linked workflows, not asserted in advance here.
+Qualification record prepared 2026-10-01 for candidate `3d681f0b359129ebc6a86198e91a539f8ec52bfc` and executable source digest `15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a`. Completed software qualification and the still-required publication gates are distinguished below.
 
-The [follow-up record](V1_FOLLOWUP.md) explains the command changes, TLS fixes,
-and disposition of v1.0.0. Its published tag, binaries, and historical evidence
-remain unchanged. The changed patch has its own fresh qualification evidence.
+Five completed GitHub-hosted runs cover 43 combinations, 14,822 CLI processes and 44,466 repetitions, zero recorded failures, verified owned-resource cleanup, and at least two hours per case. The [complete evidence index](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/README.md) gives exact UTC times, spans, counters, binary/report hashes and links to all five reports and 15 hosted provenance/validation/checksum proofs. The summary was recomputed from packaged reports (SHA-256 `3a4d8196e77a73fbd11a69b16b309cc9130da3885838b8771d3263c8210f833d`).
 
-## Frozen candidate
+`live` creates fresh application sessions; `reproduce` sends the captured frames statelessly, and `replay` remains its compatibility alias. Each Windows/Linux application matrix contains 16 application comparison cases plus one `tls-handshake` case. The handshake case verifies a fresh TLS handshake and peer identity, sends zero application bytes, and deliberately leaves captured application replay incomplete, unverified and unmatched. It contributes handshake observations only. Stateless cases verify captured frame bytes, order and counts, and check that independent capture timestamps fall within the corresponding execution window. This does not establish original inter-packet timing fidelity, an application response match or fault reproduction. Explicit packet wire/transport cases likewise do not establish an application match.
 
-The completed gate records bind to commit
-`99600ceae7c179eb758895cf6657d646ae1fe466`, Go 1.26.7, and source digest
-`8300e2e6ea1c0a0991103e8ff7664c5afa5d677d5a9fd09da540abca0c7c5dcb`.
-The soaks used the exact packaged Windows amd64 and Linux amd64 candidates;
-final manifest validation must reconcile their hashes with the release assets.
-Linux arm64 is cross-built and has no native runtime qualification.
+Matching TLS secrets embedded in PCAPNG or supplied with `-keylog` allow supported captured plaintext to run on fresh verified TLS sessions. TLS application fixtures cover captured TLS 1.2 with fresh TLS 1.3; the separate handshake fixture preserves a TLS 1.2 offer. HTTP/2/3 application replay and TLS client-certificate authentication remain outside this qualification. No physical NIC/DUT, Windows Npcap driver fault behavior, native Linux arm64 runtime, or uncoached human-pilot qualification is claimed. A software response comparison or transport error alone does not establish an industrial-device fault.
 
-The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
-links source-bound Windows/Linux execution records, logs, coverage results,
-corpus results, completed run reports, transcripts and artifact hashes.
+Native Windows/Linux Go 1.26.7 gates passed build, vet, tests, dashboard, Python tests, lint/security, race, shuffle, fuzz, coverage, corpus, protocol-fault, recovery/cleanup and benchmark checks; Windows additionally passed published-version comparison. The corpus contains 35 checked cases. Aggregate coverage is Windows 69.1% and Linux 69.2%. Native scans found zero called-symbol and zero imported-package vulnerabilities; the module-only advisory does not establish a vulnerability in code Livewire imports. The reviewed native-audit original SHA-256 is `10d3b27ecfbacac075793fe6d8140e3f3216918c6441972890c4521c0bd7c067`. Public-safe command evidence is bound by the [Windows](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/windows-checks/checks.json) and [Linux](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/linux-checks/checks.json) check manifests.
 
-## Completed automated checks
+The Windows comparison used an independently audited continuation after its sparse checkout omitted committed historical checksum manifests. Only that comparison was retried after restoring the frozen files. All 14 earlier successful command records remained unchanged; the original runner failure and the successful continuation exit are retained separately.
 
-Native Windows amd64 and Linux amd64 checks passed build, vet, unit tests,
-JavaScript dashboard-state checks, static and vulnerability analysis, race
-tests, shuffled/repeated tests, all seven fuzz targets at 200,000 iterations
-each, coverage, the maintained corpus, protocol-fault regressions, and
-recovery/cleanup checks. Both completed gate records retain the frozen source
-digest before and after execution. Frozen-source GitHub CI also passed for the
-same full commit: [pull-request run 36627049037](https://github.com/kvmukilan/livewire/actions/runs/36627049037)
-and [push run 36627037090](https://github.com/kvmukilan/livewire/actions/runs/36627037090).
-These runs establish the frozen source's CI result; final release-commit CI
-remains a separate gate.
+Actual tested-candidate CI: [push 36757281568](https://github.com/kvmukilan/livewire/actions/runs/36757281568), [pull_request 36757286314](https://github.com/kvmukilan/livewire/actions/runs/36757286314); all eight jobs in each run passed. Final-commit CI is a separate required gate.
 
-| Statement coverage | Windows | Linux | Required |
-|---|---:|---:|---:|
-| Aggregate | 68.1% | 67.8% | 60% |
-| PCAP I/O | 85.3% | 85.3% | 85% |
-| Dashboard backend | 63.1% | 63.0% | 60% |
-| CLI | 48.7% | 48.8% | 30% |
-| Packet backend | 30.0% | 31.0% | 20% |
+The [reviewed rendered dashboard proof](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/dashboard-browser/README.md) used installed Chromium 153.0.8010.12 through Playwright at desktop 1440x1100 and mobile 390x844. Two previews opened no target connection. It observed amber application-incomplete status after a fresh verified keyless handshake with zero application bytes, successful application replay from embedded secrets without an external keylog, and a real wrong-host certificate failure remaining red. All 10 owned processes and 3 listeners were absent after cleanup. The idle hidden dashboard required a bounded forced stop; this is not evidence of graceful dashboard shutdown. Raw screenshots/fixtures/secrets/certificates remain private; safe summary and screenshot hashes are retained.
 
-Loader checks at 10, 100 and 512 MiB and 1,000,000 records passed on both hosts;
-513 MiB and 1,000,001-record inputs were rejected at the documented limits.
-Windows comparison with checksum-verified published 0.7.0 and 0.8.0 executables
-passed its gzip HTTP, selected-exchange and mixed-capture expectations.
+Before publication, the release process must validate the final stable manifest against the final assets, rebuild the full final commit from a fresh clean checkout, compare all 23 assets byte-for-byte (including exactly 19 flat Windows ZIP members), and preserve the three frozen executable hashes. The final evidence/docs commit must pass its own push and PR CI before merge/tag. The tag-triggered [Release workflow](https://github.com/kvmukilan/livewire/actions/workflows/release.yml) must rebuild, verify the committed checksums and SBOM, and publish the assets and attestations. Downloaded asset hashes and six attestation subjects must then be verified against the tagged merge commit. These are required publication gates; this document does not claim those later steps have completed. Consult the [v1.1.0 release](https://github.com/kvmukilan/livewire/releases/tag/v1.1.0) and workflow for actual publication status.
 
-`govulncheck` reported zero called vulnerabilities and zero vulnerabilities in
-imported packages on both platforms. It also reported the required-module
-advisory [GO-2026-5932](https://pkg.go.dev/vuln/GO-2026-5932), which affects only
-the unmaintained `golang.org/x/crypto/openpgp` package family. The frozen-source
-Linux dependency audit found none of those packages in Livewire's dependency
-closure; the module's other cryptographic and SSH packages are imported.
-This is an assessed unused-package advisory, not a claim that the dependency
-module has no advisories. The [security review](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/security-review/README.md)
-retains the scan, dependency analysis and primary advisory evidence.
+Existing v1.0.0/v1.0.1 tags and downloads remain immutable. v1.1.0 corrects the command contract and adds the explicit keyless-handshake/embedded-secrets TLS paths; it does not relabel historical results as current coverage. The [archived v1.0.1 audit](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/RELEASE_AUDIT.md) and [v1.0.0 audit](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELEASE_AUDIT.md) preserve their original scope and disposition.
 
-No connected browser was available. Dashboard API and JavaScript state tests
-passed; visual and keyboard QA are not claimed.
+## Supplemental Modbus over TLS check
 
-## Completed soaks and publication gates
-
-The `software-lab` profile and case boundaries are documented in
-[V1_QUALIFICATION.md](V1_QUALIFICATION.md). Every required case has successful
-executions spanning at least two hours. All seven final reports record zero
-failures, no interruption and verified cleanup.
-
-| Completed run | Case combinations | CLI processes | Replay iterations |
-|---|---:|---:|---:|
-| Windows application `live` | 16 | 3,440 | 10,320 |
-| Windows application `reproduce` | 16 | 3,440 | 10,320 |
-| Linux application `live` | 16 | 3,360 | 10,080 |
-| Linux application `reproduce` | 16 | 3,360 | 10,080 |
-| Linux packet `live` | 7 | 1,533 | 4,599 |
-| Linux packet `reproduce` | 7 | 1,533 | 4,599 |
-| Linux stateless `replay` | 1 | 349 | 1,047 |
-| **Total** | **79** | **17,015** | **51,045** |
-
-The [machine-readable summary](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/summary.json)
-retains exact spans, counts and hashes. The independent
-[application audit](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/final-audits/application/README.md)
-and [packet/stateless audit](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/final-audits/packet/README.md)
-retain additional checks of actual exits and task-owned resource cleanup.
-
-The application runs exercised the public defaults without `-mode application`.
-Each CLI process ran three repetitions; these matrix results do not claim that
-one CLI process stayed alive for two hours. The stateless run checked independent
-frame bytes, order and counts and retained an unverified application outcome.
-Packet and application results carry different verification claims.
-
-Publication requires successful validation of the completed current-source
-manifest, matching tested and packaged executable hashes, final CI,
-reproducible artifacts and SBOM, Windows ZIP validation, attestations, and
-verification of the actual published downloads. The
-[Release workflow](https://github.com/kvmukilan/livewire/actions/workflows/release.yml)
-and [v1.0.1 release page](https://github.com/kvmukilan/livewire/releases/tag/v1.0.1)
-provide the actual publication status. This audit records completed tests and
-the enforced publication gates; it does not claim future workflow or download
-checks have already succeeded.
-
-## Qualification limits and history
-
-Physical NICs and DUTs were unavailable. This software profile does not assert
-physical-device, human-pilot, native Linux arm64, Windows physical Npcap fault,
-or visual-browser qualification. The separate physical profile retains its
-applicable field requirements. Windows artifacts are not Authenticode-signed.
-A matched application response alone does not establish a device crash or
-other field fault.
-
-The immutable [v1.0.0 audit](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELEASE_AUDIT.md)
-and [evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
-retain that release's completed six-run qualification, including the diagnosed
-MQTT pacing failure and fresh successful runs of its correction. Its additional
-[long-process HTTP checks](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/long-process-http/README.md)
-remain historical evidence and do not qualify the changed v1.0.1 candidate.
-For earlier results, see the
-[0.9.0-rc.2 audit](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/history/RELEASE_AUDIT_0.9.0-rc.2.md).
+A separate [short Modbus-over-TLS check](https://github.com/kvmukilan/livewire/blob/v1.1.0/qualification/v1.1.0/modbus-embedded/README.md) used the same frozen Linux executable with matching TLS secrets embedded in PCAPNG and no external keylog. Three fresh, non-resumed TLS connections produced six verified Modbus responses, including reversed response order and split writes. This supports the embedded-secret application path; it is not an additional two-hour run, mTLS, full Modbus Security, or physical-device qualification.

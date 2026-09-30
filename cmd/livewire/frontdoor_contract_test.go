@@ -6,7 +6,7 @@ import (
 )
 
 func TestFreshSessionDefaultsAndAdvancedCompatibility(t *testing.T) {
-	for _, command := range []string{"live", "reproduce"} {
+	for _, command := range []string{"live"} {
 		for _, tc := range []struct {
 			flags []string
 			mode  string
@@ -58,7 +58,7 @@ func TestFreshDefaultsDoNotFallBackToPacketEngine(t *testing.T) {
 	if err != nil || !strings.Contains(preview, "no TCP application adapter") {
 		t.Fatalf("check must expose the same default blocker before execution: %v\n%s", err, preview)
 	}
-	for _, command := range []string{"live", "reproduce"} {
+	for _, command := range []string{"live"} {
 		out, err := runBinary(t, bin, command, capture, "-dry-run")
 		if err == nil || !strings.Contains(out, "application") || strings.Contains(out, "Injecting captured frames") {
 			t.Fatalf("%s must reject a TCP-only capture without an application adapter: %v\n%s", command, err, out)

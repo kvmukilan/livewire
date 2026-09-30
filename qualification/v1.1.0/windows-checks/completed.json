@@ -1,0 +1,9 @@
+{
+  "commit": "3d681f0b359129ebc6a86198e91a539f8ec52bfc",
+  "completionMode": "continued-after-comparison-recovery",
+  "finished": "2026-09-30T19:06:55.793632Z",
+  "originalRunnerExitCode": 1,
+  "passed": true,
+  "platform": "windows-amd64",
+  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a"
+}

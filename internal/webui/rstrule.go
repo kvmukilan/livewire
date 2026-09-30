@@ -41,6 +41,10 @@ func (s *Server) handleRSTRule(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		writeErr(w, http.StatusServiceUnavailable, fmt.Errorf("dashboard is shutting down"))
+		return
+	}
 	switch req.Action {
 	case "add":
 		if _, exists := s.rstRules[key]; exists {

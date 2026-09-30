@@ -1,0 +1,121 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "captureDigest": "sha256:e3c0c0887caa27c5719fae5055bf689edb237c332dfa0a0c87a6473798d189b1",
+  "kind": "tls",
+  "limitations": [
+    "tcp-0: application replay remains incomplete without captured TLS secrets; no ciphertext is transmitted and no response match is claimed",
+    "tcp-0: only TLS 1.2/1.3 offers are retained; exact ClientHello, cipher fingerprint, PSK resumption and timing are not reproduced",
+    "captured application replay is incomplete without matching TLS secrets; peer certificate verification is not capture-response verification",
+    "exact ClientHello fingerprint, cipher list, resumption, early data and application timing are not reproduced"
+  ],
+  "outcome": {
+    "adapter": "tls-handshake",
+    "alpn": "livewire-lab/1",
+    "applicationReplayCompleted": false,
+    "capturedClientHello": {
+      "alpn": [
+        "livewire-lab/1"
+      ],
+      "legacyVersion": 771,
+      "offeredVersions": [
+        771
+      ],
+      "randomSha256": "sha256:a47aa624b994196e1713df2373aa6c01de12fdba89dc719aef753bce5664b27e",
+      "serverName": "localhost",
+      "sha256": "sha256:65ec41c4370f1d6e3c5ac6ca93e72e6000982d7277b88d05b28e189cf158e793",
+      "usedVersions": [
+        771
+      ]
+    },
+    "cipherSuite": "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+    "cleanup": "complete",
+    "comparedResponses": 0,
+    "completed": false,
+    "expectedResponses": 0,
+    "freshClientHello": {
+      "alpn": [
+        "livewire-lab/1"
+      ],
+      "legacyVersion": 771,
+      "offeredVersions": [
+        771
+      ],
+      "randomSha256": "sha256:dee5f2a172f2961555581c706c0605854a3a95b3b0f2b276f0ceb182f63adf4c",
+      "serverName": "localhost",
+      "sha256": "sha256:b9c6fd300a7e791cfe8fbe6cd300089a3cd27838675e03ff9fc3089af5bb32bb",
+      "usedVersions": [
+        771
+      ]
+    },
+    "handshakeCompleted": true,
+    "matched": false,
+    "mismatches": 0,
+    "observedResponses": 0,
+    "peerIdentityChecked": true,
+    "protocolVersion": "TLS 1.2",
+    "reasonCode": "captured_plaintext_unavailable",
+    "requests": 0,
+    "responses": 0,
+    "status": "incomplete",
+    "tlsSecretsSource": "none",
+    "verificationScope": "fresh TLS handshake only; captured application plaintext unavailable",
+    "verified": false
+  },
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "tls-handshake",
+        "driver": "tls-handshake",
+        "fidelity": "handshake",
+        "fingerprint": "28aacfe49362",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "fresh TLS handshake from captured SNI, ALPN and supported modern versions; new randomness, keys and secure cipher selection"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "application replay remains incomplete without captured TLS secrets; no ciphertext is transmitted and no response match is claimed",
+          "only TLS 1.2/1.3 offers are retained; exact ClientHello, cipher fingerprint, PSK resumption and timing are not reproduced"
+        ]
+      }
+    ],
+    "packets": 14,
+    "profile": "functional"
+  },
+  "target": "127.0.0.1:54045",
+  "tool": "livewire",
+  "transformations": [
+    "captured public ClientHello SNI, ALPN and supported TLS 1.2/1.3 versions used for a fresh handshake",
+    "new TLS randomness, key exchange and secure cipher selection; no captured application ciphertext transmitted"
+  ],
+  "variables": {},
+  "version": "1.1.0",
+  "when": "2026-09-30T19:33:17.0330369Z"
+}

@@ -5,8 +5,8 @@
 //	go run ./scripts/qualify corpus -output coverage/corpus-new
 //	go run ./scripts/qualify benchmark -output coverage/benchmark-new
 //	go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-//	go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire reproduce issue.pcap -t 192.168.1.50
-//	go run ./scripts/qualify validate -version 1.0.0 -artifacts dist/v1.0.0 qualification/stable.json
+//	go run ./scripts/qualify soak -output coverage/soak-new -seconds 7200 -- livewire live issue.pcap -t 192.168.1.50
+//	go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/stable.json
 //
 // No subcommand sends traffic by itself. record and soak execute only the argv
 // after --, on the lab host and target the operator selected.

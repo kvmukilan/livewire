@@ -31,6 +31,7 @@ type Options struct {
 	Repeat         int
 	Cases          []string
 	Progress       func(string)
+	clock          func() time.Time // test seam for host suspend and clock corrections
 }
 
 type caseState struct {
@@ -39,27 +40,28 @@ type caseState struct {
 }
 
 type runEvent struct {
-	Case              string    `json:"case"`
-	Round             int       `json:"round"`
-	Command           string    `json:"command"`
-	Repeat            int       `json:"repeat"`
-	Started           time.Time `json:"started"`
-	Finished          time.Time `json:"finished"`
-	Before            Counters  `json:"before"`
-	After             Counters  `json:"after"`
-	PeerEvents        []string  `json:"peerEvents,omitempty"`
-	CLIReport         string    `json:"cliReport"`
-	CLIReports        []string  `json:"cliReports,omitempty"`
-	Output            string    `json:"output"`
-	VerifiedResponses int       `json:"verifiedResponses"`
-	Error             string    `json:"error,omitempty"`
+	Case               string    `json:"case"`
+	Round              int       `json:"round"`
+	Command            string    `json:"command"`
+	Repeat             int       `json:"repeat"`
+	Started            time.Time `json:"started"`
+	Finished           time.Time `json:"finished"`
+	Before             Counters  `json:"before"`
+	After              Counters  `json:"after"`
+	PeerEvents         []string  `json:"peerEvents,omitempty"`
+	CLIReport          string    `json:"cliReport"`
+	CLIReports         []string  `json:"cliReports,omitempty"`
+	Output             string    `json:"output"`
+	VerifiedResponses  int       `json:"verifiedResponses"`
+	HandshakesObserved int       `json:"handshakesObserved,omitempty"`
+	Error              string    `json:"error,omitempty"`
 }
 
 // Run never marks a short smoke execution as a two-hour qualification. The
-// release gate independently checks every case's first/last successful times.
+// release gate independently checks every case's span and uninterrupted cadence.
 func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr error) {
-	if o.Command != "live" && o.Command != "reproduce" {
-		return result, fmt.Errorf("lab command must be live or reproduce")
+	if o.Command != "live" && (o.Command != "reproduce" || qualification.UsesStatelessReproduce(o.Version)) {
+		return result, fmt.Errorf("application lab requires live; reproduce is stateless from v1.1.0")
 	}
 	if o.Duration < 0 || o.Interval < 0 {
 		return result, fmt.Errorf("lab durations cannot be negative")
@@ -69,6 +71,12 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 	}
 	if o.ProcessTimeout <= 0 {
 		o.ProcessTimeout = 45 * time.Second
+	}
+	if qualification.UsesStatelessReproduce(o.Version) && (o.Interval > qualification.LabMaxIdleGap || o.ProcessTimeout > qualification.LabMaxExecutionDuration) {
+		return result, fmt.Errorf("lab interval or process timeout exceeds qualification continuity limits")
+	}
+	if o.clock == nil {
+		o.clock = time.Now
 	}
 	var err error
 	o.Binary, err = filepath.Abs(o.Binary)
@@ -125,7 +133,7 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 	defer stopServers()
 	states := make([]caseState, 0, len(o.Cases))
 	defer func() {
-		result.Interrupted = ctx.Err() != nil
+		result.Interrupted = ctx.Err() != nil || retErr != nil
 		result.CleanupVerified = true
 		for i := range states {
 			s := &states[i]
@@ -174,6 +182,8 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 		}
 		states = append(states, caseState{fixture: fixture, result: qualification.LabCaseResult{Name: name, CleanupVerified: true}})
 	}
+	continuity := qualification.LabContinuity{Version: o.Version}
+	handshakeProof := qualification.TLSHandshakeLabVerifier{Version: o.Version}
 	for round := 1; ; round++ {
 		for i := range states {
 			if err := ctx.Err(); err != nil {
@@ -189,9 +199,17 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 			outputPath := filepath.Join(attemptDir, "output.txt")
 			// Exercise the public front-door defaults; an explicit mode would hide
 			// routing regressions in the workflow these labs qualify.
-			args := []string{o.Command, s.fixture.Capture, "-n", fmt.Sprint(o.Repeat), "-gap", "0s", "-strict-exit", "-report", reportPath}
+			args := []string{o.Command, s.fixture.Capture, "-n", fmt.Sprint(o.Repeat), "-gap", "0s", "-report", reportPath}
+			if name != "tls-handshake" {
+				args = append(args, "-strict-exit")
+			}
 			args = append(args, s.fixture.Args...)
-			event := runEvent{Case: name, Round: round, Command: o.Command, Repeat: o.Repeat, Started: time.Now().UTC(), Before: s.fixture.Snapshot(), CLIReport: relative(o.Output, reportPath), Output: relative(o.Output, outputPath)}
+			event := runEvent{Case: name, Round: round, Command: o.Command, Repeat: o.Repeat, Started: o.clock().UTC(), Before: s.fixture.Snapshot(), CLIReport: relative(o.Output, reportPath), Output: relative(o.Output, outputPath)}
+			if err := continuity.CheckStart(name, event.Started); err != nil {
+				s.result.Failures++
+				event.Finished, event.Error = event.Started, err.Error()
+				return result, errors.Join(err, encoder.Encode(event))
+			}
 			processCtx, cancel := context.WithTimeout(ctx, o.ProcessTimeout)
 			cmd := exec.CommandContext(processCtx, o.Binary, args...)
 			cmd.Dir = o.SourceRoot
@@ -215,12 +233,24 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 				}
 			}
 			event.After = s.fixture.Snapshot()
-			event.Finished = time.Now().UTC()
+			event.Finished = o.clock().UTC()
 			if s.fixture.Events != nil {
 				event.PeerEvents = s.fixture.Events()
 			}
-			verified, reportErr := checkCLIReport(reportPath, o.Repeat, o.Version, name)
 			reportPaths, pathsErr := CLIReportPaths(reportPath, o.Repeat)
+			verified, handshakes := 0, 0
+			var reportErr error
+			if name == "tls-handshake" {
+				var reports [][]byte
+				for _, path := range reportPaths {
+					data, err := os.ReadFile(path)
+					pathsErr = errors.Join(pathsErr, err)
+					reports = append(reports, data)
+				}
+				handshakes, reportErr = handshakeProof.Check(event.Started, event.Finished, o.Repeat, event.PeerEvents, reports)
+			} else {
+				verified, reportErr = checkCLIReport(reportPath, o.Repeat, o.Version, name)
+			}
 			for _, path := range reportPaths {
 				event.CLIReports = append(event.CLIReports, relative(o.Output, path))
 			}
@@ -228,10 +258,15 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 				event.CLIReport = event.CLIReports[0]
 			}
 			event.VerifiedResponses = verified
-			checkErr := errors.Join(processErr, reportErr, pathsErr)
+			event.HandshakesObserved = handshakes
+			checkErr := errors.Join(processErr, reportErr, pathsErr, continuity.Observe(name, event.Started, event.Finished))
 			requests := event.After.Requests - event.Before.Requests
 			responses := event.After.Responses - event.Before.Responses
-			if requests < int64(o.Repeat) || responses < int64(o.Repeat) {
+			if name == "tls-handshake" {
+				if requests != 0 || responses != 0 {
+					checkErr = errors.Join(checkErr, fmt.Errorf("TLS handshake-only case sent application traffic"))
+				}
+			} else if requests < int64(o.Repeat) || responses < int64(o.Repeat) {
 				checkErr = errors.Join(checkErr, fmt.Errorf("independent peer counts below CLI repetitions: requests=%d responses=%d repeats=%d", requests, responses, o.Repeat))
 			}
 			if event.After.Errors != event.Before.Errors {
@@ -253,6 +288,7 @@ func Run(ctx context.Context, o Options) (result qualification.LabRun, retErr er
 				s.result.LastAt = event.Finished
 				s.result.RequestsObserved += int(requests)
 				s.result.ResponsesVerified += verified
+				s.result.HandshakesObserved += handshakes
 			}
 			if err := encoder.Encode(event); err != nil {
 				return result, err
@@ -386,6 +422,7 @@ func checkCLIReport(path string, repeats int, version string, caseNames ...strin
 			Version string `json:"version"`
 			Kind    string `json:"kind"`
 			Outcome struct {
+				TLSSecretsSource    string `json:"tlsSecretsSource"`
 				Completed           bool   `json:"completed"`
 				Verified            bool   `json:"verified"`
 				Matched             bool   `json:"matched"`
@@ -419,6 +456,15 @@ func checkCLIReport(path string, repeats int, version string, caseNames ...strin
 			return 0, fmt.Errorf("secure report version %q differs from lab version %q", report.Version, version)
 		}
 		o := report.Outcome
+		if qualification.UsesStatelessReproduce(version) && report.Kind == "tls" {
+			want := "external"
+			if caseName == "http1-tls" {
+				want = "embedded"
+			}
+			if o.TLSSecretsSource != want {
+				return 0, fmt.Errorf("TLS secrets source differs from the qualified fixture path")
+			}
+		}
 		if !o.Completed || !o.Verified || !o.Matched || o.Error != "" || o.Cleanup == "failed" || o.Mismatches != 0 {
 			return 0, fmt.Errorf("secure attempt %d did not complete, verify and match: %s", attempt+1, o.Error)
 		}

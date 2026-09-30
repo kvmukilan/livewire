@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/kvmukilan/livewire/internal/backend"
@@ -253,28 +254,34 @@ func TestDUTNATPATLearning(t *testing.T) {
 }
 
 func TestTwoSidedActorWaitsForDUTCrossing(t *testing.T) {
-	sim, err := NewDUTSimulator(SimulatorConfig{Mode: "pass", Delay: 45 * time.Millisecond})
-	if err != nil {
-		t.Fatal(err)
-	}
-	trace := twoWayUDPTrace()
-	trace.Sessions[0].Events[1].At = 2 * time.Millisecond
-	var serverInjectedAt time.Duration
-	res, err := RunWithBackendsContext(context.Background(), Config{
-		Trace: trace, Topology: labTopology(), Scenario: Scenario{Version: 1, Seed: 1},
-		Profile: replay.ProfileTiming, Drain: 60 * time.Millisecond, ActorTimeout: 200 * time.Millisecond,
-		Progress: func(p Progress) {
-			if p.Stage == "inject" && strings.Contains(p.Message, "server side") {
-				serverInjectedAt = p.At
-			}
-		},
-	}, sim.Backends())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if serverInjectedAt < 35*time.Millisecond || res.Metrics.Crossed != 2 {
-		t.Fatalf("server actor did not wait for DUT crossing: injectedAt=%s metrics=%+v", serverInjectedAt, res.Metrics)
-	}
+	// Every backend is in-memory. Advance timers only when all bubble goroutines
+	// are blocked, so host scheduling cannot consume the reverse-frame drain.
+	// An actor that ignores crossing would still inject at the captured 2ms.
+	synctest.Test(t, func(t *testing.T) {
+		const crossingDelay = 45 * time.Millisecond
+		sim, err := NewDUTSimulator(SimulatorConfig{Mode: "pass", Delay: crossingDelay})
+		if err != nil {
+			t.Fatal(err)
+		}
+		trace := twoWayUDPTrace()
+		trace.Sessions[0].Events[1].At = 2 * time.Millisecond
+		var serverInjectedAt time.Duration
+		res, err := RunWithBackendsContext(context.Background(), Config{
+			Trace: trace, Topology: labTopology(), Scenario: Scenario{Version: 1, Seed: 1},
+			Profile: replay.ProfileTiming, Drain: 60 * time.Millisecond, ActorTimeout: 200 * time.Millisecond,
+			Progress: func(p Progress) {
+				if p.Stage == "inject" && strings.Contains(p.Message, "server side") {
+					serverInjectedAt = p.At
+				}
+			},
+		}, sim.Backends())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if serverInjectedAt != crossingDelay || res.Metrics.Crossed != 2 {
+			t.Fatalf("server actor did not wait for DUT crossing: injectedAt=%s metrics=%+v", serverInjectedAt, res.Metrics)
+		}
+	})
 }
 
 func TestTwoSidedActorSuppressesResponseAfterDUTDrop(t *testing.T) {

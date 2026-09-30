@@ -189,6 +189,10 @@ func CaptureTLS(ctx context.Context, capture, keylog, address string, config *tl
 // EncryptConversation builds real TLS records for a supplied fixture exchange,
 // without sharing any application decoder with the replay implementation.
 func EncryptConversation(cert tls.Certificate, exchanges []Exchange) ([]Exchange, []byte, error) {
+	return encryptConversation(cert, exchanges, nil)
+}
+
+func encryptConversation(cert tls.Certificate, exchanges []Exchange, alpn []string) ([]Exchange, []byte, error) {
 	clientRaw, serverRaw := net.Pipe()
 	defer clientRaw.Close()
 	defer serverRaw.Close()
@@ -198,7 +202,7 @@ func EncryptConversation(cert tls.Certificate, exchanges []Exchange) ([]Exchange
 	done := make(chan error, 1)
 	go func() {
 		// #nosec G402 -- Offline synthetic capture deliberately exercises TLS 1.2 decryption; the live peer negotiates current TLS.
-		server := tls.Server(serverRaw, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12})
+		server := tls.Server(serverRaw, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12, NextProtos: alpn})
 		defer serverRaw.Close()
 		if err := server.Handshake(); err != nil {
 			done <- err
@@ -239,7 +243,7 @@ func EncryptConversation(cert tls.Certificate, exchanges []Exchange) ([]Exchange
 	var keys bytes.Buffer
 	recorder := &recordingConn{Conn: clientRaw}
 	// #nosec G402 -- Offline synthetic capture deliberately exercises TLS 1.2 decryption; no remote connection is made.
-	client := tls.Client(recorder, &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12, KeyLogWriter: &keys})
+	client := tls.Client(recorder, &tls.Config{RootCAs: roots, ServerName: "localhost", MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS12, KeyLogWriter: &keys, NextProtos: alpn})
 	if err := client.Handshake(); err != nil {
 		return nil, nil, err
 	}

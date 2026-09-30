@@ -1,0 +1,9 @@
+==> python-tests
+Python interpreter: C:\Users\kvmuk\AppData\Local\Microsoft\WindowsApps\python.exe (3.14.4 (tags/v3.14.4:23116f9, Apr  7 2026, 14:10:54) [MSC v.1944 64 bit (AMD64)])
+$ C:\Users\kvmuk\AppData\Local\Microsoft\WindowsApps\python.exe -m unittest discover -s scripts -p test_*.py
+...........s.......sss...............
+----------------------------------------------------------------------
+Ran 37 tests in 0.981s
+
+OK (skipped=4)
+==> python-tests ok (1.566s)

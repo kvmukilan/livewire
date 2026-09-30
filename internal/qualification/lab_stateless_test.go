@@ -56,10 +56,14 @@ func encodeStatelessTestCapture(t *testing.T, frames [][]byte, at ...time.Time) 
 }
 
 func statelessValidatorFixture(t *testing.T) (LabRun, string, func(string, []byte) Evidence) {
+	return statelessValidatorFixtureVersion(t, "1.0.1", "replay", statelessTestFrames())
+}
+
+func statelessValidatorFixtureVersion(t *testing.T, version, command string, frames [][]byte) (LabRun, string, func(string, []byte) Evidence) {
 	t.Helper()
 	base := t.TempDir()
 	start := time.Unix(1700000000, 0).UTC()
-	run := LabRun{SchemaVersion: 1, Version: "1.0.1", Suite: "stateless", Platform: "linux-amd64", Command: "replay", Environment: "synthetic gate test only", Started: start, Finished: start.Add(7201 * time.Second), CleanupVerified: true}
+	run := LabRun{SchemaVersion: 1, Version: version, Suite: "stateless", Platform: "linux-amd64", Command: command, Environment: "synthetic gate test only", Started: start, Finished: start.Add(7201 * time.Second), CleanupVerified: true}
 	write := func(name string, data []byte) Evidence {
 		t.Helper()
 		if err := os.WriteFile(filepath.Join(base, name), data, 0600); err != nil {
@@ -67,12 +71,16 @@ func statelessValidatorFixture(t *testing.T) (LabRun, string, func(string, []byt
 		}
 		return Evidence{Path: name, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
 	}
-	frames := statelessTestFrames()
 	fixture := write("mixed.pcap", encodeStatelessTestCapture(t, frames))
 	run.Evidence = []Evidence{fixture}
 	var transcript bytes.Buffer
-	for round := 1; round <= 3; round++ {
-		at := start.Add(time.Duration(round-1) * time.Hour)
+	commandField := ""
+	if UsesStatelessReproduce(version) {
+		commandField = fmt.Sprintf(`"command":%q,`, command)
+	}
+	rounds, interval := syntheticLabCadence(version, 1)
+	for round := 1; round <= rounds; round++ {
+		at := start.Add(time.Duration(round-1) * interval)
 		prefix := ""
 		if round > 1 {
 			prefix = fmt.Sprintf("round-%d-", round)
@@ -80,15 +88,15 @@ func statelessValidatorFixture(t *testing.T) (LabRun, string, func(string, []byt
 		actual := write(prefix+"actual.pcap", encodeStatelessTestCapture(t, append(append([][]byte{}, frames...), frames...), at))
 		output := write(prefix+"output.txt", []byte("synthetic output"))
 		firewall := write(prefix+"firewall.txt", []byte("# empty owned-namespace firewall\n"))
-		report := write(prefix+"report.json", []byte(fmt.Sprintf(`{"tool":"livewire","version":"1.0.1","mode":"wire","status":"wire","completed":true,"verified":false,"passes":2,"framesPerPass":6,"framesSent":12,"captureDigest":"sha256:%s"}`, fixture.SHA256)))
+		report := write(prefix+"report.json", []byte(fmt.Sprintf(`{"tool":"livewire","version":%q,%s"mode":"wire","status":"wire","completed":true,"verified":false,"passes":2,"framesPerPass":%d,"framesSent":%d,"captureDigest":"sha256:%s"}`, version, commandField, len(frames), len(frames)*2, fixture.SHA256)))
 		run.Evidence = append(run.Evidence, actual, output, firewall, report)
-		e := statelessLabEvent{labEvent: labEvent{Event: "pass", Case: "mixed-frames", Command: "replay", Round: round, Repeat: 2, Started: at, Finished: at, CleanupVerified: true, IndependentCapture: actual.Path, CaptureSHA256: actual.SHA256, Report: report.Path, ReportSHA256: report.SHA256, Output: output.Path}, Fixture: fixture.Path, FixtureSHA256: fixture.SHA256, FramesObserved: 12, Firewall: firewall.Path, FirewallSHA256: firewall.SHA256}
+		e := statelessLabEvent{labEvent: labEvent{Event: "pass", Case: "mixed-frames", Command: command, Round: round, Repeat: 2, Started: at, Finished: at, CleanupVerified: true, IndependentCapture: actual.Path, CaptureSHA256: actual.SHA256, Report: report.Path, ReportSHA256: report.SHA256, Output: output.Path}, Fixture: fixture.Path, FixtureSHA256: fixture.SHA256, FramesObserved: len(frames) * 2, Firewall: firewall.Path, FirewallSHA256: firewall.SHA256}
 		if err := json.NewEncoder(&transcript).Encode(e); err != nil {
 			t.Fatal(err)
 		}
 	}
 	transcript.WriteString("{\"event\":\"cleanup\",\"verified\":true}\n")
-	run.Cases = []LabCaseResult{{Name: "mixed-frames", Passes: 3, RepeatedProcessPasses: 3, FirstAt: start, LastAt: start.Add(7200 * time.Second), CleanupVerified: true, FramesObserved: 36}}
+	run.Cases = []LabCaseResult{{Name: "mixed-frames", Passes: rounds, RepeatedProcessPasses: rounds, FirstAt: start, LastAt: start.Add(7200 * time.Second), CleanupVerified: true, FramesObserved: len(frames) * 2 * rounds}}
 	run.Evidence = append(run.Evidence, write("events.jsonl", transcript.Bytes()))
 	return run, base, write
 }
@@ -217,7 +225,14 @@ func TestRecordedStatelessLabTranscript(t *testing.T) {
 	if base == "" {
 		t.Skip("set LIVEWIRE_STATELESS_LAB_SMOKE to a recorded stateless lab directory")
 	}
-	data, err := os.ReadFile(filepath.Join(base, "replay.run.json"))
+	command := os.Getenv("LIVEWIRE_STATELESS_LAB_COMMAND")
+	if command == "" {
+		command = "replay" // preserve the existing recorded-evidence entry point
+	}
+	if command != "replay" && command != "reproduce" {
+		t.Fatal("LIVEWIRE_STATELESS_LAB_COMMAND must be reproduce or replay")
+	}
+	data, err := os.ReadFile(filepath.Join(base, command+".run.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,11 +240,11 @@ func TestRecordedStatelessLabTranscript(t *testing.T) {
 	if err := json.Unmarshal(data, &run); err != nil {
 		t.Fatal(err)
 	}
-	if run.Suite != "stateless" {
+	if run.Suite != "stateless" || run.Command != command {
 		t.Fatal("not a stateless lab run")
 	}
 	if err := validateLabTranscript(run, base); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("validated stateless replay: %d passes, %d observed frames", run.Cases[0].Passes, run.Cases[0].FramesObserved)
+	t.Logf("validated stateless %s: %d passes, %d observed frames", command, run.Cases[0].Passes, run.Cases[0].FramesObserved)
 }

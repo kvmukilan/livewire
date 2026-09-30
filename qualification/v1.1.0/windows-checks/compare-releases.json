@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "compare-releases",
+    "-output",
+    "C:\\Users\\kvmuk\\livewire\\coverage\\v1.1.0-windows-checks\\release-comparison"
+  ],
+  "exitCode": 0,
+  "finished": "2026-09-30T19:06:55.259866Z",
+  "platform": "windows-amd64",
+  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "sourceDigestAfter": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
+  "started": "2026-09-30T19:06:47.403309Z"
+}

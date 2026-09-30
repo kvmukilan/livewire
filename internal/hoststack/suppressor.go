@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/netip"
 	"strconv"
+	"sync"
 )
 
 // Rule describes the connection whose host RSTs to drop. TargetIP and TargetPort
@@ -43,6 +44,7 @@ type Suppressor interface {
 // Guard ties a Suppressor to Release; defer it (and call it on SIGINT) so an
 // interrupted replay doesn't leak the rule.
 type Guard struct {
+	mu    sync.Mutex
 	s     Suppressor
 	armed bool
 }
@@ -64,11 +66,19 @@ func Arm(r Rule) (*Guard, error) {
 
 // Release removes the rule if it is still armed. Idempotent.
 func (g *Guard) Release() error {
-	if g == nil || !g.armed {
+	if g == nil {
 		return nil
 	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.armed {
+		return nil
+	}
+	if err := g.s.Disarm(); err != nil {
+		return err
+	}
 	g.armed = false
-	return g.s.Disarm()
+	return nil
 }
 
 // Describe exposes the underlying suppressor's description.

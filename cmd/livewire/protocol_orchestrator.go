@@ -66,7 +66,7 @@ func printProtocolReadiness(ready protocolReadiness) {
 	}
 }
 
-// orchestratorOptions contains the requirements shared by `reproduce` and the
+// orchestratorOptions contains the requirements shared by `live` and the
 // positional `live` experience. It deliberately contains values, not flag-set
 // details, so protocol runners do not need to know which front door was used.
 type orchestratorOptions struct {
@@ -74,6 +74,8 @@ type orchestratorOptions struct {
 	captureDigest                       string
 	capture, iface, target              string
 	keylog, serverName, ca              string
+	keylogData                          []byte
+	keylogSource                        string
 	insecure, strict, wire              bool
 	user, password, privateKey, hostKey string
 	commands, expects                   []string
@@ -174,9 +176,11 @@ func resolveProtocolRequirements(route protocolRoute, opts orchestratorOptions) 
 	}
 	switch route.kind {
 	case protocolTLS:
-		opts.keylog, err = resolveKeyLog(opts.capture, opts.keylog, "TLS")
+		if opts.inspection == nil {
+			opts.keylog, err = resolveKeyLog(opts.capture, opts.keylog, "TLS")
+		}
 	case protocolFTP:
-		if ftpNeedsKeyLog(route.session) {
+		if ftpNeedsKeyLog(route.session) && len(opts.keylogData) == 0 {
 			opts.keylog, err = resolveKeyLog(opts.capture, opts.keylog, "FTPS")
 		}
 	case protocolSSH:
@@ -356,6 +360,7 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 	var reportRegistry *replay.Registry
 	if opts.inspection != nil {
 		cfg := secureexec.Config{Inspection: opts.inspection, Target: opts.target, ServerName: opts.serverName, User: opts.user, Password: opts.password, Commands: opts.commands, Expects: opts.expects, Variables: opts.variables, Timeout: opts.timeout, Insecure: opts.insecure, Verify: replay.VerifyLenient}
+		cfg.KeyLog = append([]byte(nil), opts.keylogData...)
 		cfg.Scenario = opts.scenario
 		cfg.ExchangeTimeout = opts.responseTimeout
 		if opts.strict {
@@ -368,12 +373,21 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 		for _, item := range []struct {
 			path string
 			dest *[]byte
-		}{{opts.keylog, &cfg.KeyLog}, {opts.ca, &cfg.CA}, {opts.privateKey, &cfg.PrivateKey}, {opts.hostKey, &cfg.HostKey}} {
+		}{{opts.ca, &cfg.CA}, {opts.privateKey, &cfg.PrivateKey}, {opts.hostKey, &cfg.HostKey}} {
 			if item.path != "" {
 				*item.dest, err = os.ReadFile(item.path)
 				if err != nil {
 					return err
 				}
+			}
+		}
+		if len(cfg.KeyLog) == 0 && opts.keylog != "" {
+			cfg.KeyLog, err = os.ReadFile(opts.keylog)
+			if err != nil {
+				return err
+			}
+			if len(cfg.KeyLog) == 0 {
+				return fmt.Errorf("explicit key log is empty; refusing handshake fallback")
 			}
 		}
 		reportRegistry = cfg.Registry
@@ -405,6 +419,7 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 			runErr = runProtocolCompatibility(kind, args)
 		} else {
 			outcome, e := prepared.Run(attemptCtx)
+			outcome.TLSSecretsSource = opts.keylogSource
 			directOutcome = &outcome
 			runErr = e
 			if e != nil {
@@ -419,6 +434,13 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 			}
 			report.secretValues = append(report.secretValues, exec.Scenario.SecretValues()...)
 			report.Transformations = []string{"fresh session executed using explicit replay intent and selected capture sessions"}
+			if outcome.Adapter == "tls-handshake" {
+				report.Transformations = []string{"captured public ClientHello SNI, ALPN and supported TLS 1.2/1.3 versions used for a fresh handshake", "new TLS randomness, key exchange and secure cipher selection; no captured application ciphertext transmitted"}
+				report.Limitations = append(report.Limitations, "captured application replay is incomplete without matching TLS secrets; peer certificate verification is not capture-response verification", "exact ClientHello fingerprint, cipher list, resumption, early data and application timing are not reproduced")
+				if outcome.HandshakeCompleted {
+					fmt.Println("Fresh TLS handshake completed; application replay remains incomplete because captured plaintext is unavailable.")
+				}
+			}
 			if opts.insecure {
 				report.Limitations = append(report.Limitations, "TLS peer identity verification was explicitly disabled")
 			}

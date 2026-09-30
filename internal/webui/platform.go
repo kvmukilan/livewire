@@ -78,7 +78,7 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err)
 		return
 	}
-	keys, err := s.planningKeyLog(req.Secure.Keylog)
+	keys, _, err := s.selectTLSKeys(req.Secure.Keylog, capture.TLSKeyLog())
 	if err != nil {
 		writeErr(w, 400, err)
 		return

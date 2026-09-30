@@ -149,7 +149,7 @@ func TestGzipHTTPReplaysWithExplicitApplicationIntent(t *testing.T) {
 	port := uint16(server.Listener.Addr().(*net.TCPAddr).Port)
 	capture := writeIntentHTTP(t, port, body, true)
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", capture, "--mode", "application", "--session", "tcp-0", "-t", "127.0.0.1")
+	out, err := runBinary(t, bin, "live", capture, "--mode", "application", "--session", "tcp-0", "-t", "127.0.0.1")
 	if err != nil {
 		t.Fatalf("gzip replay failed: %v\n%s", err, out)
 	}
@@ -222,7 +222,7 @@ func TestExplicitWireBypassesTLSInputsAndValidatesOptions(t *testing.T) {
 	path := writeProtocolStub(t, t.TempDir(), "tls", 443, []byte{22, 3, 3, 0, 1, 0})
 	bin := buildBinary(t)
 	for _, flag := range [][]string{{"--wire"}, {"-profile", "wire"}, {"--mode", "wire"}} {
-		args := append([]string{"reproduce", path}, flag...)
+		args := append([]string{"live", path}, flag...)
 		args = append(args, "--dry-run")
 		out, err := runBinary(t, bin, args...)
 		if err != nil || !strings.Contains(out, "no packets sent") {
@@ -232,11 +232,11 @@ func TestExplicitWireBypassesTLSInputsAndValidatesOptions(t *testing.T) {
 			t.Fatalf("wire preview requested TLS inputs: %s", out)
 		}
 	}
-	out, err := runBinary(t, bin, "reproduce", path, "--profile", "bad", "--dry-run")
+	out, err := runBinary(t, bin, "live", path, "--profile", "bad", "--dry-run")
 	if err == nil || !strings.Contains(out, "unknown fidelity profile") {
 		t.Fatalf("invalid profile bypassed: %v %s", err, out)
 	}
-	out, err = runBinary(t, bin, "reproduce", path, "--mode", "transport", "--dry-run")
+	out, err = runBinary(t, bin, "live", path, "--mode", "transport", "--dry-run")
 	if err == nil || !strings.Contains(out, "encrypted sessions") {
 		t.Fatalf("transport silently reterminated TLS: %v %s", err, out)
 	}
@@ -319,11 +319,11 @@ func TestBinaryProtocolHonorsExplicitTransportAndCustomAdapter(t *testing.T) {
 	_, _ = rand.New(rand.NewSource(92)).Read(payload)
 	capture := writeProtocolStub(t, t.TempDir(), "binary", 4567, payload)
 	bin := buildBinary(t)
-	out, err := runBinary(t, bin, "reproduce", capture, "--mode", "auto", "--dry-run")
+	out, err := runBinary(t, bin, "live", capture, "--mode", "auto", "--dry-run")
 	if err == nil || !strings.Contains(out, "opaque") {
 		t.Fatalf("auto did not flag uncertainty: %v %s", err, out)
 	}
-	out, err = runBinary(t, bin, "reproduce", capture, "--mode", "transport", "--dry-run")
+	out, err = runBinary(t, bin, "live", capture, "--mode", "transport", "--dry-run")
 	if err != nil || !strings.Contains(out, "unrecognized binary data") {
 		t.Fatalf("explicit transport was overridden: %v %s", err, out)
 	}
@@ -331,7 +331,7 @@ func TestBinaryProtocolHonorsExplicitTransportAndCustomAdapter(t *testing.T) {
 	if err := os.WriteFile(rules, []byte(`{"name":"device-binary","match":{"transport":"tcp","ports":[4567]},"framing":{"type":"fixed","size":1024}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	out, err = runBinary(t, bin, "reproduce", capture, "--mode", "application", "--rules", rules, "--dry-run")
+	out, err = runBinary(t, bin, "live", capture, "--mode", "application", "--rules", rules, "--dry-run")
 	if err != nil || !strings.Contains(out, "device-binary") {
 		t.Fatalf("custom adapter lost to entropy: %v %s", err, out)
 	}

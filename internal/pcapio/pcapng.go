@@ -18,6 +18,7 @@ const (
 	ngBlockIDB   = 0x00000001 // Interface Description Block
 	ngBlockSPB   = 0x00000003 // Simple Packet Block
 	ngBlockEPB   = 0x00000006 // Enhanced Packet Block
+	ngBlockDSB   = 0x0000000A // Decryption Secrets Block
 	ngByteMagic  = 0x1A2B3C4D
 	ngOptTSResol = 9 // if_tsresol option code in an IDB
 )
@@ -31,11 +32,12 @@ type ngIface struct {
 // NgReader streams records from a pcapng file, tracking per-interface link type
 // and timestamp resolution.
 type NgReader struct {
-	r      *bufio.Reader
-	bo     binary.ByteOrder
-	ifaces []ngIface
-	links  map[wire.LinkType]struct{}
-	limits Limits
+	r         *bufio.Reader
+	bo        binary.ByteOrder
+	ifaces    []ngIface
+	links     map[wire.LinkType]struct{}
+	limits    Limits
+	tlsKeyLog []byte // sensitive metadata; never included in packet records
 }
 
 // NewNgReader parses the leading Section Header Block and returns a reader.
@@ -137,6 +139,10 @@ func (nr *NgReader) Read() (*Record, error) {
 			return nr.readEPB(body)
 		case ngBlockSPB:
 			return nr.readSPB(body)
+		case ngBlockDSB:
+			if err := nr.addSecrets(body); err != nil {
+				return nil, err
+			}
 		default:
 			// Name-resolution, statistics, etc.: skip.
 		}

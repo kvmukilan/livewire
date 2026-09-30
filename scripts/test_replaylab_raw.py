@@ -1,5 +1,8 @@
 """Artifact integrity checks; these do not require packet privileges."""
 import json
+import contextlib
+import datetime
+import io
 import struct
 import signal
 from pathlib import Path
@@ -8,7 +11,92 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from replaylab_raw import Lab, collect_evidence, decode_pcap, evidence_ref, ethernet_frames, main, sha, stateless_fixture, verify_stateless_report, verify_wire_capture, verify_wire_report, wire_fixture
+from replaylab_raw import Lab, LabContinuity, collect_evidence, corrected_contract, decode_pcap, evidence_ref, ethernet_frames, is_stateless, main, sha, stateless_fixture, verify_stateless_report, verify_wire_capture, verify_wire_report, wire_fixture
+
+
+class ContinuityTests(unittest.TestCase):
+    @staticmethod
+    def at(seconds):
+        return (datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(seconds=seconds)).isoformat()
+
+    def test_regular_activity_and_documented_boundaries(self):
+        c = LabContinuity("1.1.0")
+        for second in range(0, 7201, 20):
+            c.observe(str(second // 20 % 7), self.at(second), self.at(second + 1))
+        c = LabContinuity("1.1.0")
+        c.observe("a", self.at(0), self.at(0))
+        for second in range(60, 301, 60):
+            c.observe("b", self.at(second), self.at(second))
+        with self.assertRaisesRegex(ValueError, "case gap"):
+            c.check_start("a", self.at(300.000001))
+        c.observe("a", self.at(300), self.at(420))
+
+    def test_suspend_and_backward_clock_are_not_credited(self):
+        for begin, end, diagnostic in ((3600, 3601, "idle gap"), (20, 28800, "execution duration"), (-1, 0, "idle gap"), (20, 19, "execution duration"), (61.000001, 62, "idle gap"), (20, 140.000001, "execution duration")):
+            with self.subTest(begin=begin, end=end):
+                c = LabContinuity("1.1.0")
+                c.observe("a", self.at(0), self.at(1))
+                with self.assertRaisesRegex(ValueError, diagnostic):
+                    c.observe("a", self.at(begin), self.at(end))
+                c.observe("a", self.at(20), self.at(21))
+        for version in ("1.0.0", "1.0.1"):
+            LabContinuity(version).observe("a", self.at(0), self.at(28800))
+
+    def test_resume_rejected_before_capture_or_traffic(self):
+        for command, name in (("live", "udp"), ("reproduce", "mixed-frames"), ("replay", "mixed-frames")):
+            with self.subTest(command=command):
+                lab = Lab.__new__(Lab)
+                lab.continuity = LabContinuity("1.1.0")
+                lab.continuity.observe(name, self.at(0), self.at(1))
+                lab.spawn = Mock()
+                with patch("replaylab_raw.utc", return_value=self.at(28800)), patch("replaylab_raw.subprocess.run") as process:
+                    with self.assertRaisesRegex(ValueError, "idle gap"):
+                        lab.execute(command, name, 2)
+                lab.spawn.assert_not_called()
+                process.assert_not_called()
+
+    def test_continuity_failure_retains_cleanup_and_interruption(self):
+        lab = Mock()
+        lab.results = {"live": {"udp": {"failures": 0}}}
+        lab.execute.side_effect = ValueError("lab continuity: suspended")
+        lab.cleanup.return_value = True
+        with patch("sys.argv", ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", "1.1.0", "--case", "udp"]), patch("replaylab_raw.os.geteuid", return_value=0, create=True), patch("replaylab_raw.Lab", return_value=lab):
+            with self.assertRaisesRegex(ValueError, "lab continuity"):
+                main()
+        self.assertEqual(lab.results["live"]["udp"]["failures"], 1)
+        lab.cleanup.assert_called_once_with()
+        lab.finish.assert_called_once_with(True, True)
+
+    def test_suspended_stateless_execution_is_not_added_to_passes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lab = Lab.__new__(Lab)
+            lab.out, lab.server, lab.client, lab.sif, lab.cif = Path(directory), "owned-server", "owned-client", "server-veth", "client-veth"
+            lab.args = SimpleNamespace(version="1.1.0", binary="synthetic")
+            lab.continuity = LabContinuity("1.1.0")
+            lab.checked_evidence = {}
+            lab.results = {"reproduce": {"mixed-frames": {"passes": 0}}}
+            cap = Mock()
+            cap.poll.return_value = None
+            lab.children, lab.handles = [cap], [cap.lab_log_handle]
+            capture = lab.out / "reproduce-mixed-frames-00001.independent.pcap"
+            capture.write_bytes(b"x" * 24)
+            report = lab.out / "reproduce-mixed-frames-00001.report.json"
+            report.write_text("{}", encoding="utf-8")
+            lab.spawn, lab.run, lab.event = Mock(return_value=cap), Mock(return_value=""), Mock()
+            with patch("replaylab_raw.utc", side_effect=[self.at(0), self.at(28800)]), patch("replaylab_raw.subprocess.run", return_value=SimpleNamespace(returncode=0, stdout="", stderr="")), patch("replaylab_raw.time.sleep"), patch("replaylab_raw.verify_stateless_report", return_value=66), patch("replaylab_raw.evidence_ref", side_effect=lambda folder, path: {"path": path.name, "sha256": "a" * 64}):
+                with self.assertRaisesRegex(ValueError, "execution duration"):
+                    lab.execute_stateless("reproduce", 1)
+            self.assertEqual(lab.results["reproduce"]["mixed-frames"]["passes"], 0)
+            lab.event.assert_not_called()
+            cap.wait.assert_called_once_with(timeout=5)
+            self.assertEqual(lab.children, [])
+
+    def test_invalid_timing_options_fail_before_resources(self):
+        for args in (("--duration", "nan"), ("--duration", "inf"), ("--round-gap", "-1"), ("--round-gap", "61")):
+            with self.subTest(args=args), patch("sys.argv", ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", "1.1.0", *args]), patch("replaylab_raw.Lab") as constructor, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    main()
+                constructor.assert_not_called()
 
 
 class EvidenceTests(unittest.TestCase):
@@ -61,6 +149,62 @@ class EvidenceTests(unittest.TestCase):
 
 
 class StatelessTests(unittest.TestCase):
+    def test_versioned_command_routing_before_any_network_setup(self):
+        class Parsed(Exception):
+            pass
+        def parsed(version, commands):
+            found = []
+            def construct(args):
+                found.append(args)
+                raise Parsed()
+            argv = ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", version]
+            for command in commands:
+                argv += ["--command", command]
+            with patch("sys.argv", argv), patch("replaylab_raw.os.geteuid", return_value=0, create=True), patch("replaylab_raw.Lab", side_effect=construct):
+                with self.assertRaises(Parsed):
+                    main()
+            return found[0]
+        self.assertEqual(parsed("1.0.1", []).command, ["live", "reproduce"])
+        self.assertEqual(parsed("1.1.0", []).command, ["live"])
+        self.assertNotEqual(parsed("1.0.1", ["reproduce"]).case, ["mixed-frames"])
+        for command in ("reproduce", "replay"):
+            args = parsed("1.1.0", [command])
+            self.assertEqual((args.command, args.case), ([command], ["mixed-frames"]))
+            self.assertTrue(is_stateless(command, args.version))
+        self.assertFalse(is_stateless("reproduce", "1.0.1"))
+        self.assertTrue(corrected_contract("v1.1.0-rc.1"))
+        for tail in (["--command", "live", "--command", "reproduce"], ["--command", "reproduce", "--command", "replay"], ["--command", "live", "--command", "live"], ["--command", "reproduce", "--netem"], ["--command", "live", "--case", "mixed-frames"]):
+            argv = ["replaylab_raw.py", "--binary", "synthetic", "--output", "synthetic", "--source-digest", "synthetic", "--version", "1.1.0", *tail]
+            with self.subTest(tail=tail), patch("sys.argv", argv), patch("replaylab_raw.Lab") as constructor, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    main()
+                constructor.assert_not_called()
+
+    def test_corrected_stateless_fixture_covers_protocol_bytes_and_actual_alias(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture, actual = Path(directory) / "mixed.pcap", Path(directory) / "actual.pcap"
+            frames = stateless_fixture(fixture, "1.1.0")
+            self.assertEqual(len(frames), 22)
+            rows = decode_pcap(fixture)
+            ports = {row.get("dport") for row in rows} | {row.get("sport") for row in rows}
+            self.assertTrue({20, 21, 22, 53, 80, 443, 502, 990, 1883, 1884, 20000}.issubset(ports))
+            payloads = [row.get("payload", b"") for row in rows]
+            self.assertTrue(any(b"MQTT\x04" in payload for payload in payloads))
+            self.assertTrue(any(b"MQTT\x05" in payload for payload in payloads))
+            self.assertIn(b"AUTH TLS\r\n", payloads)
+            self.assertTrue(any(payload.startswith(b"SSH-2.0-") for payload in payloads))
+            self.assertTrue(any(payload.startswith(b"\x05\x64") for payload in payloads))
+            data = fixture.read_bytes()[:24]
+            for frame in frames * 3:
+                data += struct.pack("<IIII", 1700000000, 0, len(frame), len(frame)) + frame
+            actual.write_bytes(data)
+            for command in ("reproduce", "replay"):
+                report = {"tool": "livewire", "version": "1.1.0", "command": command, "mode": "wire", "status": "wire", "completed": True, "verified": False, "passes": 3, "framesPerPass": 22, "framesSent": 66, "captureDigest": "sha256:" + sha(fixture)}
+                self.assertEqual(verify_stateless_report(report, fixture, actual, 3, "1.1.0", command), 66)
+                for wrong in ("live", "replay" if command == "reproduce" else "reproduce", None):
+                    with self.subTest(command=command, wrong=wrong), self.assertRaises(ValueError):
+                        verify_stateless_report(dict(report, command=wrong), fixture, actual, 3, "1.1.0", command)
+
     def test_wire_interleaved_sessions_reject_session_grouping_and_tie_reordering(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture, capture = Path(directory) / "wire.pcap", Path(directory) / "observed.pcap"

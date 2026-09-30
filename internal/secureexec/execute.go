@@ -127,6 +127,9 @@ func Prepare(c Config) (*Prepared, error) {
 	if route.Kind == replayintent.SSH {
 		return prepareSSH(c)
 	}
+	if route.Kind == replayintent.TLS && len(c.KeyLog) == 0 {
+		return prepareTLSHandshake(c, host)
+	}
 	var keys *tlsreplay.KeyLog
 	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) || len(c.KeyLog) > 0 {
 		if len(c.KeyLog) == 0 {

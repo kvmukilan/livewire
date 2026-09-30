@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +23,7 @@ type wireReplayReport struct {
 	Status        string             `json:"status,omitempty"`
 	Selection     *replay.ReplayPlan `json:"selection,omitempty"`
 	Tool          string             `json:"tool"`
+	Command       string             `json:"command"`
 	Version       string             `json:"version"`
 	When          time.Time          `json:"when"`
 	CaptureDigest string             `json:"captureDigest"`
@@ -40,11 +42,19 @@ type wireReplayReport struct {
 // an interface at a chosen rate, with no live sequence state. Use `live` when
 // the frames must land on a real TCP peer that answers.
 func cmdReplay(args []string) error {
-	return cmdReplayWithSender(args, backend.OpenSender)
+	return cmdStatelessReplay("replay", args)
 }
 
-func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketBackend, error)) (retErr error) {
-	fs := flag.NewFlagSet("replay", flag.ContinueOnError)
+func cmdStatelessReplay(command string, args []string) error {
+	return cmdStatelessReplayWithSender(command, args, backend.OpenSender)
+}
+
+func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketBackend, error)) error {
+	return cmdStatelessReplayWithSender("replay", args, openSender)
+}
+
+func cmdStatelessReplayWithSender(command string, args []string, openSender func(string) (backend.PacketBackend, error)) (retErr error) {
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	var inPath string
 	fs.StringVar(&inPath, flagIn, "", "input pcap/pcapng file")
 	var iface string
@@ -57,26 +67,37 @@ func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketB
 	var loop int
 	fs.IntVar(&loop, flagCount, 1, "send the capture this many times (0 = forever)")
 	fs.IntVar(&loop, "loop", 1, "alias for -n")
+	fs.IntVar(&loop, "times", 1, "alias for -n")
+	fs.IntVar(&loop, "iterations", 1, "alias for -n")
 	var selectedSessions fileFlags
 	fs.Var(&selectedSessions, "session", "select session ID (repeatable)")
 	dryRun := fs.Bool("dry-run", false, "compute and print the schedule without sending")
 	reportPath := fs.String("report", "", "write a JSON execution report without packet payloads")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
-		fmt.Println("usage: livewire replay -in <file> -i <connection> [-pps N | -mbps N | -multiplier N | -topspeed] [-n N]")
+		fmt.Printf("usage: livewire %s <capture.pcap> -i <connection> [-pps N | -mbps N | -multiplier N | -topspeed] [-n N]\n", command)
+		fmt.Printf("   or: livewire %s -in <capture.pcap> -i <connection> [options]\n", command)
 		fmt.Println("\nStateless replay: send captured frames as-is at a chosen rate. There is no")
-		fmt.Println("live peer and no reply checking — use 'reproduce' or 'live' for that.")
+		fmt.Println("fresh TCP/TLS connection or reply checking. Both recorded directions are sent.")
+		fmt.Println("Captured TLS bytes need no key log here and do not form a fresh TLS session.")
+		fmt.Println("Use live <capture> -t <target> for fresh application sessions and response checks.")
+		fmt.Println("Without a rate flag, preserve captured timing. Use -dry-run to preview without sending.")
 		printFlags(fs, flagIn, flagIface, flagCount, "pps", "mbps", "multiplier", "topspeed", "dry-run", "report")
 	}
-	if err := fs.Parse(args); err != nil {
+	if name := applicationOnlyReplayFlag(fs, args); name != "" {
+		return fmt.Errorf("-%s is not supported by stateless %s; no packets were sent. Use live <capture> with that option for application/session replay", name, command)
+	}
+	capturePath, err := parseCaptureArgs(fs, args, &inPath)
+	if err != nil {
 		return err
 	}
-	if handleAllFlags(fs, *allFlags, aliasSet{"iface": true, "loop": true}) {
+	inPath = capturePath
+	if handleAllFlags(fs, *allFlags, aliasSet{"iface": true, "loop": true, "times": true, "iterations": true}) {
 		return errAllFlags
 	}
 	if inPath == "" {
 		fs.Usage()
-		return fmt.Errorf("-in is required")
+		return fmt.Errorf("a capture file is required, e.g. livewire %s issue.pcap -i <connection>", command)
 	}
 	if loop < 0 {
 		return fmt.Errorf("-n cannot be negative (0 = forever)")
@@ -169,7 +190,7 @@ func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketB
 			mode = "dry-run"
 		}
 		report = &wireReplayReport{
-			Tool: "livewire", Version: version, When: time.Now().UTC(), CaptureDigest: captureDigest, Selection: &inspection.Plan,
+			Tool: "livewire", Command: command, Version: version, When: time.Now().UTC(), CaptureDigest: captureDigest, Selection: &inspection.Plan,
 			Interface: iface, Mode: mode, FramesPerPass: len(recs), Verified: false,
 			Limitations: []string{"captured frames are not adapted to a live session and replies are not compared with the recording"},
 		}
@@ -234,9 +255,39 @@ func cmdReplayWithSender(args []string, openSender func(string) (backend.PacketB
 		if report != nil {
 			report.Passes = pass
 		}
-		fmt.Printf("pass %d complete (%d frames)\n", pass, len(recs))
+		fmt.Printf("attempt %d complete (%d frames)\n", pass, len(recs))
 	}
 	return nil
+}
+
+// applicationOnlyReplayFlag recognizes option tokens, never filenames or flag
+// values. Old application invocations must fail before opening a capture or a
+// sender; secure inputs must never silently switch stateless reproduction modes.
+func applicationOnlyReplayFlag(fs *flag.FlagSet, args []string) string {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		if !isFlagArg(arg) {
+			continue
+		}
+		name, _, assigned := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		switch name {
+		case "t", "to", "target", "keylog", "ca", "server-name", "insecure-skip-verify", "user", "pass", "key", "host-key", "cmd", "expect", "timeout", "response-timeout", "expect-fault", "under-load", "exact-tcp", "gap", "stop-when-different", "mode", "profile", "strict", "strict-exit", "actual-out", "no-rst-guard", "udp-idle", "set", "rules", "scenario", "state-dir", "resume", "run-timeout", "concurrency", "wire":
+			return name
+		}
+		if assigned {
+			continue
+		}
+		if f := fs.Lookup(name); f != nil {
+			boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+			if (!ok || !boolean.IsBoolFlag()) && i+1 < len(args) {
+				i++
+			}
+		}
+	}
+	return ""
 }
 
 func waitReplayContext(ctx context.Context, duration time.Duration) bool {
