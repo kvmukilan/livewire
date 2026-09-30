@@ -1,0 +1,107 @@
+name: Software lab qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_commit:
+        description: Full 40-character commit SHA containing this workflow and lab tooling
+        required: true
+        type: string
+      source_digest:
+        description: Expected qualification SourceDigest (lowercase SHA256)
+        required: true
+        type: string
+      windows_binary_sha256:
+        description: Frozen release-builder Windows amd64 executable SHA256
+        required: true
+        type: string
+      linux_binary_sha256:
+        description: Frozen release-builder Linux amd64 executable SHA256
+        required: true
+        type: string
+      version:
+        description: Exact candidate version, for example 1.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Each runner exercises only repository-generated synthetic peers/frames. No
+# downloaded capture, credential, physical NIC or external device is accepted.
+# Manual cancellation/timeout is invalid evidence, never a qualifying soak.
+jobs:
+  lab:
+    name: ${{ matrix.id }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {id: windows-application-live, os: windows-latest, suite: application, command: live, platform: windows}
+          - {id: linux-application-live, os: ubuntu-latest, suite: application, command: live, platform: linux}
+          - {id: linux-packet-live, os: ubuntu-latest, suite: packet, command: live, platform: linux}
+          - {id: linux-stateless-reproduce, os: ubuntu-latest, suite: stateless, command: reproduce, platform: linux}
+          - {id: linux-stateless-replay, os: ubuntu-latest, suite: stateless, command: replay, platform: linux}
+    env:
+      GOTOOLCHAIN: local
+      CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+      EXPECTED_SOURCE: ${{ inputs.source_digest }}
+      EXPECTED_BINARY: ${{ matrix.platform == 'windows' && inputs.windows_binary_sha256 || inputs.linux_binary_sha256 }}
+      CANDIDATE_VERSION: ${{ inputs.version }}
+      LAB_SUITE: ${{ matrix.suite }}
+      LAB_COMMAND: ${{ matrix.command }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.7'
+          cache: true
+      - name: Install namespace lab tools
+        if: matrix.suite != 'application'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iptables tcpdump
+      - name: Check exporter guards
+        shell: python {0}
+        run: |
+          import subprocess, sys
+          assert sys.version_info >= (3, 11), 'Python 3.11 or newer is required'
+          subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_qualification_export.py'], check=True)
+      - name: Run pinned two-hour lab and independently validate evidence
+        shell: python {0}
+        run: |
+          import os, pathlib, subprocess, sys
+          root = pathlib.Path.cwd()
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          subprocess.run([
+              sys.executable, 'scripts/qualification_export.py',
+              '--root', str(root), '--scratch', str(temporary / 'qualification-private'),
+              '--export', str(temporary / 'qualification-evidence'),
+              '--diagnostic', str(temporary / 'qualification-diagnostics'),
+              '--commit', os.environ['CANDIDATE_COMMIT'], '--source', os.environ['EXPECTED_SOURCE'],
+              '--binary', os.environ['EXPECTED_BINARY'], '--version', os.environ['CANDIDATE_VERSION'],
+              '--suite', os.environ['LAB_SUITE'], '--command', os.environ['LAB_COMMAND'],
+          ], check=True)
+      - name: Upload qualifying evidence only
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualification-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: diagnostics-${{ matrix.id }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/qualification-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
