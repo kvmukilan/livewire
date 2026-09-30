@@ -3,29 +3,34 @@ layout: "../../layouts/Reference.astro"
 title: "Command reference"
 description: "Flags, replay outcomes, and compatibility commands for the pinned release."
 sourcePath: "docs/COMMANDS.md"
-sourceRef: "v1.0.1"
+sourceRef: "v1.1.0"
 ---
 
 
 Every Livewire command, its options, and what its output means. The everyday
-workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.0.1/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/SETUP.md).
+workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.1.0/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/SETUP.md).
+
+This reference describes the 1.1.0 command contract. When using a 1.0.1 binary,
+use its
+[version-pinned command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
+with that binary. In 1.0.1, `reproduce` invokes application replay; in 1.1 it is
+stateless packet replay.
 
 Run `livewire help <command>` for the same information at the terminal, and
 `livewire <command> -all-flags` for the complete option list of one command.
 
 ## Primary
 
-### `reproduce`
+### `live`
 
 Replay a recorded exchange against your device and report, in plain language,
 whether it behaved the same. This is the command to hand to someone else. It
 inspects selected sessions before it opens an interface or connection and uses
 fresh application sessions by default. No `-mode` flag or mode-selection prompt
-is needed. `live` uses the same execution contract. The separate `replay`
-command is stateless packet injection.
+is needed. Use `reproduce` for stateless captured-packet transmission.
 
 ```sh
-livewire reproduce issue.pcap -t 192.168.1.50
+livewire live issue.pcap -t 192.168.1.50
 ```
 
 For ordinary TCP, UDP, and ICMP supply the device IP; the destination port comes
@@ -40,24 +45,26 @@ exact flag to add.
 | HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | UDP or ICMP | live datagram/echo driver with reply checking |
 | ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
-| TLS with `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
-| explicit or implicit FTPS with `-keylog` | FTP control/data coordinator with fresh verified TLS |
+| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
+| TLS without secrets | fresh verified handshake from captured ClientHello metadata; application replay remains incomplete and unverified |
+| explicit or implicit FTPS with matching embedded secrets or `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
 | DNP3 Secure Authentication, MQTT enhanced authentication, or unsupported security | blocked with the reason; no false success |
 | unknown opaque/encrypted traffic | blocked; never silently replayed as ordinary TCP or wire traffic |
 
-An adjacent key log or `SSLKEYLOGFILE` value is only suggested. Livewire never
-reads one until the operator selects it or passes `-keylog` explicitly. Captured
-TLS/SSH ciphertext is never sent by automatic mode. Raw frame injection requires
-the explicit `-wire` option. The older explicit `-profile wire` spelling remains
-accepted so existing scripts do not change meaning.
+Embedded PCAPNG TLS secrets are used automatically; an explicit `-keylog` takes
+priority. Malformed embedded secrets fail closed. An adjacent key log or
+`SSLKEYLOGFILE` value is never read without explicit selection. Captured
+TLS/SSH ciphertext is never sent by automatic mode. Use `reproduce` for raw
+frame injection. Advanced `live -wire` and `live -profile wire` remain available
+for compatibility and also make no response-equivalence claim.
 
 | Option | Meaning |
 |---|---|
 | `-mode <intent>` | advanced compatibility override: application (default), transport, wire, or auto |
 | `-session <id>` | select an exchange from `check -details`; repeatable |
 | `-dry-run` | inspect selection, requirements, target, and output paths without sending |
-| `-in <file>` | the capture, if you prefer it to a bare argument |
+| `-in <file>` | recognized TLS or explicit secure inputs select fresh sessions; other captures retain historical TCP dry-run/packet controls; use a positional capture for the normal application workflow |
 | `-t <ip>` | your device's address |
 | `-i <name>` | network connection to replay on |
 | `-n <count>` | replay this many times and report how often it matched — see [below](#when-the-problem-only-happens-sometimes) |
@@ -65,7 +72,7 @@ accepted so existing scripts do not change meaning.
 | `-exact-tcp` | use stateful transport replay for a low-level TCP issue |
 | `-wire` | explicitly inject captured frames as-is; requires `-i` and does not claim session adaptation or reply equivalence |
 | `-keylog <file>` | matching NSS key log for TLS or FTPS |
-| `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default |
+| `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default; handshake-only TLS defaults to captured SNI, then target hostname |
 | `-user`, `-pass`/`-key`, `-host-key`, `-cmd` | SSH requirements; repeat `-cmd` and optionally pair each with `-expect` |
 | `-details` | also print the capture assessment, the replay plan, and every session's verdict |
 | `-strict-exit` | exit nonzero unless every selected exchange completes with positive matching response evidence |
@@ -97,12 +104,12 @@ Response verification distinguishes these outcomes:
 
 Run `livewire help reliability` for TCP mode selection and repeatable workflows.
 Durable resume cannot restore a socket or the target's application state. See
-[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
+[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
 
 To reproduce an expected timeout rather than require matching responses:
 
 ```sh
-livewire reproduce issue.pcap -t 192.168.1.50 \
+livewire live issue.pcap -t 192.168.1.50 \
   -response-timeout 5s -expect-fault timeout
 ```
 
@@ -118,34 +125,66 @@ captured timing gaps; MQTT 5 applies negotiated limits and rebuilds topic aliase
 DNP3 reassembles supported transport/application fragments, accepts changed live
 fragmentation, and generates required confirmations. Unknown DNP3 object layouts,
 unsupported link control, and secure authentication remain explicit limits. See
-the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 `-strict`, `-profile`, `-set`, `-rules`, `-report`, `-actual-out`, and
 `-no-rst-guard` are available behind `-all-flags`.
 
-### `live`
+The positional `live <capture>` form uses the application orchestrator.
+`live -in <file>` with explicit secure inputs such as `-keylog`, `-ca`, or SSH
+credentials also uses that route. Recognized TLS always takes the fresh-session
+route, including `live -in <file> -t <host:port>` without secure flags. Incompatible
+legacy TCP controls are refused before traffic. Other captures retain historical
+`live -in` dry-run, flow-selection, sequence-rewrite and raw-L4 controls.
+See [Legacy `live -in` mode](#legacy-live--in-mode).
 
-Play captured application requests through fresh live connections:
+### `reproduce`
+
+Send captured packets unchanged, without maintaining a live connection. Both
+recorded directions are transmitted in capture order. This reproduces recorded
+packet stimuli; it does not negotiate TCP/TLS, adapt requests, wait for replies,
+or claim that the original application outcome occurred.
 
 ```sh
-livewire live issue.pcap -t 192.168.1.50
-livewire live tls.pcap -keylog sslkeys.log -t device.example:443
-livewire replay -in issue.pcap -i eth0  # separate stateless packet replay
+livewire reproduce issue.pcap -dry-run
+livewire reproduce issue.pcap -i eth0 -report packets.json
+livewire reproduce issue.pcap -i eth0 -pps 1000 -n 5
 ```
 
-The positional form uses the same fresh-session orchestrator as `reproduce`.
-`live -in <file>` with explicit secure inputs such as `-keylog`, `-ca`, or SSH
-credentials also uses that route. Mixing secure inputs with legacy-only
-controls is rejected before loading the capture or sending. Without secure
-inputs, historical `live -in` keeps its dry-run, flow-selection, sequence-rewrite
-and raw-L4 controls. See [Legacy `live -in` mode](#legacy-live--in-mode).
+| Option | Meaning |
+|---|---|
+| `<capture>` or `-in <file>` | PCAP/PCAPNG input; flags may precede or follow a positional capture |
+| `-i <name>` / `-iface <name>` | interface to inject packets on; required unless previewing |
+| `-session <id>` | select recorded sessions; repeatable |
+| `-n <count>` / `-loop <count>` | number of passes; `0` continues until interrupted |
+| `-pps <n>` / `-mbps <n>` | packets per second or megabits per second |
+| `-multiplier <n>` | multiply captured timing rate; `2` is twice as fast |
+| `-topspeed` | send as fast as the sender allows |
+| `-dry-run` | validate selection and schedule without opening a sender |
+| `-report <file>` | write collision-safe JSON transmission evidence |
+
+Use at most one rate option. Without a rate option, recorded timing is used.
+The selected frames must have one link type compatible with the output
+interface. Addresses, ports, sequence numbers and ciphertext remain unchanged;
+use `rewrite` beforehand when static address changes are needed. Packet access
+requires the appropriate driver and privileges. Reports always have
+`verified: false`, including after all frames were sent successfully.
+
+TLS-containing PCAPs can be transmitted as captured bytes without key material,
+but those bytes cannot establish a new TLS application session. Use `live`
+with matching keys for fresh secure application replay.
+
+In 1.0.x, `reproduce` invoked the application workflow. In 1.1, migrate those
+commands to `live`. Application options such as `-t`, `-keylog`, `-resume` and
+`-mode application` are rejected before network access. `replay` remains a
+compatibility alias for stateless `reproduce`.
 
 ## Supporting commands
 
 ### `check`
 
 Look at a capture without touching the network: what traffic it holds, and
-whether Livewire can replay it faithfully. Run it before `reproduce` if you want
+whether Livewire can replay it faithfully. Run it before `live` if you want
 to know what you were sent.
 
 ```sh
@@ -158,7 +197,6 @@ livewire check -in issue.pcap -json assessment.json
 |---|---|
 | `-mode <intent>` | advanced compatibility override: application (default), transport, wire, or auto |
 | `-session <id>` | select an exchange from `check -details`; repeatable |
-| `-dry-run` | inspect selection, requirements, target, and output paths without sending |
 | `-in <file>` | the capture, if you prefer it to a bare argument |
 | `-details` | add the per-session replay plan and checksum validation |
 | `-json <file>` | also write the machine-readable assessment |
@@ -228,12 +266,12 @@ network: it is an explicit override, not authentication.
 
 ## Advanced and compatibility tools
 
-Shown by `livewire help --all`. These are power-user tools; `reproduce` covers
+Shown by `livewire help --all`. These are power-user tools; `live` covers
 the normal case.
 
 ### Legacy `live -in` mode
 
-The stateful TCP engine that `reproduce` wraps, with the controls exposed. Learns
+The stateful TCP engine that `live` wraps, with the controls exposed. Learns
 the live peer's ISN and realigns sequence and acknowledgement numbers per flow.
 Protocol-agnostic — only TCP headers are rewritten.
 
@@ -286,10 +324,9 @@ cannot receive a prerecorded response.
 
 ### `replay`
 
-Stateless send, in the style of `tcpreplay`: blast a capture's frames onto a
-connection at a chosen rate. There is no live peer, no sequence tracking, and no
-reply checking — use `reproduce` or `live` when the frames must land on something
-that answers.
+Compatibility alias for stateless [`reproduce`](#reproduce). It uses the same
+packet sender, rate validation, selection and report semantics. Use `live` when
+a target must participate in a fresh stateful exchange.
 
 ```sh
 livewire replay -in issue.pcap -i eth0 -pps 1000
@@ -307,8 +344,7 @@ livewire replay -in issue.pcap -dry-run
 | `-topspeed` | send as fast as possible |
 | `-dry-run` | print the schedule without sending |
 
-Rate options take priority in the order `-topspeed`, `-pps`, `-mbps`,
-`-multiplier`.
+Rate options are mutually exclusive; supplying more than one is rejected.
 
 ### `rewrite`
 
@@ -350,12 +386,12 @@ for `-reassemble`. A pcapng holding mixed link types cannot be converted.
 
 ### `ftp-replay`
 
-Compatibility alias for the FTP/FTPS driver used automatically by `reproduce`
-and positional `live`. It remains available for scripts that want the older,
+Compatibility alias for the FTP/FTPS driver used automatically by positional
+`live`. It remains available for scripts that want the older,
 protocol-specific spelling.
 
 ```sh
-livewire reproduce secure.pcap -t ftp.example:990 -keylog sslkeys.log
+livewire live secure.pcap -t ftp.example:990 -keylog sslkeys.log
 livewire ftp-replay -in issue.pcap -t ftp.example:21 \
   -set ftp.user=lab -set ftp.password=secret
 livewire ftp-replay -in secure.pcap -t ftp.example:990 \
@@ -389,12 +425,13 @@ sessions are blockers.
 
 ### `tls-replay`
 
-Compatibility alias for the TLS driver selected automatically by `reproduce`
-and positional `live`. It decrypts with the supplied key log and re-terminates a
+Compatibility command for captured TLS application replay. It retains its
+explicit keylog requirement; use `live` for embedded PCAPNG secrets or a
+keylog-free handshake. It decrypts with the supplied key log and re-terminates a
 fresh, certificate-verified connection through the detected inner adapter.
 
 ```sh
-livewire reproduce issue.pcap -keylog sslkeys.log -t device.example:443
+livewire live issue.pcap -keylog sslkeys.log -t device.example:443
 livewire tls-replay -in issue.pcap -keylog sslkeys.log \
   -t device.example:443 -server-name device.example
 ```
@@ -412,19 +449,19 @@ livewire tls-replay -in issue.pcap -keylog sslkeys.log \
 Configure whatever produced the capture to write an `SSLKEYLOGFILE`, and treat
 that file as a credential. Unified mode may suggest that environment value or an
 adjacent key log but never reads it without affirmative selection. Ciphertext
-alone cannot be replayed, and the capture must hold exactly one selected TLS
+alone cannot recover the application requests, and the capture must hold exactly one selected TLS
 session. Certificate verification stays on unless you explicitly pass
 `-insecure-skip-verify`, which is a lab-only override. Key-log contents never
 reach reports or logs.
 
 ### `ssh-replay`
 
-Compatibility alias for the SSH driver selected by `reproduce` and positional
-`live`. Captured SSH ciphertext does not reveal commands, so every operation is
+Compatibility alias for the SSH driver selected by positional `live`.
+Captured SSH ciphertext does not reveal commands, so every operation is
 supplied explicitly and runs over a fresh authenticated connection.
 
 ```sh
-livewire reproduce issue.pcap -t device.example:22 \
+livewire live issue.pcap -t device.example:22 \
   -user lab -key id_ed25519 -host-key device_host_key.pub -cmd 'show version'
 livewire ssh-replay -in issue.pcap -t device.example:22 \
   -user lab -key id_ed25519 -host-key device_host_key.pub \
@@ -479,8 +516,8 @@ livewire rstdrop -t 192.0.2.50 -port 502
 | `-port <n>` | target TCP port |
 | `-sport <n>` | match only this source port |
 
-**You usually do not need this.** `reproduce` and `live` arm and release the same
-guard automatically for the duration of a replay. Use it only when an external
+**You usually do not need this.** Stateful packet routes in `live` arm and release
+the same guard automatically for the duration of a replay. Use it only when an external
 injector — Scapy, or a hand-rolled script — is sending the packets instead. Needs
 Administrator or root.
 
@@ -513,12 +550,12 @@ The announced removal boundary is 2.0.
 
 ## When the problem only happens sometimes
 
-`-n` replays the whole capture more than once and reports how often the device
+`live -n` replays the selected plan more than once and reports how often the device
 behaved the same. An intermittent fault is named as such, rather than reported as
 a single pass or failure:
 
 ```sh
-livewire reproduce issue.pcap -t 192.168.1.50 -i eth0 -n 5
+livewire live issue.pcap -t 192.168.1.50 -i eth0 -n 5
 ```
 
 ```
@@ -552,6 +589,8 @@ Details worth knowing:
 - `-stop-when-different` ends the run at the first attempt that diverges, when one
   failing sample is all you need. Ctrl-C stops cleanly and still writes a report
   for the attempts that ran.
-- Also available on `live -n`, and as an **Attempts** field on the dashboard.
+- The dashboard exposes the same control as an **Attempts** field. Stateless
+  `reproduce -n` and `replay -n` repeat captured packet sends without checking
+  device responses.
 
 ---

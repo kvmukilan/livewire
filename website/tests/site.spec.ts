@@ -4,7 +4,7 @@ import path from 'node:path';
 const basePath = process.env.PUBLIC_BASE_PATH || '/';
 const sitePath = (route: string) => basePath + route.replace(/^\//, '');
 
-const routes = ['/', '/install/', '/workflows/', '/secure-replay/', '/protocols/', '/releases/', '/troubleshooting/', '/reference/setup/', '/reference/commands/', '/reference/workflow/', '/reference/reliability/', '/reference/operations/'];
+const routes = ['/', '/install/', '/workflows/', '/secure-replay/', '/protocols/', '/releases/', '/troubleshooting/', '/reference/setup/', '/reference/commands/', '/reference/workflow/', '/reference/reliability/', '/reference/operations/', '/reference/tls-capture/'];
 for (const route of routes) {
   test(`accessible and responsive ${route}`, async ({ page }) => {
     await page.goto(sitePath(route));
@@ -76,4 +76,20 @@ test('commands have real newlines and pages make no third-party requests', async
   await page.goto(sitePath('/secure-replay/'));
   await expect(page.locator('code').filter({hasText:'-cmd "show version"'})).toHaveCount(1);
   expect(external).toEqual([]);
+});
+
+test('TLS inputs preserve the handshake and application evidence boundary', async ({page, context}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(sitePath('/secure-replay/'));
+  await page.getByRole('button', {name:'Copy Fresh TLS from a capture command'}).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('livewire live tls.pcap -t device.example:443');
+  await expect(page.getByText('Handshake complete. Application replay incomplete.', {exact:true})).toBeVisible();
+  await expect(page.getByRole('region', {name:'TLS capture inputs'})).toContainText('matching embedded TLSK secrets');
+  await page.getByRole('link', {name:'Read the complete TLS capture guide →'}).click();
+  await expect(page).toHaveURL(/\/reference\/tls-capture\/$/);
+  await expect(page.locator('.reference-content')).toContainText('applicationReplayCompleted');
+  await page.goto(sitePath('/workflows/'));
+  await page.getByRole('button', {name:'Copy Packet replay · v1.1.0 command'}).click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('livewire reproduce -in issue.pcap -i eth0');
+  await expect(page.getByRole('region', {name:'Command version contract'})).toContainText('Compatibility alias for reproduce');
 });

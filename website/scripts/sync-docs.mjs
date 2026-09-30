@@ -12,6 +12,7 @@ const allowlist = [
   ['WORKFLOW.md', 'workflow', 'Workflow reference', 'Capture inspection, session selection, and replay planning.'],
   ['RELIABILITY_IMPLEMENTATION.md', 'reliability', 'Reliability reference', 'Replay state, supported protocols, durable progress, and verification boundaries.'],
   ['PRODUCTION.md', 'operations', 'Operations reference', 'Operational diagnostics, recovery, and qualification requirements.'],
+  ['TLS_CAPTURE_REPLAY.md', 'tls-capture', 'TLS capture reference', 'Fresh TLS handshakes from public metadata and application replay with matching captured secrets.'],
 ];
 const out = path.join(root, 'src/pages/reference');
 mkdirSync(out, { recursive: true });
