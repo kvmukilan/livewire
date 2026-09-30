@@ -4,6 +4,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -122,6 +125,40 @@ class ExportTests(unittest.TestCase):
             exporter.export_run(self.run, self.base / 'diagnostic', self.meta, False)
         self.assertFalse((self.base / 'diagnostic').exists())
 
+    def test_validator_failure_log_survives_missing_report_with_hash(self):
+        log = self.base / 'validation.log'
+        payload = b'--- FAIL: TestRecordedStatelessLabTranscript (0.00s)\n    report.json: permission denied\nFAIL\n'
+        log.write_bytes(payload)
+        (self.base / 'handoff.log').write_bytes(b'raw scratch must be private\n')
+        (self.run / 'reproduce.run.json').unlink()
+        self.meta['validationExitCode'] = 1
+        exporter.failure_diagnostics(self.run, self.base / 'diagnostic', self.meta, log)
+        out = self.base / 'diagnostic'
+        self.assertEqual((out / 'validation.log').read_bytes(), payload)
+        self.assertEqual((out / 'handoff.log').read_bytes(), b'raw scratch must be private\n')
+        detail = json.loads((out / 'validation-diagnostic.json').read_text())
+        self.assertTrue(detail['retained'])
+        self.assertFalse(detail['qualifying'])
+        self.assertEqual(detail['sha256'], hashlib.sha256(payload).hexdigest())
+        for line in (out / 'SHA256SUMS').read_text().splitlines():
+            expected, name = line.split('  ')
+            self.assertEqual(exporter.digest(out / name), expected)
+
+    def test_validator_failure_log_is_bounded_and_private_material_omitted(self):
+        for label, payload in (('large', b'bounded diagnostic\n' * 20000), ('secret', b'permission denied\n-----BEGIN PRIVATE KEY-----\nprivate-body\n'), ('credential', b'{"ftp.password":"private"}\n')):
+            with self.subTest(label=label):
+                log = self.base / 'validation.log'
+                log.write_bytes(payload)
+                out = self.base / label
+                exporter.failure_diagnostics(self.run, out, self.meta, log)
+                detail = json.loads((out / 'validation-diagnostic.json').read_text())
+                if label == 'large':
+                    self.assertTrue(detail['truncated'])
+                    self.assertLessEqual((out / 'validation.log').stat().st_size, 128 << 10)
+                else:
+                    self.assertFalse(detail['retained'])
+                    self.assertFalse((out / 'validation.log').exists())
+
     def test_keylog_hidden_in_json_or_pcap_cannot_export(self):
         original = copy.deepcopy(self.report)
         keylog = b'CLIENT_RANDOM ' + b'a'*64 + b' ' + b'b'*96
@@ -206,6 +243,99 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(execute.call_count, 1)
         metadata = json.loads((self.base/'diagnostic/failure.json').read_text())
         self.assertFalse(metadata['qualifying'])
+
+
+@unittest.skipUnless(sys.platform == 'linux', 'native Linux ownership regression')
+class RawOwnershipTests(unittest.TestCase):
+    def setUp(self):
+        self.root = os.geteuid() == 0
+        if not self.root and (not shutil.which('sudo') or subprocess.run(['sudo', '-n', 'true'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode):
+            self.skipTest('requires Linux root orchestration or an ordinary user with passwordless sudo')
+        self.uid, self.gid = (65534, 65534) if self.root else (os.getuid(), os.getgid())
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        if self.root:
+            os.chown(self.base, self.uid, self.gid)
+
+    def privileged(self, argv, **kwargs):
+        return subprocess.run(([] if self.root else ['sudo', '-n']) + argv, **kwargs)
+
+    def fixture(self, label, kind='regular'):
+        scratch = self.base / label
+        scratch.mkdir(mode=0o700)
+        if self.root:
+            os.chown(scratch, self.uid, self.gid)
+        run = scratch / 'run'
+        outside = scratch / 'outside'
+        outside.write_bytes(b'outside must not change')
+        setup = '''import os, pathlib, sys
+run, outside, kind = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]), sys.argv[3]
+run.mkdir()
+report = run / 'reproduce-mixed-frames-00001.report.json'
+report.write_bytes(b'{"completed":true,"verified":false}\\n')
+report.chmod(0o600)
+target = run / 'events.jsonl'
+if kind == 'symlink': target.symlink_to(outside)
+elif kind == 'hardlink': os.link(outside, target)
+elif kind == 'fifo': os.mkfifo(target)
+elif kind == 'directory': target.mkdir()
+elif kind == 'unknown': (run / 'private.key').write_bytes(b'not evidence')
+else: target.write_bytes(b'{"event":"synthetic"}\\n')
+'''
+        self.privileged([sys.executable, '-c', setup, str(run), str(outside), kind], check=True)
+        # Only this newly created test directory is removed, after link tests.
+        self.addCleanup(self.privileged, [sys.executable, '-c', 'import shutil,sys; shutil.rmtree(sys.argv[1])', str(run)], check=True)
+        return run, outside
+
+    def handoff(self, run):
+        env = dict(os.environ, SUDO_UID=str(self.uid), SUDO_GID=str(self.gid)) if self.root else None
+        return self.privileged([sys.executable, str(Path(exporter.__file__).resolve()), '--handoff-raw', str(run), '--suite', 'stateless', '--command', 'reproduce'], env=env, capture_output=True, text=True)
+
+    def read_as_owner(self, path):
+        def become_owner():
+            os.setgroups([])
+            os.setgid(self.gid)
+            os.setuid(self.uid)
+        return subprocess.run([sys.executable, '-c', 'import pathlib,sys; sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).read_bytes())', str(path)], preexec_fn=become_owner if self.root else None, capture_output=True)
+
+    def test_root_private_report_becomes_readable_only_to_original_runner(self):
+        run, _ = self.fixture('success')
+        report = run / 'reproduce-mixed-frames-00001.report.json'
+        self.assertEqual(report.stat().st_uid, 0)
+        denied = self.read_as_owner(report)
+        self.assertNotEqual(denied.returncode, 0)
+        self.assertIn(b'PermissionError', denied.stderr)
+        result = self.handoff(run)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        read = self.read_as_owner(report)
+        self.assertEqual(read.returncode, 0, read.stderr)
+        self.assertEqual(read.stdout, b'{"completed":true,"verified":false}\n')
+        for path, mode in ((run, 0o700), (report, 0o600), (run / 'events.jsonl', 0o600)):
+            self.assertEqual(path.stat().st_uid, self.uid)
+            self.assertEqual(path.stat().st_gid, self.gid)
+            self.assertEqual(path.stat().st_mode & 0o777, mode)
+
+    def test_links_special_entries_and_unknown_files_are_rejected_before_handoff(self):
+        for kind in ('symlink', 'hardlink', 'fifo', 'directory', 'unknown'):
+            with self.subTest(kind=kind):
+                run, outside = self.fixture(kind, kind)
+                original = outside.stat()
+                result = self.handoff(run)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual((run / 'reproduce-mixed-frames-00001.report.json').stat().st_uid, 0)
+                self.assertEqual(outside.read_bytes(), b'outside must not change')
+                self.assertEqual((outside.stat().st_uid, outside.stat().st_mode), (original.st_uid, original.st_mode))
+
+    def test_nonprivate_parent_and_ancestor_links_are_rejected(self):
+        run, _ = self.fixture('parent')
+        run.parent.chmod(0o777)
+        self.assertNotEqual(self.handoff(run).returncode, 0)
+        run.parent.chmod(0o700)
+        alias = self.base / 'alias'
+        alias.symlink_to(run.parent, target_is_directory=True)
+        self.assertNotEqual(self.handoff(alias / 'run').returncode, 0)
+        self.assertEqual((run / 'reproduce-mixed-frames-00001.report.json').stat().st_uid, 0)
 
 
 if __name__ == '__main__':
