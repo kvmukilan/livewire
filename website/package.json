@@ -1,0 +1,28 @@
+{
+  "name": "livewire-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1",
+    "check": "astro check",
+    "verify": "node scripts/check-site.mjs",
+    "build": "astro check && astro build && npm run verify",
+    "preview": "astro preview --host 127.0.0.1",
+    "test": "playwright test",
+    "docs:sync": "node scripts/sync-docs.mjs"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "astro": "7.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@astrojs/check": "0.9.10",
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "typescript": "6.0.3"
+  }
+}

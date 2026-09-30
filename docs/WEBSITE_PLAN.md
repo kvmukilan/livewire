@@ -1,9 +1,9 @@
-# Livewire website on Vercel
+# Livewire website hosting
 
 ## Purpose and scope
 
-Create a public product and documentation site after the replay release is
-qualified. Keep the first version static: explain the workflows, link verified
+The public product and documentation site is implemented in `website/`.
+It is static: it explains the workflows, links verified
 GitHub downloads, and expose the supported protocol matrix and qualification
 boundaries. Captures, TLS key logs and credentials stay on the operator's machine.
 The existing `livewire web` dashboard remains the local replay interface.
@@ -14,7 +14,7 @@ The existing `livewire web` dashboard remains the local replay interface.
 |---|---|
 | Home | Explain fresh live sessions and stateless packet replay, show one working example of each, link installation and downloads. |
 | Install | Windows/Linux steps, packet-driver versus socket prerequisites, checksums and provenance verification. |
-| Workflows | `live`, `reproduce`, stateless `replay`, selection, preview, repeated attempts, fault expectations and recovery. |
+| Workflows | Stateful `live`, stateless `reproduce` from 1.1, compatibility `replay`, selection, preview, repeated attempts, fault expectations and recovery. |
 | Secure replay | TLS/keylog example, fresh certificate verification, FTPS/SSH requirements, explicit unsupported cases. |
 | Protocols | Supported application families, transport-only behavior, evidence links and limits; no claims of universal protocol or hardware support. |
 | Releases | Version-pinned links to GitHub releases, checksum manifests and qualification evidence. |
@@ -22,13 +22,15 @@ The existing `livewire web` dashboard remains the local replay interface.
 
 ## Implementation decisions
 
-Use Astro with static output in `website/`, a committed dependency lockfile,
+The implementation uses Astro with static output in `website/`, a committed dependency lockfile,
 locally hosted fonts and minimal client JavaScript. Vercel documents native
 [Astro deployment support](https://vercel.com/docs/frameworks/frontend/astro).
-Generate documentation from an explicit allowlist of the existing Markdown
+Documentation is generated from an explicit allowlist of five version-pinned Markdown
 guides; do not copy captures, private qualification fixtures or the full evidence
 tree into the website build. Keep download/version metadata in one reviewed
-file updated only after release verification.
+file updated only after release verification. Imported guides retain source
+paths, the immutable release tag and content SHA-256 values; ordinary site
+builds use these reviewed committed files without reading the working CLI docs.
 
 Set the Vercel project root to `website/`, use the Astro preset, and connect the
 GitHub repository. Vercel supports branch previews and production deployments
@@ -37,22 +39,46 @@ site changes. See [Vercel Git deployment](https://vercel.com/docs/git) and
 [project configuration](https://vercel.com/docs/project-configuration).
 
 Use the initial Vercel domain until a custom domain is chosen. Account linking
-and any paid-plan choice belong to the deployment step; this plan does not
-create a project or incur hosting charges.
+is required for a permanent owned deployment. Temporary previews are explicitly
+identified as temporary and do not establish production ownership.
 
-## Build and launch sequence
+## Checks and deployment
 
-1. Finish and verify the CLI release; pin the site's initial release metadata.
-2. Scaffold the static site and import reviewed operator documentation.
-3. Add CI for production build, internal links, examples, accessibility and
-   checks that download links agree with the release metadata.
-4. Review mobile/desktop layouts, keyboard navigation, contrast, copy buttons
-   and the TLS workflow in a Vercel preview.
-5. Connect the selected Vercel account, publish the approved site, then verify
-   HTTPS, canonical URLs, sitemap, redirects, 404 behavior and download links.
+`npm ci`, `npm run build` and `npm test` are the repeatable local checks.
+The website CI workflow runs the production build and Chromium suite. Checks
+cover static links/assets, release filenames, source provenance, local fonts,
+JavaScript size, WCAG rules, keyboard navigation, copy buttons, no-JavaScript
+operation, four responsive widths and the custom 404, including reference
+guides. Desktop and mobile screenshots are retained privately for visual review.
+
+Only `website/` and its static output are deployment inputs. `.vercelignore`
+excludes local dependencies, generated test output and environment files. The
+CLI capture/evidence tree is never part of the deployment.
+
+On 2026-09-30 a tested preview was deployed with Vercel's unauthenticated
+temporary-deployment feature. Vercel assigned it a one-hour expiry. No Vercel
+account login was available in this environment; permanent Vercel hosting
+requires connecting the owner's account. Ownership claim credentials
+are private, ignored local files and are not published in this repository.
+
+The initial site correctly pins published v1.0.1 and explains its older command
+contract. Promote the release metadata and imported guides to v1.1 only after
+the corrected CLI's qualification and published artifacts pass verification.
+Set `PUBLIC_SITE_URL` to the permanent verified HTTPS origin to enable canonical
+URLs, sitemap entries and indexing. Temporary previews disallow crawling.
+
+GitHub Pages is the lasting fallback under the existing repository owner's
+account, at `https://kvmukilan.github.io/livewire/`. Its deployment workflow builds
+and tests the static site before publishing, with `PUBLIC_SITE_URL` set to
+`https://kvmukilan.github.io` and `PUBLIC_BASE_PATH` set to `/livewire/`. The Vercel
+root-domain configuration remains supported. The initial Pages deployment is
+pending the reviewed website workflow reaching the main branch; configuring
+Pages alone does not mean the site has been published.
 
 Launch is complete when a new operator can install a checksum-verified binary,
 preview a capture, run a local synthetic live example, understand the keylog
 requirement, and distinguish a verified response from stateless transmission.
 
-This is an implementation-ready plan; no website deployment is claimed.
+The implementation and temporary deployment are complete. The lasting Pages
+deployment, final release-metadata promotion and any later Vercel account
+connection are recorded separately from CLI replay qualification.

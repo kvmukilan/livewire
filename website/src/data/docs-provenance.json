@@ -1,0 +1,35 @@
+{
+  "ref": "v1.0.1",
+  "files": [
+    {
+      "source": "docs/SETUP.md",
+      "sourceSHA256": "51c309b040ba46beb0640dddfe6da4d0df1e5330658b84c77ffac205a98de3e2",
+      "output": "src/pages/reference/setup.md",
+      "generatedSHA256": "0d487a41953bb83232d43feea328746b5de060e56fbb29209b495d492a651da9"
+    },
+    {
+      "source": "docs/COMMANDS.md",
+      "sourceSHA256": "64c22ac5288d728d9afd7fed08c876579aeb8374e4d4814d0f07c10481b73a6e",
+      "output": "src/pages/reference/commands.md",
+      "generatedSHA256": "e8076327f7b8d1f97f34bc2cbc7d7bfd19d840ca05fa9ca9f956feb3d9f0af2b"
+    },
+    {
+      "source": "docs/WORKFLOW.md",
+      "sourceSHA256": "6ba92df5a9d7cf66a3af84888ea43bacef5427380e966d89bc592a09df3217a3",
+      "output": "src/pages/reference/workflow.md",
+      "generatedSHA256": "73f3390f491b48ffd2fe82ef2ff8e7034e4bfab72e0b54fb49c82443d309bd6a"
+    },
+    {
+      "source": "docs/RELIABILITY_IMPLEMENTATION.md",
+      "sourceSHA256": "8ab99be3b6863de7e0c52fc2bc3f6a4e7aa84d9370e4e6fd99a015526f728f97",
+      "output": "src/pages/reference/reliability.md",
+      "generatedSHA256": "5d0a5832812d9a06d6fb358ec85711554805fd342b884bdbf76abcfc4d188e7e"
+    },
+    {
+      "source": "docs/PRODUCTION.md",
+      "sourceSHA256": "6837d550efc2d89c725d49523503ae25281a3e7fb68785efb47065bee210cacb",
+      "output": "src/pages/reference/operations.md",
+      "generatedSHA256": "db3589110886c653b4994da1ca59d89d3ffc2ff08775c14b0372a81fe5ed0210"
+    }
+  ]
+}
