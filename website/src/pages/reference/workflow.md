@@ -3,26 +3,29 @@ layout: "../../layouts/Reference.astro"
 title: "Workflow reference"
 description: "Capture inspection, session selection, and replay planning."
 sourcePath: "docs/WORKFLOW.md"
-sourceRef: "v1.0.1"
+sourceRef: "v1.1.0"
 ---
 
 
 For prerequisite diagnostics, failure recovery, supported platforms, and the
-stable qualification procedure, see [PRODUCTION.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/PRODUCTION.md). Run
+stable qualification procedure, see [PRODUCTION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes version 1.0.1. `live` and `reproduce` open fresh application
-sessions by default; the separate `replay` command sends stateless packets.
+This guide describes version 1.1.0. When using a 1.0.1 binary, use its
+[version-pinned workflow](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WORKFLOW.md)
+with that binary. In 1.1, `live` opens fresh stateful application
+sessions; `reproduce` sends captured packets statelessly. `replay` is a
+compatibility alias for `reproduce`.
 Advanced intent overrides remain available for existing scripts. The release's
-[qualification scope](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/V1_QUALIFICATION.md) states which software tests passed
+[qualification scope](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md) states which software tests passed
 and which field checks remain outstanding.
 
 ## Inspect, select, preview, run
 
 ```sh
 livewire check issue.pcap -details
-livewire reproduce issue.pcap -session tcp-0 -dry-run
-livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50
+livewire live issue.pcap -session tcp-0 -dry-run
+livewire live issue.pcap -session tcp-0 -t 192.168.1.50
 ```
 
 Use the session IDs shown for that capture. Repeat `-session` to include more
@@ -35,9 +38,14 @@ all traffic through a different driver. Reports retain excluded packet indexes
 and counts. A match describes selected sessions only.
 
 No mode flag is needed for the commands above. For packet-only replay use
-`livewire replay -in issue.pcap -i <connection>`. It retains captured bytes,
+`livewire reproduce issue.pcap -i <connection>`. It retains captured bytes,
 directions, order and timing; it cannot turn old TLS ciphertext into a fresh
-secure exchange. These advanced overrides remain available:
+secure exchange. No target or decryption keys are needed for stateless sending.
+Preview it with `reproduce issue.pcap -dry-run`; use `-report packets.json` to
+retain counts. Its report always records `verified: false`. Adding `-report`
+to a stateless dry run writes preview JSON with no transmitted frames.
+
+These advanced `live` overrides remain available for compatibility:
 
 | Advanced intent | Behavior |
 |---|---|
@@ -50,7 +58,7 @@ Plain application/transport targets are IP addresses and use captured ports.
 Secure targets accept `host:port`. Socket-based application replay does not need
 a packet interface or packet-driver elevation. Packet drivers still do.
 
-`-dry-run` inspects the capture, validates the chosen mode and supplied target,
+`live ... -dry-run` inspects the capture, validates the chosen mode and supplied target,
 and shows requirements and report destinations. It sends nothing and writes no
 report. Missing credentials are listed as requirements; preview alone does not
 prove keys/certificates will work against a live peer. A blocked preview exits
@@ -64,20 +72,20 @@ Choose the observable failure first: a different response, a reset, a stalled
 request, a device crash, or a timing threshold. Retain device logs and a packet
 capture from the test run to check that symptom independently of reply matching.
 
-For supported application protocols over TCP, `live` and `reproduce` use fresh OS TCP
+For supported application protocols over TCP, `live` uses fresh OS TCP
 connections. The OS maintains sequence numbers, acknowledgements, retransmission,
 and flow control; adapters maintain supported application identifiers and state.
 Captured segmentation and packet loss are not reproduced by a socket replay.
 The target also needs the relevant firmware, configuration, authentication,
 and starting data. A PCAP alone does not restore those conditions. HTTP setup
 and response-dependent tokens can be declared with `-scenario`; see
-[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/RELIABILITY_IMPLEMENTATION.md).
+[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md).
 
 For a packet-level TCP issue, preview and run the transport route:
 
 ```sh
-livewire reproduce issue.pcap -mode transport -session tcp-0 -dry-run
-livewire reproduce issue.pcap -mode transport -session tcp-0 -t 192.168.1.50 -i <connection> -details -run-timeout 2m
+livewire live issue.pcap -mode transport -session tcp-0 -dry-run
+livewire live issue.pcap -mode transport -session tcp-0 -t 192.168.1.50 -i <connection> -details -run-timeout 2m
 ```
 
 The transport driver needs a captured handshake and maps captured client
@@ -91,7 +99,7 @@ it cannot promise identical network or device state.
 To investigate intermittent application behavior:
 
 ```sh
-livewire reproduce issue.pcap -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m
+livewire live issue.pcap -session tcp-0 -t 192.168.1.50 -n 5 -strict-exit -run-timeout 10m
 ```
 
 Each attempt opens a fresh connection. Reset required target data between runs
@@ -110,13 +118,19 @@ require an explicit recovery contract.
 ## Secure exchanges
 
 ```sh
-livewire reproduce tls.pcap -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
+livewire live tls.pcap -t device.example:443 -ca device-ca.pem
+livewire live tls.pcap -t device.example:443 -keylog sslkeys.log -ca device-ca.pem
 livewire check ftps.pcap -mode application -keylog sslkeys.log -details
-livewire reproduce ssh.pcap -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
+livewire live ssh.pcap -t device:22 -user operator -key device.key -host-key device.pub -cmd "show status" -expect ready
 ```
 
 FTPS negotiation is decrypted offline to associate data sessions when a matching
-key log is supplied. No key log is consumed merely because it exists nearby.
+key log is supplied or is embedded in the selected PCAPNG. An explicit key log
+takes priority over embedded secrets. No external key log is consumed merely
+because it exists nearby. TLS without secrets establishes a fresh handshake
+from captured public ClientHello metadata and reports application replay as
+incomplete and unverified. It sends no old ciphertext or invented requests.
+See [TLS capture replay](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/TLS_CAPTURE_REPLAY.md).
 Multiple independent secure exchanges require explicit session selection; this
 version does not coordinate arbitrary mixed secure sessions in one run.
 
@@ -125,7 +139,9 @@ material, command bodies, and response bodies are excluded from reports. SSH
 output evidence contains lengths and digests. Blank expectations do not count
 as verification. TLS identity verification remains enabled by default.
 
-Fresh secure sessions support functional replay, and TLS supports captured pacing.
+Fresh secure sessions support functional replay, and TLS application replay with
+matching secrets supports captured pacing. Handshake-only TLS does not replay
+application timing, scenarios, durable checkpoints or response comparisons.
 Unsupported timing/exact-transport options and actual-packet output are rejected
 instead of silently ignored. Add `-n 5`
 for fresh repeated attempts and `-gap 0s` for no settle delay.
@@ -155,14 +171,22 @@ session selection and fresh secure application replay are one-sided features.
 
 ## Compatibility and API additions
 
-- `live <capture>` and `reproduce` use fresh application sessions, including flags on either side of the
-  positional capture. `live -in <capture>` with explicit secure inputs uses the
-  same fresh-session route; otherwise it keeps the historical TCP engine.
-- Commands without `-mode` now select fresh application sessions consistently
-  in terminals and scripts. To retain v1.0.0 automatic transport selection for
+- `live <capture>` uses fresh application sessions, including flags on either side of the
+  positional capture. Recognized TLS or explicit secure inputs route
+  `live -in <capture>` through the same fresh-session path; other captures
+  retain the historical TCP engine.
+- `reproduce <capture>` is stateless. From 1.0.x, migrate application commands
+  from `reproduce ... -t ...` to `live ... -t ...`. Application-only flags are
+  rejected before sending. `replay` is a stateless compatibility alias.
+- Positional `live <capture>` selects fresh application sessions without a mode
+  prompt in terminals and scripts. Recognized TLS does the same with `live -in`,
+  including a keyless handshake that leaves application replay incomplete.
+  Other `live -in` invocations without secure inputs retain the simulation default.
+  To retain v1.0.0 automatic transport selection for
   unrecognized TCP, pass the advanced compatibility override `-mode auto`.
-- `-wire` and `-profile wire` select explicit wire replay. Existing protocol
-  commands remain available for compatibility.
+- Advanced `live -wire` and `live -profile wire` select explicit wire replay.
+  Use `reproduce` for the primary stateless workflow. Existing protocol commands
+  remain available for compatibility.
 - `/api/plan` accepts `mode`, `sessions`, `shape` (`one`/`lab`), and
   `secure.keylog`. It returns shared `readiness`, `mode`, selected/excluded packet
   counts, and `captureDigest` alongside existing fields.
@@ -183,7 +207,7 @@ Run `go test ./...`, `go test -race ./...`, `go vet ./...`, and
 shipped state transitions; they do not replace visual browser QA.
 
 Version 1 publication requires the CI, reproducibility, security and
-software-lab qualification gates, including two-hour protocol matrices for
-both commands. Windows/Linux physical NIC and DUT checks, browser visual and
+software-lab qualification gates, including two-hour application `live` and
+independently captured stateless `reproduce`/`replay` runs. Windows/Linux physical NIC and DUT checks, browser visual and
 keyboard checks, and the uncoached pilot remain part of the separate physical
 qualification profile. Automated results do not assert that those checks passed.
