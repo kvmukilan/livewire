@@ -16,7 +16,7 @@ assert.ok(['legacy-dual-application', 'live-stateful-reproduce-stateless'].inclu
 const walk = dir => readdirSync(dir).flatMap(name => statSync(path.join(dir, name)).isDirectory() ? walk(path.join(dir, name)) : [path.join(dir, name)]);
 const files = walk(dist);
 const htmlFiles = files.filter(file => file.endsWith('.html'));
-assert.equal(htmlFiles.length, 13, 'Expected seven main pages, five reference pages, and 404');
+assert.equal(htmlFiles.length, 14, 'Expected seven main pages, six reference pages, and 404');
 const hashes = new Map();
 let maxInlineJS = 0;
 for (const file of htmlFiles) {
@@ -68,7 +68,7 @@ const forbidden = files.filter(file => /\.(?:pcap|pcapng|pem|key|log|zip|exe)$/i
 assert.deepEqual(forbidden, [], 'Private or executable artifacts must never ship in the site');
 const provenance = JSON.parse(readFileSync(path.join(root, 'src/data/docs-provenance.json'), 'utf8'));
 assert.equal(provenance.ref, release.docsRef);
-assert.equal(provenance.files.length, 5);
+assert.equal(provenance.files.length, 6);
 for (const doc of provenance.files) {
   assert.equal(createHash('sha256').update(readFileSync(path.join(root, doc.output))).digest('hex'), doc.generatedSHA256, `Reference changed without provenance: ${doc.output}`);
 }
@@ -79,8 +79,8 @@ assert.ok(files.some(file => file.endsWith('.woff2')), 'Local fonts missing');
 for (const font of ['ibm-plex-sans', 'jetbrains-mono']) assert.ok(existsSync(path.join(dist, `${font}-LICENSE.txt`)), `Font license missing: ${font}`);
 if (site) {
   const sitemap = readFileSync(path.join(dist,'sitemap.xml'),'utf8');
-  assert.equal((sitemap.match(/<loc>/g)||[]).length, 12);
+  assert.equal((sitemap.match(/<loc>/g)||[]).length, 13);
   for (const match of sitemap.matchAll(/<loc>(.*?)<\/loc>/g)) assert.ok(match[1].startsWith(new URL(base,site).href));
   if (process.env.VERCEL_ENV !== 'preview') assert.ok(readFileSync(path.join(dist,'robots.txt'),'utf8').includes(new URL(base+'sitemap.xml',site).href));
 }
-console.log(`Verified ${htmlFiles.length} pages, ${checkedLinks} local links/assets under ${base}, release v${release.version}, five pinned guides, local fonts, ${jsBytes} external JS bytes and at most ${maxInlineJS} inline JS bytes/page.`);
+console.log(`Verified ${htmlFiles.length} pages, ${checkedLinks} local links/assets under ${base}, release v${release.version}, six pinned guides, local fonts, ${jsBytes} external JS bytes and at most ${maxInlineJS} inline JS bytes/page.`);

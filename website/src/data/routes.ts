@@ -1,1 +1,1 @@
-export const routes = ['/', '/install/', '/workflows/', '/secure-replay/', '/protocols/', '/releases/', '/troubleshooting/', '/reference/setup/', '/reference/commands/', '/reference/workflow/', '/reference/reliability/', '/reference/operations/'];
+export const routes = ['/', '/install/', '/workflows/', '/secure-replay/', '/protocols/', '/releases/', '/troubleshooting/', '/reference/setup/', '/reference/commands/', '/reference/workflow/', '/reference/reliability/', '/reference/operations/', '/reference/tls-capture/'];
