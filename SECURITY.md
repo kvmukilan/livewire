@@ -42,7 +42,20 @@ failure.
 
 Passwords, TLS secrets, SSH credentials, authorization values, MQTT
 credentials, private-key material, and key-log contents must never be written to
-logs, JSON reports, PCAP metadata, or support bundles.
+logs, JSON reports, ordinary PCAP metadata, or support bundles. Explicit
+`capture -tls` is the intentional exception: it embeds matching exported TLS
+secrets in a sensitive PCAPNG so supported application replay needs one file.
+It does not copy keys into diagnostic reports or upload them.
+
+TLS recording launches only the operator-supplied executable, without a shell,
+with an owned private key log. It replaces `SSLKEYLOGFILE` in the child's
+environment without reading or changing the parent's file. The temporary
+directory and secret-bearing artifact use owner-only permissions (protected
+Windows DACLs). Normal completion/error/cancellation cleans up the temporary
+key log and owned process group/job. Interrupted recordings remain explicitly
+partial and sensitive; forced termination may leave private temporary files.
+The child inherits recording privileges and its output is not redacted by
+Livewire. Launch trusted foreground applications and avoid daemonization.
 
 Variable names with common secret markers are automatically redacted and their
 supplied values are scrubbed from report errors. This is defense in depth, not a
@@ -54,8 +67,8 @@ application data.
   configured directory, so use a private mode-0700 directory for dashboard FTPS.
 - Restrict permissions on the capture directory and delete secrets according to
   your retention policy.
-- Review PCAP/PCAPNG payloads before sharing; evidence may contain replayed
-  credentials even though metadata does not.
+- Review PCAP/PCAPNG payloads and embedded decryption secrets before sharing;
+  captures may contain credentials and intentionally embedded TLS keys.
 - Use `livewire bundle` or the dashboard bundle action. The archive recursively
   redacts secret-shaped report fields and references evidence by name, size, and
   SHA-256 only; it never embeds packet bytes, the key log, an SSH key, or the

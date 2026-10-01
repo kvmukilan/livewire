@@ -2,6 +2,7 @@ package pcapio
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -17,8 +18,9 @@ type NgInterface struct {
 
 // NgWriter writes nanosecond-resolution pcapng with multiple interfaces.
 type NgWriter struct {
-	w      *bufio.Writer
-	ifaces []NgInterface
+	w           *bufio.Writer
+	ifaces      []NgInterface
+	secretBytes int
 }
 
 func NewNgWriter(w io.Writer, ifaces []NgInterface) (*NgWriter, error) {
@@ -131,3 +133,24 @@ func (w *NgWriter) writeBlock(kind uint32, body []byte) error {
 }
 
 func (w *NgWriter) Flush() error { return w.w.Flush() }
+
+// WriteTLSSecrets explicitly embeds NSS TLS key-log data in a Decryption Secrets
+// Block. Ordinary packet writes never copy secrets implicitly. Callers must
+// validate and restrict the data to the sessions they intend to disclose.
+func (w *NgWriter) WriteTLSSecrets(data []byte) error {
+	if len(data) == 0 || len(data) > MaxTLSKeyLogBytes-w.secretBytes || data[len(data)-1] != '\n' || bytes.IndexByte(data, 0) >= 0 {
+		return fmt.Errorf("pcapio: invalid or oversized TLS secrets block")
+	}
+	body := make([]byte, 8)
+	binary.LittleEndian.PutUint32(body[:4], ngSecretsTLS)
+	binary.LittleEndian.PutUint32(body[4:8], uint32(len(data)))
+	body = append(body, data...)
+	for len(body)%4 != 0 {
+		body = append(body, 0)
+	}
+	if err := w.writeBlock(ngBlockDSB, body); err != nil {
+		return err
+	}
+	w.secretBytes += len(data)
+	return nil
+}

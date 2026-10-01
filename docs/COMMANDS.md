@@ -216,9 +216,24 @@ livewire capture -i eth0 -o issue.pcap -duration 30s
 | `-o <file>` | where to save |
 | `-n <count>` | stop after this many packets |
 | `-duration <time>` | stop after this long, e.g. `30s`, `5m` |
+| `-tls -- <application> [args...]` | launch a key-exporting application and embed matching TLS secrets; `-o` must end in `.pcapng` |
 
 Stops on Ctrl-C if you give neither limit. It records the whole connection, so
 use an isolated adapter if you want only the traffic of interest. Needs elevation.
+
+To record supported TLS application traffic into a single replayable capture:
+
+```sh
+livewire capture -i eth0 -o issue.pcapng -tls -- python modbus_client.py
+livewire live issue.pcapng -t device.example:1502
+```
+
+The launched application must support `SSLKEYLOGFILE` or an explicit TLS
+key-export integration. The capture becomes sensitive. Recording stops after
+the application exits; interruption or missing/malformed/unmatched keys returns
+nonzero and preserves an explicitly partial capture. See the
+[TLS recording guide](TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
+for supported clients, process ownership, limits, permissions and recovery.
 
 ### `ifaces`
 
