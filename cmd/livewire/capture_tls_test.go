@@ -223,3 +223,46 @@ func TestRecordingMatchesExplicitFTPSAndRejectsGaps(t *testing.T) {
 		t.Fatal("incomplete handshake received embedded secrets")
 	}
 }
+
+func TestRecordingMatchesTLSClientIndependentOfTCPInitiator(t *testing.T) {
+	for _, version := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
+		t.Run(tls.VersionName(version), func(t *testing.T) {
+			cert, ca := testTLSCertificate(t)
+			original, keys := captureHTTPOverTLSVersion(t, cert, version)
+			_, unrelated := captureHTTPOverTLSVersion(t, cert, version)
+			for _, reversed := range []bool{false, true} {
+				events := append([]tlsWireEvent(nil), original...)
+				for i := range events {
+					if reversed {
+						events[i].client = !events[i].client
+					}
+				}
+				path, _, _ := writeTLSFixture(t, t.TempDir(), events, keys, ca)
+				capture, err := pcapio.LoadFile(path, pcapio.DefaultLimits())
+				if err != nil {
+					t.Fatal(err)
+				}
+				matched, count, err := recording.MatchSecrets(&capture, append(bytes.Clone(keys), unrelated...))
+				if err != nil || count != 1 {
+					t.Fatalf("reversed=%t: count=%d err=%v", reversed, count, err)
+				}
+				for _, line := range strings.Split(string(unrelated), "\n") {
+					if line != "" && bytes.Contains(matched, []byte(line)) {
+						t.Fatal("unrelated session keys included")
+					}
+				}
+				// A TLS-looking sequence inside arbitrary application bytes must
+				// not count as an opening ClientHello in either TCP direction.
+				events[0].data = append([]byte("not a TLS opening"), events[0].data...)
+				path, _, _ = writeTLSFixture(t, t.TempDir(), events, keys, ca)
+				capture, err = pcapio.LoadFile(path, pcapio.DefaultLimits())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, _, err := recording.MatchSecrets(&capture, keys); err == nil {
+					t.Fatal("matched an embedded ClientHello at an arbitrary offset")
+				}
+			}
+		})
+	}
+}

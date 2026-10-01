@@ -4,7 +4,7 @@ Copy-paste instructions to get Livewire working on a machine that has nothing
 installed. Pick your operating system, run the blocks in order, then confirm with
 [Check it works](#check-it-works).
 
-The download blocks target **1.1.0** on the
+The download blocks target **1.2.0** on the
 [Releases page](https://github.com/kvmukilan/livewire/releases). If that release
 is not available yet, use **1.0.1** and its
 [1.0.1 command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
@@ -33,7 +33,7 @@ Socket-based application replay, including HTTP/TLS/FTP/SSH, needs neither drive
 Open **PowerShell** (a normal one is fine for this step) and paste:
 
 ```powershell
-$Version = "1.1.0"
+$Version = "1.2.0"
 $Release = "https://github.com/kvmukilan/livewire/releases/download/v$Version"
 New-Item -ItemType Directory -Force C:\livewire | Out-Null
 Set-Location C:\livewire
@@ -115,7 +115,7 @@ to list them, and paste the whole `\Device\NPF_{...}` value:
 ### 1. Download it
 
 ```bash
-VERSION=1.1.0
+VERSION=1.2.0
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/livewire-$VERSION-linux-amd64"
 curl -fsSLO "https://github.com/kvmukilan/livewire/releases/download/v$VERSION/SHA256SUMS"
 sha256sum --check --ignore-missing SHA256SUMS

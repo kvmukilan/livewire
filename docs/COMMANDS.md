@@ -3,7 +3,7 @@
 Every Livewire command, its options, and what its output means. The everyday
 workflow is in the [README](../README.md); install steps are in [SETUP.md](SETUP.md).
 
-This reference describes the 1.1.0 command contract. When using a 1.0.1 binary,
+This reference describes the 1.2.0 command contract. When using a 1.0.1 binary,
 use its
 [version-pinned command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
 with that binary. In 1.0.1, `reproduce` invokes application replay; in 1.1 it is

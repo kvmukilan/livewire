@@ -42,11 +42,17 @@ livewire live modbus.pcapng -t device.example:1502
 ```
 
 Use an interface that sees the complete original connection, starting before
-its handshake. The command stops after the launched application exits and a
+its handshake. Capture records the selected interface, so it can include
+unrelated traffic from other applications. `check -details` lists the exchanges;
+use `live issue.pcapng -session <id> -t <target>` to select the intended one.
+Only the launched application's matching exported secrets are embedded.
+
+The command stops after the launched application exits and a
 short packet drain. It launches the supplied executable directly, without a
 shell; put Livewire options before `--` and application arguments after it.
-Capture needs the usual Windows/Npcap or Linux raw-packet privileges, which the
-launched application inherits. Prefer a short-lived client running in the
+Capture needs the usual Windows/Npcap or Linux raw-packet privileges. If you
+run Livewire as Administrator or with `sudo`, the launched application also
+runs with that account's privileges. Prefer a short-lived client running in the
 foreground; do not detach/daemonize it or delegate to an existing background
 service. Finish the client normally to finalize a complete recording.
 
