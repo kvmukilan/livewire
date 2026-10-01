@@ -31,7 +31,7 @@ func MatchSecrets(capture *pcapio.Capture, data []byte) ([]byte, int, error) {
 		if session.Transport != replay.TransportTCP {
 			continue
 		}
-		client, _, err := replay.TCPPayloadStreams(session)
+		client, server, err := replay.TCPPayloadStreams(session)
 		if err != nil {
 			continue
 		}
@@ -40,9 +40,15 @@ func MatchSecrets(capture *pcapio.Capture, data []byte) ([]byte, int, error) {
 		if end := bytes.Index(bytes.ToUpper(client), []byte("AUTH TLS\r\n")); end >= 0 && (end == 0 || bytes.HasSuffix(client[:end], []byte("\r\n"))) {
 			client = client[end+len("AUTH TLS\r\n"):]
 		}
-		hello, err := tlsreplay.ParseClientHello(client)
-		if err == nil {
-			hashes[hello.RandomSHA256] = true
+		// TCP initiation does not determine TLS roles: an active FTPS data
+		// connection is opened by the FTP server, but its peer sends the
+		// ClientHello. Check each complete stream's opening, never arbitrary
+		// offsets inside application data or an incomplete TCP stream.
+		for _, stream := range [][]byte{client, server} {
+			hello, err := tlsreplay.ParseClientHello(stream)
+			if err == nil {
+				hashes[hello.RandomSHA256] = true
+			}
 		}
 	}
 	matched, count := keys.FilterClientRandoms(hashes)

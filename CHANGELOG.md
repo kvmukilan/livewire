@@ -26,6 +26,8 @@ livewire live issue.pcapng -t device.example:1502
 - Add real Linux CLI/AF_PACKET recording and replay tests with an independent
   Python TLS client across TLS 1.2/1.3 and six application variants, plus Windows
   lifecycle, key isolation, failure, and record-to-replay regressions.
+- Verify the frozen Windows executable through actual Npcap loopback recording
+  and fresh application replay for the same twelve TLS/protocol combinations.
 
 ## [1.1.0] - 2026-10-01
 
