@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/qualify",
+    "benchmark",
+    "-output",
+    "/tmp/livewire-v120-checks-c5dfe7fea386/benchmark"
+  ],
+  "started": "2026-10-01T06:47:00.168565Z",
+  "finished": "2026-10-01T06:47:05.929176Z",
+  "exitCode": 0,
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "sourceDigestAfter": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "platform": "linux-amd64"
+}

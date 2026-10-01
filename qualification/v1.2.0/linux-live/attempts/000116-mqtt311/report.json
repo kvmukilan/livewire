@@ -1,0 +1,298 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": true,
+  "attempts": 3,
+  "captureDigest": "sha256:df4af84ce6e675db6f263b9accab07688ed82b3e12d20a4f042bde2cf654e1df",
+  "flows": null,
+  "iface": "",
+  "intent": "application",
+  "limitations": [
+    "tcp-0: semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+  ],
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 0,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 3,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 0,
+      "sameAsRecording": 3,
+      "unverified": 0,
+      "wireOnly": 0
+    },
+    "status": "matched",
+    "unverified": 0,
+    "verdict": "same",
+    "wireOnly": 0
+  },
+  "paced": true,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 18,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "timing",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "mqtt",
+        "capabilities": {
+          "incremental": true,
+          "recovery": "completed session boundary",
+          "stateful": true
+        },
+        "driver": "semantic-tcp",
+        "fidelity": "semantic",
+        "fingerprint": "c5fb90078840",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "application messages decoded and dynamic fields prepared by mqtt"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+        ]
+      }
+    ],
+    "packets": 18,
+    "profile": "timing"
+  },
+  "selectedPackets": 18,
+  "sessions": [
+    {
+      "adapter": "mqtt",
+      "attempt": 1,
+      "cleanup": "complete",
+      "comparedResponses": 6,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 6,
+      "fidelity": "semantic",
+      "fingerprint": "c5fb90078840",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 6,
+      "packetCount": 18,
+      "protocol": "tcp",
+      "received": 6,
+      "sent": 7,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:44873",
+      "timing": {
+        "liveResponseMs": 0.9455075999999998,
+        "maxLiveResponseMs": 1.22744,
+        "maxPacingDriftMs": 0.959053,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.11118,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.138983,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.15364,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.22744,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 0.096295,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 5
+      },
+      "transformations": [
+        "mqtt: live broker packet identifier mapped",
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    },
+    {
+      "adapter": "mqtt",
+      "attempt": 2,
+      "cleanup": "complete",
+      "comparedResponses": 6,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 6,
+      "fidelity": "semantic",
+      "fingerprint": "c5fb90078840",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 6,
+      "packetCount": 18,
+      "protocol": "tcp",
+      "received": 6,
+      "sent": 7,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:44873",
+      "timing": {
+        "liveResponseMs": 0.7349638000000001,
+        "maxLiveResponseMs": 1.243081,
+        "maxPacingDriftMs": 1.161811,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.089299,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.177521,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 0.065334,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 0.099584,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.243081,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 5
+      },
+      "transformations": [
+        "mqtt: live broker packet identifier mapped",
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    },
+    {
+      "adapter": "mqtt",
+      "attempt": 3,
+      "cleanup": "complete",
+      "comparedResponses": 6,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 6,
+      "fidelity": "semantic",
+      "fingerprint": "c5fb90078840",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 6,
+      "packetCount": 18,
+      "protocol": "tcp",
+      "received": 6,
+      "sent": 7,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:44873",
+      "timing": {
+        "liveResponseMs": 0.9690094,
+        "maxLiveResponseMs": 1.242713,
+        "maxPacingDriftMs": 1.047778,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 1.145061,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.158205,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 0.064533,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.242713,
+            "recordedMs": 1
+          },
+          {
+            "liveMs": 1.234535,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 5
+      },
+      "transformations": [
+        "mqtt: live broker packet identifier mapped",
+        "captured client FIN replayed as a TCP write half-close"
+      ],
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "strict",
+  "version": "1.2.0",
+  "when": "2026-10-01T07:46:53Z"
+}

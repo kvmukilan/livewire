@@ -1,0 +1,315 @@
+{
+  "captureDigest": "sha256:dd4879af06bb689fda20dead19b87f5e1fccef00013b35be90614c26bbc28e7c",
+  "command": "replay",
+  "completed": true,
+  "framesPerPass": 22,
+  "framesSent": 66,
+  "interface": "vc3ddc5eae5a",
+  "limitations": [
+    "captured frames are not adapted to a live session and replies are not compared with the recording"
+  ],
+  "mode": "wire",
+  "passes": 3,
+  "selection": {
+    "entries": [
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "5e1127006cb3",
+        "mode": "wire",
+        "packetIndexes": [
+          0,
+          1
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "0845ca6c39b5",
+        "mode": "wire",
+        "packetIndexes": [
+          2
+        ],
+        "sessionId": "udp-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "0ce631da6ec1",
+        "mode": "wire",
+        "packetIndexes": [
+          3
+        ],
+        "sessionId": "udp-1",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "bb7f07d3aa66",
+        "mode": "wire",
+        "packetIndexes": [
+          4
+        ],
+        "sessionId": "icmp4-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "icmp4"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "7bb1110232ec",
+        "mode": "wire",
+        "packetIndexes": [
+          5
+        ],
+        "sessionId": "icmp6-0",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "icmp6"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "78f563a56dad",
+        "mode": "wire",
+        "packetIndexes": [
+          7
+        ],
+        "sessionId": "tcp-1",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "5f8057a09389",
+        "mode": "wire",
+        "packetIndexes": [
+          8
+        ],
+        "sessionId": "tcp-2",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "8ca7615cf1dd",
+        "mode": "wire",
+        "packetIndexes": [
+          9
+        ],
+        "sessionId": "tcp-3",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "8eecf3f2382a",
+        "mode": "wire",
+        "packetIndexes": [
+          10
+        ],
+        "sessionId": "tcp-4",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "b2684af40203",
+        "mode": "wire",
+        "packetIndexes": [
+          11
+        ],
+        "sessionId": "tcp-5",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "4bf20221c0fb",
+        "mode": "wire",
+        "packetIndexes": [
+          12
+        ],
+        "sessionId": "tcp-6",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "f22acf4869f4",
+        "mode": "wire",
+        "packetIndexes": [
+          13,
+          15,
+          16
+        ],
+        "sessionId": "tcp-7",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "1bbf8e412b59",
+        "mode": "wire",
+        "packetIndexes": [
+          14
+        ],
+        "sessionId": "tcp-8",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "968d2925e359",
+        "mode": "wire",
+        "packetIndexes": [
+          17
+        ],
+        "sessionId": "tcp-9",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "a6659f86f144",
+        "mode": "wire",
+        "packetIndexes": [
+          18,
+          19
+        ],
+        "sessionId": "tcp-10",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "c871d9f7bfdf",
+        "mode": "wire",
+        "packetIndexes": [
+          20
+        ],
+        "sessionId": "tcp-11",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "TCP capture starts mid-session; client direction inferred from the first packet"
+        ]
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "fingerprint": "973e0efad687",
+        "mode": "wire",
+        "packetIndexes": [
+          21
+        ],
+        "sessionId": "udp-2",
+        "transformations": [
+          "frames emitted without live protocol adaptation"
+        ],
+        "transport": "udp"
+      },
+      {
+        "driver": "frame-injector",
+        "fidelity": "wire",
+        "mode": "wire",
+        "packetIndexes": [
+          6
+        ],
+        "sessionId": "raw-0",
+        "transport": "raw",
+        "warnings": [
+          "frames have no supported stateful session model and will only be emitted in explicit wire mode"
+        ]
+      }
+    ],
+    "packets": 22,
+    "profile": "wire"
+  },
+  "status": "wire",
+  "tool": "livewire",
+  "verified": false,
+  "version": "1.2.0",
+  "when": "2026-10-01T06:53:20.095919537Z"
+}

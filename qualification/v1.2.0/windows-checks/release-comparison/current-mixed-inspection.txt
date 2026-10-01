@@ -1,0 +1,24 @@
+file format:     classic pcap
+link type(s):    Ethernet (6)
+timestamps:      microsecond resolution
+packets:         6
+capture length:  min 42, max 4243, avg 757 bytes
+time span:       2023-11-14T22:13:20Z -> 2023-11-14T22:13:20.005Z (5ms)
+network:         IPv4 5, IPv6 0, non-IP 1
+transport:       TCP 5, UDP 0, other 0
+tcp handshakes:  SYN 1, SYN-ACK 1, RST 0, FIN 0
+distinct flows:  1
+bad checksums:   IP 0, transport 0
+Capture quality: 6 packets, 1 session(s): 1 TCP, 0 UDP, 0 ICMP; 1 raw
+  warning: 1 packet(s) could not be decoded
+  warning: 1 frame(s) have no stateful model and are explicitly limited to wire replay
+  note:   client payloads are available for application-level replay and comparison
+
+Replay route: BLOCKED (raw-0: raw-0 requires explicit wire replay; select intended sessions with --session <id> to exclude background traffic)
+Selected: 6 packet(s); explicitly excluded: 0.
+
+Protocol coverage (functional profile):
+  session      fingerprint  proto   driver       fidelity     adapter          notes
+  tcp-0        5089803e284d tcp     none         blocked      http/1           BLOCKER: raw-0: raw-0 requires explicit wire replay; select intended sessions with --session <id> to exclude background traffic
+  raw-0        -            raw     none         blocked      -                BLOCKER: raw-0 requires explicit wire replay; select intended sessions with --session <id> to exclude background traffic
+  A fingerprint names an exchange by content; -session accepts it, or a unique prefix, in any copy of this capture.

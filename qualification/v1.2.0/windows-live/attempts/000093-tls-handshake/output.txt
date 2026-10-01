@@ -1,0 +1,29 @@
+Replay intent: application; 14 selected packet(s), 0 explicitly excluded.
+Detected TLS. Opening a fresh authenticated session; captured ciphertext will not be transmitted.
+
+---- fresh secure attempt 1 of 3 ----
+Fresh TLS handshake completed; application replay remains incomplete because captured plaintext is unavailable.
+RESULT: DID NOT COMPLETE
+Report: D:\a\_temp\qualification-private\run\attempts\000093-tls-handshake\report.attempt-1.json
+Attempt 1 of 3: DID NOT COMPLETE
+
+---- fresh secure attempt 2 of 3 ----
+Fresh TLS handshake completed; application replay remains incomplete because captured plaintext is unavailable.
+RESULT: DID NOT COMPLETE
+Report: D:\a\_temp\qualification-private\run\attempts\000093-tls-handshake\report.attempt-2.json
+Attempt 2 of 3: DID NOT COMPLETE
+
+---- fresh secure attempt 3 of 3 ----
+Fresh TLS handshake completed; application replay remains incomplete because captured plaintext is unavailable.
+RESULT: DID NOT COMPLETE
+Report: D:\a\_temp\qualification-private\run\attempts\000093-tls-handshake\report.attempt-3.json
+Attempt 3 of 3: DID NOT COMPLETE
+
+================================
+OVERALL: DID NOT COMPLETE
+  did not complete        3 of 3
+
+The exchange did not complete on any of the 3 attempts. Send us the
+report file.
+================================
+Secure report paths: D:\a\_temp\qualification-private\run\attempts\000093-tls-handshake\report.attempt-1.json through D:\a\_temp\qualification-private\run\attempts\000093-tls-handshake\report.attempt-3.json

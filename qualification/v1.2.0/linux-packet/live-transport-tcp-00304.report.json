@@ -1,0 +1,203 @@
+{
+  "actualCapture": "/home/runner/work/_temp/qualification-private/run/live-transport-tcp-00304.actual.pcap",
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": false,
+  "attempts": 3,
+  "captureDigest": "sha256:01a37f7365bd7b73116dadebe2bd37e3c3a080f13d2b1b3c66dafbc268ce91de",
+  "flows": null,
+  "iface": "vcf750d2507c",
+  "intent": "transport",
+  "limitations": [
+    "tcp-0: transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation"
+  ],
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 3,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 0,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 3,
+      "sameAsRecording": 0,
+      "unverified": 0,
+      "wireOnly": 0
+    },
+    "status": "different",
+    "unverified": 0,
+    "verdict": "different",
+    "wireOnly": 0
+  },
+  "paced": true,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 9,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "transport",
+  "rawL4": true,
+  "replayPlan": {
+    "entries": [
+      {
+        "driver": "tcp-state-machine",
+        "fidelity": "transport",
+        "fingerprint": "145519e39407",
+        "mode": "stateful",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "addresses and checksums retargeted",
+          "live replies correlated at the transport layer"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation"
+        ]
+      }
+    ],
+    "packets": 9,
+    "profile": "transport"
+  },
+  "selectedPackets": 9,
+  "sessions": [
+    {
+      "attempt": 1,
+      "comparedResponses": 5,
+      "completed": true,
+      "differences": [
+        {
+          "actual": "response bytes count differs: expected 18, received 5",
+          "field": "tcp-response",
+          "structural": true
+        }
+      ],
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": false,
+      "mode": "stateful",
+      "observedResponses": 5,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "reasonCode": "response_difference",
+      "received": 0,
+      "sent": 6,
+      "sessionId": "tcp-0",
+      "status": "different",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation"
+      ]
+    },
+    {
+      "attempt": 2,
+      "comparedResponses": 5,
+      "completed": true,
+      "differences": [
+        {
+          "actual": "response bytes count differs: expected 18, received 5",
+          "field": "tcp-response",
+          "structural": true
+        }
+      ],
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": false,
+      "mode": "stateful",
+      "observedResponses": 5,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "reasonCode": "response_difference",
+      "received": 0,
+      "sent": 6,
+      "sessionId": "tcp-0",
+      "status": "different",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation"
+      ]
+    },
+    {
+      "attempt": 3,
+      "comparedResponses": 5,
+      "completed": true,
+      "differences": [
+        {
+          "actual": "response bytes count differs: expected 18, received 5",
+          "field": "tcp-response",
+          "structural": true
+        }
+      ],
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": false,
+      "mode": "stateful",
+      "observedResponses": 5,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "reasonCode": "response_difference",
+      "received": 0,
+      "sent": 6,
+      "sessionId": "tcp-0",
+      "status": "different",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "transport TCP replays the captured client packet pattern without live congestion-control or advertised-window adaptation"
+      ]
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "lenient",
+  "version": "1.2.0",
+  "when": "2026-10-01T07:32:17Z"
+}

@@ -28,6 +28,9 @@ livewire live issue.pcapng -t device.example:1502
   lifecycle, key isolation, failure, and record-to-replay regressions.
 - Verify the frozen Windows executable through actual Npcap loopback recording
   and fresh application replay for the same twelve TLS/protocol combinations.
+- Collect active FTPS data-channel secrets when the TLS client accepts TCP.
+  Verify active/passive uploads and downloads through native Windows and Linux
+  recording under TLS 1.2/1.3, bringing the short recording checks to 40 cases.
 
 ## [1.1.0] - 2026-10-01
 

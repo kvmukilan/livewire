@@ -1,0 +1,28 @@
+=== RUN   TestTLSRecordingNativeLoopback
+=== RUN   TestTLSRecordingNativeLoopback/http/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/modbus/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/dns/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/mqtt311/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/mqtt5/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/dnp3/TLS12
+=== RUN   TestTLSRecordingNativeLoopback/http/TLS13
+=== RUN   TestTLSRecordingNativeLoopback/modbus/TLS13
+=== RUN   TestTLSRecordingNativeLoopback/dns/TLS13
+=== RUN   TestTLSRecordingNativeLoopback/mqtt311/TLS13
+=== RUN   TestTLSRecordingNativeLoopback/mqtt5/TLS13
+=== RUN   TestTLSRecordingNativeLoopback/dnp3/TLS13
+--- PASS: TestTLSRecordingNativeLoopback (8.99s)
+--- PASS: TestTLSRecordingNativeLoopback/http/TLS12 (0.69s)
+--- PASS: TestTLSRecordingNativeLoopback/modbus/TLS12 (0.69s)
+--- PASS: TestTLSRecordingNativeLoopback/dns/TLS12 (0.68s)
+--- PASS: TestTLSRecordingNativeLoopback/mqtt311/TLS12 (0.68s)
+--- PASS: TestTLSRecordingNativeLoopback/mqtt5/TLS12 (0.69s)
+--- PASS: TestTLSRecordingNativeLoopback/dnp3/TLS12 (0.68s)
+--- PASS: TestTLSRecordingNativeLoopback/http/TLS13 (0.73s)
+--- PASS: TestTLSRecordingNativeLoopback/modbus/TLS13 (0.73s)
+--- PASS: TestTLSRecordingNativeLoopback/dns/TLS13 (0.73s)
+--- PASS: TestTLSRecordingNativeLoopback/mqtt311/TLS13 (0.73s)
+--- PASS: TestTLSRecordingNativeLoopback/mqtt5/TLS13 (0.72s)
+--- PASS: TestTLSRecordingNativeLoopback/dnp3/TLS13 (0.72s)
+=== RUN   TestAFPacketPromiscOwnership
+--- PASS: TestAFPacketPromiscOwnership (0.03s)

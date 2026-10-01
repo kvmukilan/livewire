@@ -1,0 +1,21 @@
+{
+  "case": "512MiB",
+  "decodedBytes": 536870912,
+  "error": "",
+  "expectedLimit": false,
+  "go": "go1.26.7",
+  "hostOS": "windows/amd64",
+  "loadSeconds": 0.5061708,
+  "logicalCPUs": 16,
+  "memoryMethod": "Go heap sampled every 10ms; runtime reservation is not process RSS",
+  "observedPeakRSSBytes": 1594355712,
+  "passed": true,
+  "planSeconds": 0.8742961,
+  "platform": "windows/amd64",
+  "processor": "amd64",
+  "records": 524288,
+  "rssMethod": "Observed OS process high-water mark at 10ms intervals; excludes fixture file cache",
+  "runtimeReservedBytes": 1614942464,
+  "sampledPeakHeapBytes": 1484065344,
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82"
+}
