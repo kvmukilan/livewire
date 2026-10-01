@@ -1,6 +1,6 @@
 # Livewire Operator Guide
 
-This guide describes the 1.1.0 command contract. When using a 1.0.1 binary, use the
+This guide describes the 1.2.0 command contract. When using a 1.0.1 binary, use the
 [1.0.1 operator guide](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/DOCUMENTATION.md)
 with that binary. Start with [Replay workflow](WORKFLOW.md)
 for fresh live sessions, session selection, and offline preview.

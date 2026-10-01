@@ -1,0 +1,4 @@
+ok  	github.com/kvmukilan/livewire/cmd/livewire	5.636s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	3.002s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	0.168s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.006s

@@ -9,9 +9,11 @@ package tlsreplay
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 )
 
@@ -123,3 +125,37 @@ func (kl *KeyLog) Has(clientRandomHex string) bool {
 
 // Count reports how many distinct sessions the log carries keys for.
 func (kl *KeyLog) Count() int { return len(kl.entries) }
+
+// FilterClientRandoms exports only entries whose client-random SHA256 occurs
+// in the supplied capture. Hashes use ClientHelloMetadata.RandomSHA256 format.
+// The result contains secrets; callers must not log it or include it in reports.
+func (kl *KeyLog) FilterClientRandoms(hashes map[string]bool) ([]byte, int) {
+	var lines []string
+	count := 0
+	for random, labels := range kl.entries {
+		raw, err := hex.DecodeString(random)
+		if err != nil || len(raw) != 32 || !hashes[fmt.Sprintf("sha256:%x", sha256.Sum256(raw))] {
+			continue
+		}
+		included := false
+		for label, secret := range labels {
+			switch label {
+			case "CLIENT_RANDOM", "CLIENT_HANDSHAKE_TRAFFIC_SECRET", "SERVER_HANDSHAKE_TRAFFIC_SECRET", "CLIENT_TRAFFIC_SECRET_0", "SERVER_TRAFFIC_SECRET_0":
+			default:
+				continue // Early-data and exporter secrets are not needed for replay.
+			}
+			lines = append(lines, fmt.Sprintf("%s %s %x\n", label, random, secret))
+			included = true
+		}
+		if included {
+			count++
+		}
+	}
+	sort.Strings(lines)
+	return []byte(strings.Join(lines, "")), count
+}
+
+func (kl *KeyLog) String() string {
+	return fmt.Sprintf("TLS key log (%d sessions; secrets redacted)", kl.Count())
+}
+func (kl *KeyLog) GoString() string { return kl.String() }

@@ -2,6 +2,36 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.2.0] - 2026-10-01
+
+Record a supported application's TLS exchange and replay it from **one PCAPNG**:
+
+```sh
+livewire capture -i <interface> -o issue.pcapng -tls -- <application> [args...]
+livewire live issue.pcapng -t device.example:1502
+```
+
+- Launch the explicitly supplied application with a private `SSLKEYLOGFILE`,
+  validate exported keys, and embed only entries matching captured TLS sessions.
+  No manual key-log management or HTTP request file is needed for supported
+  TLS application replay, including Modbus, DNS/TCP, MQTT and DNP3.
+- Protect secret files with owner-only Unix permissions or Windows DACLs; own
+  child process groups/jobs, clean up temporary key logs, bound collection, and
+  preserve interrupted/failed recordings under explicit partial paths.
+- Scope Linux promiscuous capture to its socket so closing a recording restores
+  interface state without removing another capture's membership.
+- Keep `live` stateful, `reproduce` stateless, and ordinary packet-only capture
+  compatible. Existing encrypted-only PCAPs still require their original secrets
+  for application replay; unsupported clients cannot export keys automatically.
+- Add real Linux CLI/AF_PACKET recording and replay tests with an independent
+  Python TLS client across TLS 1.2/1.3 and six application variants, plus Windows
+  lifecycle, key isolation, failure, and record-to-replay regressions.
+- Verify the frozen Windows executable through actual Npcap loopback recording
+  and fresh application replay for the same twelve TLS/protocol combinations.
+- Collect active FTPS data-channel secrets when the TLS client accepts TCP.
+  Verify active/passive uploads and downloads through native Windows and Linux
+  recording under TLS 1.2/1.3, bringing the short recording checks to 40 cases.
+
 ## [1.1.0] - 2026-10-01
 
 Correct the primary command contract: **`live` is stateful application replay;

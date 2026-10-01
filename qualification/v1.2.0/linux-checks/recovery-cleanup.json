@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-count=1",
+    "./internal/runstate",
+    "./internal/replay"
+  ],
+  "started": "2026-10-01T06:46:56.114334Z",
+  "finished": "2026-10-01T06:47:00.167745Z",
+  "exitCode": 0,
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "sourceDigestAfter": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "platform": "linux-amd64"
+}

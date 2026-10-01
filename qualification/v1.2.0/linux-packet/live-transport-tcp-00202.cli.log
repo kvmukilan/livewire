@@ -1,0 +1,21 @@
+Replay intent: transport; 9 selected packet(s), 0 explicitly excluded.
+Loaded transport-tcp.pcap: 1 session(s), 0 raw frame(s).
+
+Profile: transport — preserve captured client TCP flags, retransmissions, ACK pattern, and timing
+Replaying against 198.18.42.2 on "vcf750d2507c" ...
+Running 3 attempts, 50ms apart. Each attempt opens a fresh connection.
+Attempt 1 of 3: DIFFERENT FROM THE RECORDING — response bytes count differs: expected 18, received 5
+Attempt 2 of 3: DIFFERENT FROM THE RECORDING — response bytes count differs: expected 18, received 5
+Attempt 3 of 3: DIFFERENT FROM THE RECORDING — response bytes count differs: expected 18, received 5
+
+Actual replay traffic was saved to /home/runner/work/_temp/qualification-private/run/live-transport-tcp-00202.actual.pcap.
+
+A shareable report was saved to /home/runner/work/_temp/qualification-private/run/live-transport-tcp-00202.report.json — send this back so we can see what happened.
+
+================================
+OVERALL: DIFFERENT FROM THE RECORDING
+  different               3 of 3
+
+The device answered differently on all 3 attempts — consistently, not by
+chance. Send us the report file.
+================================

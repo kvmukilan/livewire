@@ -1,0 +1,88 @@
+{
+  "adapterVersions": {
+    "dnp3": "1",
+    "dns/tcp": "1",
+    "dns/udp": "1",
+    "ftp": "1",
+    "http/1": "1",
+    "modbus-tcp": "1",
+    "mqtt": "1",
+    "ssh-reterminate": "1",
+    "tls-reterminate": "1"
+  },
+  "adaptive": true,
+  "captureDigest": "sha256:c9d7293b6708938883d966d285c9e1b3029846a2750e163c7b330b9003e77e60",
+  "flows": null,
+  "iface": "comparison-no-packet-interface",
+  "paced": false,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 5,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "functional",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "http/1",
+        "driver": "semantic-tcp",
+        "fidelity": "semantic",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "application messages decoded and dynamic fields prepared by http/1"
+        ],
+        "transport": "tcp"
+      }
+    ],
+    "packets": 5,
+    "profile": "functional"
+  },
+  "sessions": [
+    {
+      "adapter": "http/1",
+      "completed": true,
+      "driver": "semantic-tcp",
+      "fidelity": "semantic",
+      "matched": true,
+      "mode": "semantic",
+      "packetCount": 5,
+      "protocol": "tcp",
+      "received": 1,
+      "sent": 1,
+      "sessionId": "tcp-0",
+      "target": "127.0.0.1:50723",
+      "verified": true
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "captured packet timing not preserved"
+  ],
+  "verify": "lenient",
+  "version": "0.7.0",
+  "when": "2026-10-01T12:40:09+05:30"
+}

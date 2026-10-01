@@ -65,7 +65,23 @@ requires a mode choice.
 Application-only options on `reproduce` are rejected with migration guidance.
 See the [command migration](docs/V1_FOLLOWUP.md).
 
-For a TLS capture, use `livewire live tls.pcap -t device.example:443`.
+To record TLS application traffic for later replay, launch a supported client
+through Livewire:
+
+```sh
+livewire capture -i <interface> -o issue.pcapng -tls -- <application> [args...]
+livewire live issue.pcapng -t device.example:1502
+```
+
+The application must support TLS session-key export. Livewire supplies a private
+`SSLKEYLOGFILE`, embeds only secrets matching recorded handshakes, and removes
+the temporary key log. The resulting **single PCAPNG** supports fresh TLS
+application replay through the existing adapters, including Modbus; no separate
+key-log file or HTTP request file is needed. See the
+[recording guide](docs/TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
+for client compatibility and recording limits. Treat this PCAPNG as a credential.
+
+For an existing TLS capture, use `livewire live tls.pcap -t device.example:443`.
 Livewire establishes fresh TCP and certificate-verified TLS state from the
 captured ClientHello's public SNI, ALPN and supported modern versions. If the
 PCAPNG contains matching TLS secrets, it also recovers the recorded application

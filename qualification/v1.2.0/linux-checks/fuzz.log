@@ -1,0 +1,86 @@
+==> fuzz
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzBuiltInDecoders -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/61 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 61/61 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 16648 (5548/sec), new interesting: 5 (total: 66)
+fuzz: elapsed: 6s, execs: 16648 (0/sec), new interesting: 5 (total: 66)
+fuzz: elapsed: 9s, execs: 16648 (0/sec), new interesting: 5 (total: 66)
+fuzz: elapsed: 12s, execs: 16648 (0/sec), new interesting: 5 (total: 66)
+fuzz: elapsed: 13s, execs: 200000 (269823/sec), new interesting: 6 (total: 67)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	12.703s
+$ go test ./internal/adapters -run=^$ -fuzz=FuzzRulePackCompiler -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/163 completed
+fuzz: elapsed: 1s, gathering baseline coverage: 163/163 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 30091 (10027/sec), new interesting: 3 (total: 166)
+fuzz: elapsed: 6s, execs: 72934 (14281/sec), new interesting: 5 (total: 168)
+fuzz: elapsed: 9s, execs: 101221 (9430/sec), new interesting: 7 (total: 170)
+fuzz: elapsed: 12s, execs: 101221 (0/sec), new interesting: 7 (total: 170)
+fuzz: elapsed: 15s, execs: 101221 (0/sec), new interesting: 7 (total: 170)
+fuzz: elapsed: 15s, execs: 200000 (295981/sec), new interesting: 7 (total: 170)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/adapters	15.389s
+$ go test ./internal/lab -run=^$ -fuzz=FuzzScenarioParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/219 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 219/219 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 51175 (17056/sec), new interesting: 4 (total: 223)
+fuzz: elapsed: 6s, execs: 112271 (20362/sec), new interesting: 4 (total: 223)
+fuzz: elapsed: 9s, execs: 167083 (18274/sec), new interesting: 5 (total: 224)
+fuzz: elapsed: 11s, execs: 200000 (18482/sec), new interesting: 6 (total: 225)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/lab	10.836s
+$ go test ./internal/tlsreplay -run=^$ -fuzz=FuzzTLSRecordAndHandshakeParsing -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/65 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 65/65 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 17423 (5806/sec), new interesting: 0 (total: 65)
+fuzz: elapsed: 6s, execs: 39568 (7382/sec), new interesting: 0 (total: 65)
+fuzz: elapsed: 9s, execs: 57072 (5836/sec), new interesting: 0 (total: 65)
+fuzz: elapsed: 12s, execs: 82794 (8571/sec), new interesting: 0 (total: 65)
+fuzz: elapsed: 15s, execs: 82794 (0/sec), new interesting: 0 (total: 65)
+fuzz: elapsed: 18s, execs: 118516 (11916/sec), new interesting: 1 (total: 66)
+fuzz: elapsed: 21s, execs: 155357 (12284/sec), new interesting: 1 (total: 66)
+fuzz: elapsed: 24s, execs: 178400 (7679/sec), new interesting: 1 (total: 66)
+fuzz: elapsed: 27s, execs: 189632 (3745/sec), new interesting: 1 (total: 66)
+fuzz: elapsed: 28s, execs: 200000 (12520/sec), new interesting: 2 (total: 67)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	27.864s
+$ go test ./internal/pcapio -run=^$ -fuzz=FuzzPCAPNGTLSSecrets -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/4 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 4/4 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 26514 (8837/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 6s, execs: 55862 (9781/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 9s, execs: 77167 (7102/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 12s, execs: 101897 (8243/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 15s, execs: 124481 (7529/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 18s, execs: 154971 (10164/sec), new interesting: 0 (total: 4)
+fuzz: elapsed: 21s, execs: 200000 (17220/sec), new interesting: 0 (total: 4)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/pcapio	20.640s
+$ go test ./internal/replay -run=^$ -fuzz=FuzzTraceExtractionCoverage -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/42 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 42/42 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 34105 (11367/sec), new interesting: 0 (total: 42)
+fuzz: elapsed: 6s, execs: 67504 (11134/sec), new interesting: 0 (total: 42)
+fuzz: elapsed: 9s, execs: 105409 (12634/sec), new interesting: 0 (total: 42)
+fuzz: elapsed: 12s, execs: 149652 (14749/sec), new interesting: 0 (total: 42)
+fuzz: elapsed: 15s, execs: 191505 (13950/sec), new interesting: 0 (total: 42)
+fuzz: elapsed: 16s, execs: 200000 (15673/sec), new interesting: 0 (total: 42)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/replay	15.766s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzIPv6FragmentReassembly -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/11 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 11/11 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 32904 (10962/sec), new interesting: 0 (total: 11)
+fuzz: elapsed: 6s, execs: 32904 (0/sec), new interesting: 0 (total: 11)
+fuzz: elapsed: 7s, execs: 200000 (137587/sec), new interesting: 0 (total: 11)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	7.225s
+$ go test ./internal/ipreasm -run=^$ -fuzz=FuzzMalformedFragmentFrames -fuzztime=200000x -parallel=1 -timeout=2m
+fuzz: elapsed: 0s, gathering baseline coverage: 0/82 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 82/82 completed, now fuzzing with 1 workers
+fuzz: elapsed: 3s, execs: 75453 (25145/sec), new interesting: 1 (total: 83)
+fuzz: elapsed: 6s, execs: 189917 (38158/sec), new interesting: 2 (total: 84)
+fuzz: elapsed: 6s, execs: 200000 (46154/sec), new interesting: 3 (total: 85)
+PASS
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	6.248s
+==> fuzz ok (2m9.209s)

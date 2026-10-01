@@ -1,0 +1,16 @@
+{"Time":"2026-10-01T12:16:43.434994379+05:30","Action":"start","Package":"github.com/kvmukilan/livewire/internal/webui"}
+{"Time":"2026-10-01T12:16:43.438810752+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets"}
+{"Time":"2026-10-01T12:16:43.438866727+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets","Output":"=== RUN   TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets\n"}
+{"Time":"2026-10-01T12:16:43.438873349+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false"}
+{"Time":"2026-10-01T12:16:43.438875453+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false","Output":"=== RUN   TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false\n"}
+{"Time":"2026-10-01T12:16:43.504887734+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false","Output":"--- PASS: TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false (0.07s)\n"}
+{"Time":"2026-10-01T12:16:43.504935343+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/false","Elapsed":0.07}
+{"Time":"2026-10-01T12:16:43.504945242+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true"}
+{"Time":"2026-10-01T12:16:43.50494988+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true","Output":"=== RUN   TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true\n"}
+{"Time":"2026-10-01T12:16:43.516340955+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true","Output":"--- PASS: TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true (0.01s)\n"}
+{"Time":"2026-10-01T12:16:43.516398603+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets/true","Elapsed":0.01}
+{"Time":"2026-10-01T12:16:43.51640759+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets","Output":"--- PASS: TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets (0.08s)\n"}
+{"Time":"2026-10-01T12:16:43.516411968+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/webui","Test":"TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets","Elapsed":0.08}
+{"Time":"2026-10-01T12:16:43.516415405+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Output":"PASS\n"}
+{"Time":"2026-10-01T12:16:43.517937089+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/webui","Output":"ok  \tgithub.com/kvmukilan/livewire/internal/webui\t0.083s\n"}
+{"Time":"2026-10-01T12:16:43.517965201+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/webui","Elapsed":0.083}
