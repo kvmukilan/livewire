@@ -3,12 +3,12 @@ layout: "../../layouts/Reference.astro"
 title: "Reliability reference"
 description: "Replay state, supported protocols, durable progress, and verification boundaries."
 sourcePath: "docs/RELIABILITY_IMPLEMENTATION.md"
-sourceRef: "v1.1.0"
+sourceRef: "v1.2.0"
 ---
 
 
 This describes the 1.1 command contract and replay implementation. The
-[software-lab qualification profile](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md) defines release evidence;
+[software-lab qualification profile](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md) defines release evidence;
 physical-device qualification remains separate. The
 [2026-09-29 reliability review](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELIABILITY_REVIEW_2026-09-29.md) is an earlier
 implementation snapshot; protocol behavior below includes subsequent fixes.
@@ -222,7 +222,7 @@ application peers, Linux virtual packet networking, and successful stateful
 `live` and stateless `reproduce`/`replay` executions spanning two hours per
 required case. A smoke
 run or an in-progress soak does not satisfy that gate. See
-[V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md) for the exact scope and final evidence.
+[V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md) for the exact scope and final evidence.
 The separate physical profile retains its three-consecutive-pass, device/firmware,
 physical-interface, browser, and human-pilot requirements. Unit/loopback tests,
 WSL, and cross-builds do not establish physical qualification.

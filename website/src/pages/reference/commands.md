@@ -3,14 +3,14 @@ layout: "../../layouts/Reference.astro"
 title: "Command reference"
 description: "Flags, replay outcomes, and compatibility commands for the pinned release."
 sourcePath: "docs/COMMANDS.md"
-sourceRef: "v1.1.0"
+sourceRef: "v1.2.0"
 ---
 
 
 Every Livewire command, its options, and what its output means. The everyday
-workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.1.0/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/SETUP.md).
+workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.2.0/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/SETUP.md).
 
-This reference describes the 1.1.0 command contract. When using a 1.0.1 binary,
+This reference describes the 1.2.0 command contract. When using a 1.0.1 binary,
 use its
 [version-pinned command reference](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/COMMANDS.md)
 with that binary. In 1.0.1, `reproduce` invokes application replay; in 1.1 it is
@@ -104,7 +104,7 @@ Response verification distinguishes these outcomes:
 
 Run `livewire help reliability` for TCP mode selection and repeatable workflows.
 Durable resume cannot restore a socket or the target's application state. See
-[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
+[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
 
 To reproduce an expected timeout rather than require matching responses:
 
@@ -125,7 +125,7 @@ captured timing gaps; MQTT 5 applies negotiated limits and rebuilds topic aliase
 DNP3 reassembles supported transport/application fragments, accepts changed live
 fragmentation, and generates required confirmations. Unknown DNP3 object layouts,
 unsupported link control, and secure authentication remain explicit limits. See
-the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 `-strict`, `-profile`, `-set`, `-rules`, `-report`, `-actual-out`, and
 `-no-rst-guard` are available behind `-all-flags`.
@@ -223,9 +223,24 @@ livewire capture -i eth0 -o issue.pcap -duration 30s
 | `-o <file>` | where to save |
 | `-n <count>` | stop after this many packets |
 | `-duration <time>` | stop after this long, e.g. `30s`, `5m` |
+| `-tls -- <application> [args...]` | launch a key-exporting application and embed matching TLS secrets; `-o` must end in `.pcapng` |
 
 Stops on Ctrl-C if you give neither limit. It records the whole connection, so
 use an isolated adapter if you want only the traffic of interest. Needs elevation.
+
+To record supported TLS application traffic into a single replayable capture:
+
+```sh
+livewire capture -i eth0 -o issue.pcapng -tls -- python modbus_client.py
+livewire live issue.pcapng -t device.example:1502
+```
+
+The launched application must support `SSLKEYLOGFILE` or an explicit TLS
+key-export integration. The capture becomes sensitive. Recording stops after
+the application exits; interruption or missing/malformed/unmatched keys returns
+nonzero and preserves an explicitly partial capture. See the
+[TLS recording guide](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
+for supported clients, process ownership, limits, permissions and recovery.
 
 ### `ifaces`
 

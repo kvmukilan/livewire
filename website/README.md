@@ -38,7 +38,7 @@ added by the test runner.
 
 The only release metadata is `src/data/release.json`. Promote it only after the
 release and artifacts have been verified. `packetCommand` and `contract` keep
-published command behavior explicit. In v1.1.0, `live` creates fresh sessions,
+published command behavior explicit. In v1.1 and later, `live` creates fresh sessions,
 `reproduce` sends recorded packets, and `replay` is its compatibility alias.
 The historical v1.0.x `reproduce` command used application replay; migrate those
 workflows to `live`. Never promote these metadata before verifying the release.
@@ -50,7 +50,9 @@ silently import in-flight repository documentation. Never add captures, key logs
 private fixtures, or the qualification evidence tree to the site. The TLS capture
 guide distinguishes handshake-only replay without secrets from application
 replay with embedded TLSK secrets or an explicit matching key log. A fresh
-handshake is not an application response match.
+handshake is not an application response match. Version 1.2 adds the supported
+application recording workflow: collect matching exported secrets into one
+PCAPNG, then replay it through `live` without a separate key-log file.
 
 ## Vercel
 
