@@ -1,41 +1,41 @@
 {
-  "ref": "v1.1.0",
+  "ref": "v1.2.0",
   "files": [
     {
       "source": "docs/SETUP.md",
-      "sourceSHA256": "2b85c2e66c3488ed13fea9ccd6863873b4b312ee6dd7be88daa438bdc5a1eb10",
+      "sourceSHA256": "6f90c8797a29c26662a5cabdc4c458034cff21a37547407ff7e21b1b4a30e894",
       "output": "src/pages/reference/setup.md",
-      "generatedSHA256": "d27374c1d44ae8edcd1975c0ae60e8ee6f1aa0ada72314cf11f7c7d3845e7b9f"
+      "generatedSHA256": "98f7b5053a94a2c3e0b63ffa8d95ca35c0ac80afd52a6a330bfb478336a3433e"
     },
     {
       "source": "docs/COMMANDS.md",
-      "sourceSHA256": "e74ad7054db8b2d0a85c9dc9910700bfd24647e929e6ad184a0611ae4388c173",
+      "sourceSHA256": "1e56e99dbf3459ba7527b10a4ee3293b7e17b85ac838a01201c0c4de7ca16061",
       "output": "src/pages/reference/commands.md",
-      "generatedSHA256": "248e59a410077d5c27b2f2a235b2a1757b029487574b9f52a41b54cefd62b055"
+      "generatedSHA256": "ce12dff35d5794932715eabf03b6e9612b78422d7bcf729b9dc925d50c9b9670"
     },
     {
       "source": "docs/WORKFLOW.md",
-      "sourceSHA256": "1af4d450cb19786885d7a01dd76641d2e2efd399475cddd9d0847bdeee815496",
+      "sourceSHA256": "2e1d91bc1bcd405b715958bc9a48db7fe4b50e94ef5c4b8b389a6b39034b3d5b",
       "output": "src/pages/reference/workflow.md",
-      "generatedSHA256": "e8a8358c89f0c2048d29b5bd34d05508618e8b4ce993368dc10f77d721fb87b1"
+      "generatedSHA256": "08d96fcb373c98a2210b568f8cd04856705c16e1c43df8e92e7b6f97bd77e110"
     },
     {
       "source": "docs/RELIABILITY_IMPLEMENTATION.md",
       "sourceSHA256": "e867fab64934cdba045de815b070fc3b4053c0236689ac308832b3cc38108de2",
       "output": "src/pages/reference/reliability.md",
-      "generatedSHA256": "93535f66a9b69b45a57503955171c615cd263013ee363a6bc5604b4eee61743f"
+      "generatedSHA256": "cfe48f31b85df45dd66cb86dc0ad1648944cb75393b5743f5383ba707f9712a5"
     },
     {
       "source": "docs/PRODUCTION.md",
-      "sourceSHA256": "345b03a333d8b4c1dceb462e550564240e765ece3c06bd9a800a579d2d68f83a",
+      "sourceSHA256": "4b5cfe005fcba30e31fd23382ec2d450dbc92f88fc2f8a8b40d9468bb1bc4410",
       "output": "src/pages/reference/operations.md",
-      "generatedSHA256": "c537f250a38732bb03d9d4ae51310bfbedca90ff92537632afe988ad4530b425"
+      "generatedSHA256": "10c255ed8fb7218ee1b863945281a9e19efbb86873cdc97e89f20baee4fa35af"
     },
     {
       "source": "docs/TLS_CAPTURE_REPLAY.md",
-      "sourceSHA256": "0aac6cefc0060c550842a23c5995ea70e48a64dbc92fd0c00f4e12ef4f0f1923",
+      "sourceSHA256": "96071cb9f5f09584ecf09a2cc990664a6bbbd516c83098ccef68f796a7fe6efc",
       "output": "src/pages/reference/tls-capture.md",
-      "generatedSHA256": "afbf87924db5e7e6b198fd2f58710b87de08dd070cd487e6bfe2ec3149766c30"
+      "generatedSHA256": "ad6deeb29562e5dd5bcd1f85faac6d1309b82bb83da38eaccfaa7796cd023bcc"
     }
   ]
 }

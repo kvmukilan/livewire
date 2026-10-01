@@ -3,21 +3,21 @@ layout: "../../layouts/Reference.astro"
 title: "Workflow reference"
 description: "Capture inspection, session selection, and replay planning."
 sourcePath: "docs/WORKFLOW.md"
-sourceRef: "v1.1.0"
+sourceRef: "v1.2.0"
 ---
 
 
 For prerequisite diagnostics, failure recovery, supported platforms, and the
-stable qualification procedure, see [PRODUCTION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/PRODUCTION.md). Run
+stable qualification procedure, see [PRODUCTION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes version 1.1.0. When using a 1.0.1 binary, use its
+This guide describes version 1.2.0. When using a 1.0.1 binary, use its
 [version-pinned workflow](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WORKFLOW.md)
 with that binary. In 1.1, `live` opens fresh stateful application
 sessions; `reproduce` sends captured packets statelessly. `replay` is a
 compatibility alias for `reproduce`.
 Advanced intent overrides remain available for existing scripts. The release's
-[qualification scope](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md) states which software tests passed
+[qualification scope](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md) states which software tests passed
 and which field checks remain outstanding.
 
 ## Inspect, select, preview, run
@@ -79,7 +79,7 @@ Captured segmentation and packet loss are not reproduced by a socket replay.
 The target also needs the relevant firmware, configuration, authentication,
 and starting data. A PCAP alone does not restore those conditions. HTTP setup
 and response-dependent tokens can be declared with `-scenario`; see
-[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/RELIABILITY_IMPLEMENTATION.md).
+[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/RELIABILITY_IMPLEMENTATION.md).
 
 For a packet-level TCP issue, preview and run the transport route:
 
@@ -130,7 +130,7 @@ takes priority over embedded secrets. No external key log is consumed merely
 because it exists nearby. TLS without secrets establishes a fresh handshake
 from captured public ClientHello metadata and reports application replay as
 incomplete and unverified. It sends no old ciphertext or invented requests.
-See [TLS capture replay](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/TLS_CAPTURE_REPLAY.md).
+See [TLS capture replay](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/TLS_CAPTURE_REPLAY.md).
 Multiple independent secure exchanges require explicit session selection; this
 version does not coordinate arbitrary mixed secure sessions in one run.
 
