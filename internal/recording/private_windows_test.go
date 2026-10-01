@@ -4,8 +4,8 @@ import (
 	"golang.org/x/sys/windows"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestPrivateWindowsACL(t *testing.T) {
@@ -38,8 +38,17 @@ func TestPrivateWindowsACL(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if control&windows.SE_DACL_PROTECTED == 0 || acl == nil || acl.AceCount != 1 || !strings.Contains(sd.String(), user.User.Sid.String()) {
+		if control&windows.SE_DACL_PROTECTED == 0 || acl == nil || acl.AceCount != 1 {
 			t.Fatalf("secret ACL is not protected and owner-only: %s", sd.String())
+		}
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(acl, 0, &ace); err != nil {
+			t.Fatal(err)
+		}
+		// SDDL may abbreviate a well-known SID (e.g. LA for the local admin).
+		// Compare the actual ACE identity, not its formatted representation.
+		if ace.Header.AceType != windows.ACCESS_ALLOWED_ACE_TYPE || !(*windows.SID)(unsafe.Pointer(&ace.SidStart)).Equals(user.User.Sid) {
+			t.Fatalf("secret ACL grants another principal: %s", sd.String())
 		}
 	}
 }

@@ -83,7 +83,7 @@ func TestWholeBinaryDefaultFrontDoorsAgainstIndependentStreamPeers(t *testing.T)
 				return base.Add(time.Duration(calls) * time.Second)
 			}
 			output := t.TempDir()
-			run, err := Run(context.Background(), Options{Binary: binary, SourceRoot: root, Output: output, Version: "1.1.0", Command: "live", Repeat: 2, Cases: []string{"http1"}, clock: clock})
+			run, err := Run(context.Background(), Options{Binary: binary, SourceRoot: root, Output: output, Version: buildinfo.Version, Command: "live", Repeat: 2, Cases: []string{"http1"}, clock: clock})
 			if err == nil || !strings.Contains(err.Error(), "lab continuity") || !run.Interrupted || !run.CleanupVerified || len(run.Cases) != 1 || run.Cases[0].Failures != 1 {
 				t.Fatalf("suspended run credited or not cleaned: result=%+v err=%v", run, err)
 			}
