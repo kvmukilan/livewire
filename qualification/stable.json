@@ -5,12 +5,12 @@
   "softwareLab": {
     "checks": [
       {
-        "path": "v1.1.0/windows-checks/checks.json",
-        "sha256": "5bef5823f0f17fde9af93d68db2a04838f6cfad81d09e7d80386a6189d04efd0"
+        "path": "v1.2.0/windows-checks/checks.json",
+        "sha256": "fd653396910ddca3a63f50a843a1123841f41575b8d05dafe6373313d9d3adcf"
       },
       {
-        "path": "v1.1.0/linux-checks/checks.json",
-        "sha256": "1f5399f06f27e5d058718d833c1df72fb95058b1fbe6f80c6ce30fc442ea94b9"
+        "path": "v1.2.0/linux-checks/checks.json",
+        "sha256": "c73e2fb4d18fd32956d3a4bf3db726adfd67ad78e9956b99d817c5a3fa9e6787"
       }
     ],
     "humanPilotQualified": false,
@@ -28,27 +28,27 @@
     "physicalQualified": false,
     "runs": [
       {
-        "path": "v1.1.0/windows-live/report.json",
-        "sha256": "836b7e8335aeabdfcce35a33dca677d0ba45223fc98c9c526bbb8ca24d6cb225"
+        "path": "v1.2.0/windows-live/report.json",
+        "sha256": "63bf7f6fb2794f730214a8265a8651757bbfca7129695685ce1b3d9f1824f662"
       },
       {
-        "path": "v1.1.0/linux-live/report.json",
-        "sha256": "2d37e10554541078c65365be31a2e614633faa26af882dddef7ac552ffd62b98"
+        "path": "v1.2.0/linux-live/report.json",
+        "sha256": "77fd8a66583294ee7e7fbff0f8737d8d65a6d981be27473599ef64cae8972eb7"
       },
       {
-        "path": "v1.1.0/linux-packet/live.run.json",
-        "sha256": "7e30d3249f5ed4863cb7ef347d8f354b5cf59e373fc0f7738fcad9c0d6bd18c7"
+        "path": "v1.2.0/linux-packet/live.run.json",
+        "sha256": "a0a8208cb62b2c3d86366aad749f29e03f485235611adfa3527b6bd31af9e9a5"
       },
       {
-        "path": "v1.1.0/linux-stateless-reproduce/reproduce.run.json",
-        "sha256": "b342e30da1f4c9e557f6abfcea27d4d7d1b71c0f3ae808fd6138f9bde573f46b"
+        "path": "v1.2.0/linux-stateless-reproduce/reproduce.run.json",
+        "sha256": "a1ce3addd5851a178a64d922a37defd7a688f0e8e776dfddeb53402f4a310dd3"
       },
       {
-        "path": "v1.1.0/linux-stateless-replay/replay.run.json",
-        "sha256": "d35c629113891c11a6f3b3bcfd2ca87bea103238737d8dbb02b3287844f80bdd"
+        "path": "v1.2.0/linux-stateless-replay/replay.run.json",
+        "sha256": "9ae6db856345b6505e1b260a1f961fae57aaff45e3101769c48fe58bb3a5be3a"
       }
     ]
   },
-  "sourceDigest": "15d01d24a23a63aab99b41740f7bcf2f3f01739eabecc615d510c2980cf8f41a",
-  "version": "1.1.0"
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "version": "1.2.0"
 }

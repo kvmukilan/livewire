@@ -1,0 +1,40 @@
+{
+  "candidateCommit": "c5dfe7fea386414c16883d7a049a4961c89ab2e8",
+  "caseCount": 12,
+  "cases": [
+    "TestTLSRecordingNativeLoopback/dnp3/TLS12",
+    "TestTLSRecordingNativeLoopback/dnp3/TLS13",
+    "TestTLSRecordingNativeLoopback/dns/TLS12",
+    "TestTLSRecordingNativeLoopback/dns/TLS13",
+    "TestTLSRecordingNativeLoopback/http/TLS12",
+    "TestTLSRecordingNativeLoopback/http/TLS13",
+    "TestTLSRecordingNativeLoopback/modbus/TLS12",
+    "TestTLSRecordingNativeLoopback/modbus/TLS13",
+    "TestTLSRecordingNativeLoopback/mqtt311/TLS12",
+    "TestTLSRecordingNativeLoopback/mqtt311/TLS13",
+    "TestTLSRecordingNativeLoopback/mqtt5/TLS12",
+    "TestTLSRecordingNativeLoopback/mqtt5/TLS13"
+  ],
+  "cleanupCheck": "TestAFPacketPromiscOwnership",
+  "client": "Independent Python ssl.create_default_context with child-scoped SSLKEYLOGFILE",
+  "jobId": 110252053390,
+  "jobURL": "https://github.com/kvmukilan/livewire/actions/runs/36826110837/job/110252053390",
+  "nativeCapture": "Linux AF_PACKET in isolated loopback network namespace",
+  "normalizedTestOutputSHA256": "7ee812b9c097017d1f95302eca0ae789859a60b20ef77b2ebdc7ef2be583dc82",
+  "originalLogSHA256": "b96297bd4a0bb2f826d7f611537fb331f4cd9020513c905e0300f2119dbb897d",
+  "passed": true,
+  "replay": "Real live CLI, same recorded PCAPNG, embedded secrets, fresh verified TLS connection",
+  "schemaVersion": 1,
+  "scope": "Short native recording integration checks; separate from the two-hour replay soaks. No physical hardware or Windows Npcap recording qualification.",
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "step": {
+    "completed_at": "2026-10-01T06:42:48Z",
+    "conclusion": "success",
+    "name": "Record TLS applications and replay the single PCAPNG",
+    "number": 6,
+    "started_at": "2026-10-01T06:42:38Z",
+    "status": "completed"
+  },
+  "version": "1.2.0",
+  "workflowRun": 36826110837
+}

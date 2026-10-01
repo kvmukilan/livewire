@@ -86,7 +86,13 @@ must produce a fresh verified TLS application exchange. A separate Windows
 Npcap loopback check uses the frozen Windows binary for the same 12 cases.
 Mixed captures require explicit session selection.
 
-These 24 short recording checks complement the two-hour replay matrices; they
+Sixteen additional checks use the frozen Windows and Linux binaries for
+explicit FTPS: active/passive uploads/downloads under captured TLS 1.2/1.3.
+Each records protected control and data connections, embeds both connections'
+secrets, and verifies the transfer over fresh TLS sessions using the one PCAPNG.
+Active FTPS retains the FTP client's TLS role even when the server opens TCP.
+
+These 40 short recording checks complement the two-hour replay matrices; they
 are not two-hour recording soaks. Process ownership, private permissions, key
 matching, limits, output failure, interruption and partial-artifact handling
 have native regression coverage. See the [recording evidence](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/tls-recording/README.md).

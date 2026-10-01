@@ -41,6 +41,13 @@ livewire capture -i <interface> -o modbus.pcapng -tls -- python modbus_client.py
 livewire live modbus.pcapng -t device.example:1502
 ```
 
+Explicit FTPS recording also collects secrets for its protected control and
+data connections, including active transfers where the server opens TCP.
+Pass that same PCAPNG to `live -t ftp.example:21`; provide current FTP credentials
+when needed. Keep control and data sessions together, and include both in any
+`-session` selection. Active/passive uploads and downloads under TLS 1.2/1.3
+were checked through native Windows and Linux loopback capture.
+
 Use an interface that sees the complete original connection, starting before
 its handshake. Capture records the selected interface, so it can include
 unrelated traffic from other applications. `check -details` lists the exchanges;

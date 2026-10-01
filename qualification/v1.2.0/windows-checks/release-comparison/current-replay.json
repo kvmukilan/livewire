@@ -1,0 +1,125 @@
+{
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": true,
+  "captureDigest": "sha256:abd1d494d770cf8e5332d57bfb94f0e9c703afdcaeb85f072a8df05e682233e0",
+  "flows": null,
+  "iface": "",
+  "intent": "application",
+  "limitations": [
+    "tcp-0: semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+  ],
+  "paced": false,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 5,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "functional",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "adapter": "http/1",
+        "capabilities": {
+          "incremental": true,
+          "recovery": "read-only restart; fresh authentication",
+          "stateful": true
+        },
+        "driver": "semantic-tcp",
+        "fidelity": "semantic",
+        "fingerprint": "5089803e284d",
+        "mode": "semantic",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "application messages decoded and dynamic fields prepared by http/1"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+        ]
+      }
+    ],
+    "packets": 5,
+    "profile": "functional"
+  },
+  "selectedPackets": 5,
+  "sessions": [
+    {
+      "adapter": "http/1",
+      "cleanup": "complete",
+      "comparedResponses": 1,
+      "completed": true,
+      "driver": "semantic-tcp",
+      "expectedResponses": 1,
+      "fidelity": "semantic",
+      "fingerprint": "5089803e284d",
+      "matched": true,
+      "mode": "semantic",
+      "observedResponses": 1,
+      "packetCount": 5,
+      "protocol": "tcp",
+      "received": 1,
+      "sent": 1,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "127.0.0.1:50745",
+      "timing": {
+        "liveResponseMs": 0,
+        "maxLiveResponseMs": 0,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 1,
+        "samples": [
+          {
+            "liveMs": 0,
+            "recordedMs": 1
+          }
+        ],
+        "turns": 1
+      },
+      "verificationScope": "application messages",
+      "verified": true,
+      "warnings": [
+        "semantic TCP uses a fresh live socket; the operating system controls segmentation, retransmissions, and congestion behavior"
+      ]
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "captured packet timing not preserved"
+  ],
+  "verify": "lenient",
+  "version": "1.2.0",
+  "when": "2026-10-01T12:40:09+05:30"
+}

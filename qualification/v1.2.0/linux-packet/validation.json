@@ -1,0 +1,7 @@
+{
+  "exitCode": 0,
+  "logSHA256": "bfa679839695b7bbbcd7e9a29fc7cb515695a7c1c36d503add2b0614b37a6bb0",
+  "passLine": "--- PASS: TestRecordedPacketLabTranscript (3.07s)",
+  "scope": "Extracted exact successful Go test line; full log remains private. The named test independently validates the retained transcript.",
+  "test": "TestRecordedPacketLabTranscript"
+}

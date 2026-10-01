@@ -1,0 +1,45 @@
+==> shuffle
+$ go test -shuffle=on -count=3 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	18.441s
+ok  	github.com/kvmukilan/livewire/internal/adapters	2.529s
+ok  	github.com/kvmukilan/livewire/internal/backend	0.011s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	0.019s
+ok  	github.com/kvmukilan/livewire/internal/dissect	0.089s
+ok  	github.com/kvmukilan/livewire/internal/edit	0.010s
+ok  	github.com/kvmukilan/livewire/internal/engine	0.049s
+ok  	github.com/kvmukilan/livewire/internal/evidence	0.171s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	2.781s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	0.008s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	0.007s
+ok  	github.com/kvmukilan/livewire/internal/iterate	0.248s
+ok  	github.com/kvmukilan/livewire/internal/lab	2.897s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	0.009s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	0.233s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	0.074s
+ok  	github.com/kvmukilan/livewire/internal/planexec	2.836s
+ok  	github.com/kvmukilan/livewire/internal/qualification	14.690s
+ok  	github.com/kvmukilan/livewire/internal/recording	0.994s
+ok  	github.com/kvmukilan/livewire/internal/replay	10.178s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	0.020s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	10.359s
+ok  	github.com/kvmukilan/livewire/internal/runstate	2.686s
+ok  	github.com/kvmukilan/livewire/internal/runvars	0.005s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	1.098s
+ok  	github.com/kvmukilan/livewire/internal/securefile	0.262s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	4.424s
+ok  	github.com/kvmukilan/livewire/internal/stateless	0.004s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	0.216s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	9.714s
+ok  	github.com/kvmukilan/livewire/internal/tui	0.004s
+ok  	github.com/kvmukilan/livewire/internal/units	0.004s
+ok  	github.com/kvmukilan/livewire/internal/webui	3.061s
+ok  	github.com/kvmukilan/livewire/internal/wire	0.004s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+$ go test -shuffle=on -count=20 ./internal/webui
+ok  	github.com/kvmukilan/livewire/internal/webui	5.481s
+==> shuffle ok (25.896s)
