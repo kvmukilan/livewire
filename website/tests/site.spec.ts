@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+const releaseVersion = JSON.parse(readFileSync(new URL('../src/data/release.json', import.meta.url), 'utf8')).version;
 const basePath = process.env.PUBLIC_BASE_PATH || '/';
 const sitePath = (route: string) => basePath + route.replace(/^\//, '');
 
@@ -89,7 +91,27 @@ test('TLS inputs preserve the handshake and application evidence boundary', asyn
   await expect(page).toHaveURL(/\/reference\/tls-capture\/$/);
   await expect(page.locator('.reference-content')).toContainText('applicationReplayCompleted');
   await page.goto(sitePath('/workflows/'));
-  await page.getByRole('button', {name:'Copy Packet replay · v1.1.0 command'}).click();
+  await page.getByRole('button', {name:`Copy Packet replay · v${releaseVersion} command`}).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('livewire reproduce -in issue.pcap -i eth0');
   await expect(page.getByRole('region', {name:'Command version contract'})).toContainText('Compatibility alias for reproduce');
+});
+
+test('recorded TLS application workflow copies correctly and explains its inputs', async ({page, context}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto(sitePath('/secure-replay/'));
+  await expect(page.getByRole('heading', {name:'One recording. Fresh application replay.'})).toBeVisible();
+  await expect(page.getByText('The original application must support key export.', {exact:true})).toBeVisible();
+  await page.getByRole('button', {name:'Copy Record and replay TLS application traffic command'}).click();
+  await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replaceAll('\r\n', '\n'))).toBe('livewire capture -i <interface> -o issue.pcapng -tls -- <application> [args...]\nlivewire live issue.pcapng -t device.example:1502');
+  await page.getByRole('link', {name:'See client compatibility and recording limits →'}).click();
+  await expect(page).toHaveURL(/\/reference\/tls-capture\/#record-tls-applications-into-one-file$/);
+  await expect(page.locator('.reference-content')).toContainText('ssl.create_default_context()');
+  const output = process.env.SITE_TEST_OUTPUT || 'test-results';
+  for (const width of [1440,375]) {
+    await page.setViewportSize({width,height:1000});
+    await page.goto(sitePath('/secure-replay/'));
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({path:path.join(output, `tls-recording-${width}.png`),fullPage:true});
+    await page.screenshot({path:path.join(output, `tls-recording-viewport-${width}.png`)});
+  }
 });

@@ -3,13 +3,13 @@ layout: "../../layouts/Reference.astro"
 title: "Operations reference"
 description: "Operational diagnostics, recovery, and qualification requirements."
 sourcePath: "docs/PRODUCTION.md"
-sourceRef: "v1.1.0"
+sourceRef: "v1.2.0"
 ---
 
 
 Livewire's supported use case is repeatable testing on an explicitly selected
 device and isolated network. The CLI is the primary interface. Version 1 has a
-separate [software-lab release profile](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md), using controlled
+separate [software-lab release profile](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md), using controlled
 Windows/Linux protocol peers and Linux virtual packet networks. Physical
 NIC/device qualification and the human pilot remain pending. See the release's
 manifest for its completed evidence; historical RC results do not qualify a
@@ -133,7 +133,7 @@ captures and leave memory headroom. Reproduce measurements for the target host.
 
 The release workflow validates the profile declared by the manifest. Version 1
 uses `software-lab`, whose required protocol matrices and two-hour command soaks
-are described in [V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.1.0/docs/V1_QUALIFICATION.md). A lab manifest must
+are described in [V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md). A lab manifest must
 explicitly keep physical and human-pilot qualification false. It cannot satisfy
 the field profile. The following procedure retains the full `physical` profile
 for later device qualification; an omitted profile also means `physical`.
@@ -143,7 +143,7 @@ go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/physical-candidate.json
+go run ./scripts/qualify validate -version 1.2.0 -artifacts dist/v1.2.0 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
