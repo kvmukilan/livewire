@@ -4,7 +4,7 @@ For prerequisite diagnostics, failure recovery, supported platforms, and the
 stable qualification procedure, see [PRODUCTION.md](PRODUCTION.md). Run
 `livewire doctor` before choosing a packet interface.
 
-This guide describes version 1.1.0. When using a 1.0.1 binary, use its
+This guide describes version 1.2.0. When using a 1.0.1 binary, use its
 [version-pinned workflow](https://github.com/kvmukilan/livewire/blob/v1.0.1/docs/WORKFLOW.md)
 with that binary. In 1.1, `live` opens fresh stateful application
 sessions; `reproduce` sends captured packets statelessly. `replay` is a

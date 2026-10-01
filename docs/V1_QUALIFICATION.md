@@ -5,7 +5,7 @@ evidence to the reviewed CLI source digest and exact Windows/Linux amd64
 executable hashes. Physical NIC/device and human-pilot qualification are
 separate; software-lab evidence does not assert either.
 
-## Version 1.1 command contract
+## Current command contract
 
 `live` establishes stateful application sessions. `reproduce` sends the
 recorded packets statelessly, and `replay` remains its compatibility alias.
@@ -72,6 +72,36 @@ HTTP/2/3 application replay and TLS client-certificate authentication remain
 outside the supported CLI scope. Unknown security and unsupported protocol
 forms must stop before an application send.
 
+## Automatic TLS recording
+
+Version 1.2 adds `capture -tls -- <application>`: a cooperating child exports
+its original TLS session secrets, and Livewire embeds only matching secrets in
+one PCAPNG for later `live` replay. This is separate from passive capture of an
+application that does not export keys.
+
+Mandatory native Linux CI checks the real CLI and AF_PACKET with an independent
+Python TLS client. HTTP/1, Modbus, DNS/TCP, MQTT 3.1.1, MQTT 5 and DNP3 each run
+under captured TLS 1.2 and 1.3. The same recorded file, with no external key log,
+must produce a fresh verified TLS application exchange. A separate Windows
+Npcap loopback check uses the frozen Windows binary for the same 12 cases.
+Mixed captures require explicit session selection.
+
+Sixteen additional checks use the frozen Windows and Linux binaries for
+explicit FTPS: active/passive uploads/downloads under captured TLS 1.2/1.3.
+Each records protected control and data connections, embeds both connections'
+secrets, and verifies the transfer over fresh TLS sessions using the one PCAPNG.
+Active FTPS retains the FTP client's TLS role even when the server opens TCP.
+
+These 40 short recording checks complement the two-hour replay matrices; they
+are not two-hour recording soaks. Process ownership, private permissions, key
+matching, limits, output failure, interruption and partial-artifact handling
+have native regression coverage. See the [recording evidence](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/tls-recording/README.md).
+
+The application must support key export. Old ciphertext without matching
+secrets cannot be recovered by this feature. Private CA trust and fresh
+authentication inputs can still be needed. Physical NIC/DUT and Npcap fault
+qualification remain separate from successful loopback capture.
+
 ## Packet and stateless protocols
 
 Owned Linux namespaces and virtual Ethernet links exercise DNS/UDP, generic
@@ -94,7 +124,7 @@ Native Windows/Linux checks cover build, vet, tests, dashboard state,
 static/vulnerability analysis, race, shuffle, fuzz, coverage, corpus, protocol
 faults, recovery/cleanup, loader limits and published-version comparisons.
 Current completion evidence belongs in [RELEASE_AUDIT.md](RELEASE_AUDIT.md).
-The changed 1.1 source is not qualified by the prior version's passing runs.
+The changed 1.2 source is not qualified by the prior version's passing runs.
 
 The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
 retains its seven completed matrices, and [v1.0.0](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
@@ -104,12 +134,12 @@ historical results rather than a memory-leak guarantee for new builds.
 Validate the current release checkout with verified artifacts present:
 
 ```sh
-GOTOOLCHAIN=go1.26.7 go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/stable.json
+GOTOOLCHAIN=go1.26.7 go run ./scripts/qualify validate -version 1.2.0 -artifacts dist/v1.2.0 qualification/stable.json
 ```
 
 ## Repeat the software labs
 
-The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.1.0/.github/workflows/qualification.yml)
+The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.2.0/.github/workflows/qualification.yml)
 runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
 with the full candidate commit, reviewed source digest, version and frozen
 Windows/Linux amd64 executable hashes. It checks out that commit, builds with
@@ -135,16 +165,16 @@ $env:GOTOOLCHAIN = 'go1.26.7'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
-./coverage/replaylab.exe -binary ./dist/v1.1.0/livewire-1.1.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab.exe -binary ./dist/v1.2.0/livewire-1.2.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 Linux shell:
 
 ```sh
 mkdir -p coverage
-chmod +x dist/v1.1.0/livewire-1.1.0-linux-amd64
+chmod +x dist/v1.2.0/livewire-1.2.0-linux-amd64
 GOTOOLCHAIN=go1.26.7 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
-./coverage/replaylab -binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab -binary "$PWD/dist/v1.2.0/livewire-1.2.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 The packet harness requires root, Python 3, `iproute2`, `iptables`, `tcpdump`,
@@ -153,9 +183,9 @@ only its own interfaces/namespaces. Set `SOURCE_DIGEST` to the source digest
 from the exact release's reviewed manifest before running these commands:
 
 ```sh
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command live --duration 7200 --round-gap 20 --netem
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command reproduce --duration 7200 --round-gap 20
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.1.0/livewire-1.1.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.1.0 --command replay --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.0/livewire-1.2.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.2.0 --command live --duration 7200 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.0/livewire-1.2.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.2.0 --command reproduce --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.0/livewire-1.2.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.2.0 --command replay --duration 7200 --round-gap 20
 ```
 
 Application labs create private capture keys and credentials. Publish only

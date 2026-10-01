@@ -1,0 +1,20 @@
+Replay intent: wire; 80 selected packet(s), 0 explicitly excluded.
+Loaded wire.pcap: 40 session(s), 0 raw frame(s).
+
+Profile: wire — inject captured frames at captured timing without claiming live adaptation
+Injecting captured frames on "vcf750d2507c" ...
+Running 3 attempts, 1s apart. Each attempt opens a fresh connection.
+Attempt 1 of 3: SENT ON THE WIRE; NOT COMPARED
+Attempt 2 of 3: SENT ON THE WIRE; NOT COMPARED
+Attempt 3 of 3: SENT ON THE WIRE; NOT COMPARED
+
+Actual replay traffic was saved to /home/runner/work/_temp/qualification-private/run/wire.actual-319.pcap.
+
+A shareable report was saved to /home/runner/work/_temp/qualification-private/run/live-wire-00319.report.json — send this back so we can see what happened.
+
+================================
+OVERALL: SENT ON THE WIRE; NOT COMPARED
+  sent, not compared      3 of 3
+
+Frames were sent at the recorded timing; the replies were not compared.
+================================

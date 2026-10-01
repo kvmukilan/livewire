@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "vet"
+  ],
+  "started": "2026-10-01T06:41:59.396726Z",
+  "finished": "2026-10-01T06:42:05.697278Z",
+  "exitCode": 0,
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "sourceDigestAfter": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "platform": "windows-amd64"
+}

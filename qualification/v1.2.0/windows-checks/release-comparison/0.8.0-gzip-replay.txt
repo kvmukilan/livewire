@@ -1,0 +1,1 @@
+livewire reproduce: a TCP session appears encrypted or opaque, but Livewire cannot identify a safe fresh-session driver. No ciphertext was sent; inspect with 'livewire check <capture> -details' or use explicit --wire only when raw injection is truly intended

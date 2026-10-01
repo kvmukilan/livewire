@@ -136,7 +136,7 @@ go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.1.0 -artifacts dist/v1.1.0 qualification/physical-candidate.json
+go run ./scripts/qualify validate -version 1.2.0 -artifacts dist/v1.2.0 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures

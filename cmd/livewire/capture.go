@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,11 +36,13 @@ func cmdCapture(args []string) (retErr error) {
 	fs.IntVar(&count, "count", 0, "alias for -n")
 	dur := fs.Duration("duration", 0, "stop after this long (0 = until Ctrl-C or -n)")
 	promisc := fs.Bool("promisc", true, "put the interface in promiscuous mode")
+	tlsCapture := fs.Bool("tls", false, "record an application's exported TLS secrets in PCAPNG; pass its command after --")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage: livewire capture -i <connection> -o <file.pcap> [-n 1000] [-duration 10s]")
+		fmt.Println("       livewire capture -i <connection> -o <file.pcapng> -tls -- <application> [args...]")
 		fmt.Println("\nRecord traffic from a network connection into a file, for later replay.")
-		printFlags(fs, flagIface, flagOut, flagCount, "duration")
+		printFlags(fs, flagIface, flagOut, flagCount, "duration", "tls")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -55,6 +59,25 @@ func cmdCapture(args []string) (retErr error) {
 	}
 	if *dur < 0 || *dur > 24*time.Hour {
 		return fmt.Errorf("-duration must be between 0 and 24h")
+	}
+	if *tlsCapture {
+		if !strings.EqualFold(filepath.Ext(outPath), ".pcapng") {
+			return fmt.Errorf("-tls requires a .pcapng output file to embed session secrets")
+		}
+		separator := -1
+		for i, arg := range args {
+			if arg == "--" {
+				separator = i
+				break
+			}
+		}
+		if separator < 0 || len(fs.Args()) == 0 || len(fs.Args()) != len(args)-separator-1 {
+			return fmt.Errorf("-tls requires an application command after --")
+		}
+		return captureTLS(iface, outPath, count, *dur, *promisc, fs.Args(), backend.OpenCapture)
+	}
+	if len(fs.Args()) != 0 {
+		return fmt.Errorf("unexpected capture arguments; use -tls -- <application> to record TLS secrets")
 	}
 
 	// Reserve the private temporary artifact before opening the capture backend,

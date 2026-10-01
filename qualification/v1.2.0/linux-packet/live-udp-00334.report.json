@@ -1,0 +1,206 @@
+{
+  "actualCapture": "/home/runner/work/_temp/qualification-private/run/live-udp-00334.actual.pcap",
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": true,
+  "attempts": 3,
+  "captureDigest": "sha256:bdd6e49a0833bbb844b92a159987485dda747ebee7f2181e083303fe13b92ff9",
+  "flows": null,
+  "iface": "vcf750d2507c",
+  "intent": "application",
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 0,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 3,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 0,
+      "sameAsRecording": 3,
+      "unverified": 0,
+      "wireOnly": 0
+    },
+    "status": "matched",
+    "unverified": 0,
+    "verdict": "same",
+    "wireOnly": 0
+  },
+  "paced": false,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "non-tcp-traffic",
+        "detail": "2 non-TCP packet(s) classified into UDP, ICMP, or explicit wire lanes",
+        "severity": "info"
+      },
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 2,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 0,
+    "udpSessions": 1
+  },
+  "profile": "functional",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "driver": "udp-turns",
+        "fidelity": "transport",
+        "fingerprint": "a86df9a773d9",
+        "mode": "stateful",
+        "packetIndexes": [
+          0,
+          1
+        ],
+        "sessionId": "udp-0",
+        "transformations": [
+          "addresses and checksums retargeted",
+          "live replies correlated at the transport layer"
+        ],
+        "transport": "udp"
+      }
+    ],
+    "packets": 2,
+    "profile": "functional"
+  },
+  "selectedPackets": 2,
+  "sessions": [
+    {
+      "attempt": 1,
+      "cleanup": "complete",
+      "comparedResponses": 1,
+      "completed": true,
+      "driver": "udp-turns",
+      "expectedResponses": 1,
+      "fidelity": "transport",
+      "fingerprint": "a86df9a773d9",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 1,
+      "packetCount": 2,
+      "protocol": "udp",
+      "received": 1,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19000",
+      "timing": {
+        "liveResponseMs": 0.047672,
+        "maxLiveResponseMs": 0.047672,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 20,
+        "samples": [
+          {
+            "liveMs": 0.047672,
+            "recordedMs": 20
+          }
+        ],
+        "turns": 1
+      },
+      "verificationScope": "transport responses",
+      "verified": true
+    },
+    {
+      "attempt": 2,
+      "cleanup": "complete",
+      "comparedResponses": 1,
+      "completed": true,
+      "driver": "udp-turns",
+      "expectedResponses": 1,
+      "fidelity": "transport",
+      "fingerprint": "a86df9a773d9",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 1,
+      "packetCount": 2,
+      "protocol": "udp",
+      "received": 1,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19000",
+      "timing": {
+        "liveResponseMs": 0.085278,
+        "maxLiveResponseMs": 0.085278,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 20,
+        "samples": [
+          {
+            "liveMs": 0.085278,
+            "recordedMs": 20
+          }
+        ],
+        "turns": 1
+      },
+      "verificationScope": "transport responses",
+      "verified": true
+    },
+    {
+      "attempt": 3,
+      "cleanup": "complete",
+      "comparedResponses": 1,
+      "completed": true,
+      "driver": "udp-turns",
+      "expectedResponses": 1,
+      "fidelity": "transport",
+      "fingerprint": "a86df9a773d9",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 1,
+      "packetCount": 2,
+      "protocol": "udp",
+      "received": 1,
+      "sent": 1,
+      "sessionId": "udp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19000",
+      "timing": {
+        "liveResponseMs": 0.067271,
+        "maxLiveResponseMs": 0.067271,
+        "maxPacingDriftMs": 0,
+        "recordedResponseMs": 20,
+        "samples": [
+          {
+            "liveMs": 0.067271,
+            "recordedMs": 20
+          }
+        ],
+        "turns": 1
+      },
+      "verificationScope": "transport responses",
+      "verified": true
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "captured packet timing not preserved",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "lenient",
+  "version": "1.2.0",
+  "when": "2026-10-01T07:37:06Z"
+}

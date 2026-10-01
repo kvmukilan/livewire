@@ -1,5 +1,99 @@
 # TLS directly from a capture
 
+## Record TLS applications into one file
+
+```sh
+livewire ifaces
+livewire capture -i <interface> -o issue.pcapng -tls -- <application> [args...]
+livewire check issue.pcapng -details
+livewire live issue.pcapng -t device.example:1502
+```
+
+`capture -tls` starts recording before launching the application. It supplies
+`SSLKEYLOGFILE` only to that process and its children, collects exported NSS
+secrets, matches them to complete supported ClientHellos in captured TCP streams,
+and embeds the matching entries as PCAPNG TLSK Decryption Secrets Blocks. A
+successful recording leaves one capture, with no separate key-log file to manage.
+`live` then decrypts the recorded messages and executes them through a **fresh
+verified TLS connection**, including non-HTTP protocols such as Modbus, DNS/TCP,
+MQTT and DNP3. `reproduce` continues to send packets statelessly.
+
+The original application must cooperate by exporting its session keys:
+
+| Recording application | Requirement |
+|---|---|
+| Python 3.8+ client using `ssl.create_default_context()` | Honors `SSLKEYLOGFILE` when key logging is supported by its SSL implementation; exercised by the native recording test |
+| curl | A build with a TLS backend supporting `SSLKEYLOGFILE`; check `curl -V`. Support varies by backend/build; the Windows bundled curl must not be assumed compatible |
+| Firefox / Chromium-based browser | A fresh process/profile and supported key-export configuration; an already-running browser does not inherit the new environment. HTTP/2/3 application replay is still unsupported |
+| Go or another custom application | Explicitly connect its TLS key-export callback (Go: `tls.Config.KeyLogWriter`) to `SSLKEYLOGFILE`; the environment variable alone does not enable logging in every TLS library |
+| Existing services, remote endpoints, or applications without key export | This launcher cannot collect their secrets automatically. Record on a cooperative endpoint or supply secrets acquired during the original exchange |
+
+For a compatible curl build, an HTTP/1 example is:
+
+```sh
+livewire capture -i <interface> -o https.pcapng -tls -- curl --http1.1 https://device.example/health
+```
+
+For a Python Modbus-over-TLS client that uses `ssl.create_default_context()`:
+
+```sh
+livewire capture -i <interface> -o modbus.pcapng -tls -- python modbus_client.py
+livewire live modbus.pcapng -t device.example:1502
+```
+
+Explicit FTPS recording also collects secrets for its protected control and
+data connections, including active transfers where the server opens TCP.
+Pass that same PCAPNG to `live -t ftp.example:21`; provide current FTP credentials
+when needed. Keep control and data sessions together, and include both in any
+`-session` selection. Active/passive uploads and downloads under TLS 1.2/1.3
+were checked through native Windows and Linux loopback capture.
+
+Use an interface that sees the complete original connection, starting before
+its handshake. Capture records the selected interface, so it can include
+unrelated traffic from other applications. `check -details` lists the exchanges;
+use `live issue.pcapng -session <id> -t <target>` to select the intended one.
+Only the launched application's matching exported secrets are embedded.
+
+The command stops after the launched application exits and a
+short packet drain. It launches the supplied executable directly, without a
+shell; put Livewire options before `--` and application arguments after it.
+Capture needs the usual Windows/Npcap or Linux raw-packet privileges. If you
+run Livewire as Administrator or with `sudo`, the launched application also
+runs with that account's privileges. Prefer a short-lived client running in the
+foreground; do not detach/daemonize it or delegate to an existing background
+service. Finish the client normally to finalize a complete recording.
+
+`-duration`, `-n` and Ctrl-C stop recording and terminate owned child processes.
+If this interrupts the application, or capture/key collection fails, Livewire
+returns nonzero and prints the path of an explicitly **partial** PCAPNG. That
+file can contain useful packets and matching secrets; inspect it before replay.
+It never overwrites the requested output or labels an interrupted recording
+complete. TLS recording is bounded to 64 MiB of packet data, 1,000,000 packets
+and a 1 MiB exported key log. Long captures must be split into shorter exchanges.
+Ordinary `capture` without `-tls` keeps its original packet-only PCAP workflow.
+
+The temporary key directory and final artifact use owner-only permissions
+(protected DACLs on Windows). Unmatched secrets are omitted, the temporary log
+is removed on normal/error/cancellation cleanup, and secrets are not included
+in Livewire reports. The launched application's own output is inherited, so
+its logging remains its responsibility. Forced machine/process termination can
+leave private temporary files; these and the resulting PCAPNG remain sensitive.
+Neither recording nor replay uploads the capture or secrets.
+
+Embedding secrets is not a guarantee that every captured exchange can replay.
+Use `check -details` to select the desired session. Capture gaps, unsupported
+TLS suites or inner protocols, mTLS, expired application credentials, and
+missing device setup retain their existing boundaries. A private CA may still
+need `-ca`; fresh authentication may still need current credentials. This
+feature cannot retroactively recover secrets from an old encrypted-only PCAP.
+
+Client behavior and the file format are documented by
+[Python](https://docs.python.org/3/library/ssl.html#ssl.create_default_context),
+[curl](https://curl.se/docs/manpage.html#SSLKEYLOGFILE), and
+[Wireshark](https://wiki.wireshark.org/TLS/#embedding-decryption-secrets-in-a-pcapng-file).
+
+## Replay an existing capture
+
 ```sh
 livewire check issue.pcapng -details
 livewire live issue.pcapng -t device.example:443

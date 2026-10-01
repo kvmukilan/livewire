@@ -1,0 +1,181 @@
+{
+  "actualCapture": "/home/runner/work/_temp/qualification-private/run/live-stateful-tcp-00361.actual.pcap",
+  "adapterVersions": {
+    "dnp3": "3",
+    "dns/tcp": "3",
+    "dns/udp": "3",
+    "ftp": "3",
+    "http/1": "3",
+    "modbus-tcp": "3",
+    "mqtt": "3",
+    "ssh-reterminate": "3",
+    "tls-reterminate": "3"
+  },
+  "adaptive": true,
+  "attempts": 3,
+  "captureDigest": "sha256:01a37f7365bd7b73116dadebe2bd37e3c3a080f13d2b1b3c66dafbc268ce91de",
+  "flows": null,
+  "iface": "vcf750d2507c",
+  "intent": "auto",
+  "limitations": [
+    "tcp-0: stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled"
+  ],
+  "outcome": {
+    "attempts": 3,
+    "consistent": true,
+    "didNotComplete": 0,
+    "different": 0,
+    "intermittent": false,
+    "requested": 3,
+    "sameAsRecording": 3,
+    "sessions": {
+      "didNotComplete": 0,
+      "different": 0,
+      "sameAsRecording": 3,
+      "unverified": 0,
+      "wireOnly": 0
+    },
+    "status": "matched",
+    "unverified": 0,
+    "verdict": "same",
+    "wireOnly": 0
+  },
+  "paced": false,
+  "preflight": {
+    "confidence": 100,
+    "findings": [
+      {
+        "code": "payload-replayable",
+        "detail": "client payloads are available for application-level replay and comparison",
+        "severity": "info"
+      }
+    ],
+    "icmpSessions": 0,
+    "packets": 9,
+    "rawFrames": 0,
+    "sessions": 1,
+    "tcpFlows": 1,
+    "udpSessions": 0
+  },
+  "profile": "functional",
+  "rawL4": false,
+  "replayPlan": {
+    "entries": [
+      {
+        "driver": "tcp-state-machine",
+        "fidelity": "transport",
+        "fingerprint": "145519e39407",
+        "mode": "stateful",
+        "packetIndexes": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sessionId": "tcp-0",
+        "transformations": [
+          "addresses and checksums retargeted",
+          "live replies correlated at the transport layer"
+        ],
+        "transport": "tcp",
+        "warnings": [
+          "stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled"
+        ]
+      }
+    ],
+    "packets": 9,
+    "profile": "functional"
+  },
+  "selectedPackets": 9,
+  "sessions": [
+    {
+      "attempt": 1,
+      "comparedResponses": 18,
+      "completed": true,
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 18,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "received": 0,
+      "sent": 10,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled"
+      ]
+    },
+    {
+      "attempt": 2,
+      "comparedResponses": 18,
+      "completed": true,
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 18,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "received": 0,
+      "sent": 10,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled"
+      ]
+    },
+    {
+      "attempt": 3,
+      "comparedResponses": 18,
+      "completed": true,
+      "driver": "tcp-state-machine",
+      "expectedResponses": 18,
+      "fidelity": "transport",
+      "fingerprint": "145519e39407",
+      "matched": true,
+      "mode": "stateful",
+      "observedResponses": 18,
+      "packetCount": 9,
+      "protocol": "tcp",
+      "received": 0,
+      "sent": 10,
+      "sessionId": "tcp-0",
+      "status": "matched",
+      "target": "198.18.42.2:19001",
+      "verificationScope": "response bytes",
+      "verified": true,
+      "warnings": [
+        "stateful TCP adapts cumulative acknowledgements, MSS and receive windows with bounded in-flight data; full congestion control and TIME_WAIT are not modeled"
+      ]
+    }
+  ],
+  "tool": "livewire",
+  "transformations": [
+    "target IP and link-layer addresses retargeted",
+    "TCP sequence and acknowledgement numbers aligned to the live session",
+    "checksums recomputed after header changes",
+    "client acknowledgements adapted to the live device response length",
+    "captured packet timing not preserved",
+    "repeated TCP sessions used a fresh client port and ISN so the device would not treat them as duplicate connections"
+  ],
+  "verify": "lenient",
+  "version": "1.2.0",
+  "when": "2026-10-01T07:41:29Z"
+}

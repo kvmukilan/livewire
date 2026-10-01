@@ -10,6 +10,7 @@ import (
 
 	"github.com/kvmukilan/livewire/internal/ftpreplay"
 	"github.com/kvmukilan/livewire/internal/pcapio"
+	"github.com/kvmukilan/livewire/internal/recording"
 	"github.com/kvmukilan/livewire/internal/replay"
 	"github.com/kvmukilan/livewire/internal/replaylab"
 	"github.com/kvmukilan/livewire/internal/tlsreplay"
@@ -85,7 +86,14 @@ func TestCapturedFTPSDataIsDecryptedBeforeUploadOrComparison(t *testing.T) {
 				if _, err = ftpreplay.PrepareDataSessions(&control, script, trace.Sessions, nil); err == nil {
 					t.Fatal("encrypted transfer accepted without keylog")
 				}
-				keys, err := tlsreplay.ParseKeyLog(bytes.NewReader(log))
+				// Recording must retain the data channel's keys even when the
+				// FTP server initiated TCP (active mode). Replay then uses only
+				// these selected keys, as it would from the recorded PCAPNG.
+				matched, count, err := recording.MatchSecrets(&pcapio.Capture{Records: capture}, log)
+				if err != nil || count != 1 {
+					t.Fatalf("recorded data channel secrets: count=%d err=%v", count, err)
+				}
+				keys, err := tlsreplay.ParseKeyLog(bytes.NewReader(matched))
 				if err != nil {
 					t.Fatal(err)
 				}
