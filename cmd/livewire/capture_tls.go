@@ -18,6 +18,10 @@ import (
 const tlsRecordingMaxBytes = 64 << 20
 
 func captureTLS(iface, outPath string, count int, duration time.Duration, promisc bool, argv []string, open func(string, bool) (backend.PacketBackend, error)) (retErr error) {
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM, syscall.SIGPIPE)
+	// Register first so signal handling is restored after every owned resource.
+	defer signal.Stop(stop)
 	af, err := orchestration.CreateArtifact(outPath)
 	if err != nil {
 		return err
@@ -40,15 +44,14 @@ func captureTLS(iface, outPath string, count int, duration time.Duration, promis
 	if err != nil {
 		return err
 	}
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(stop)
+	if _, err := fmt.Printf("recording TLS on %s -> %s; the capture will contain sensitive session secrets\n", iface, outPath); err != nil {
+		return fmt.Errorf("write recording progress: %w", err)
+	}
 	child, err := recording.Start(argv)
 	if err != nil {
 		return err
 	}
 	defer func() { retErr = errors.Join(retErr, child.Close()) }()
-	fmt.Printf("recording TLS on %s -> %s; the capture will contain sensitive session secrets\n", iface, outPath)
 	deadline := time.Time{}
 	if duration > 0 {
 		deadline = time.Now().Add(duration)
@@ -156,7 +159,9 @@ loop:
 	if err := af.Commit(); err != nil {
 		return err
 	}
-	fmt.Printf("saved %d packet(s) with embedded secrets for %d captured TLS session(s)\n", n, sessions)
-	fmt.Printf("inspect supported application replay: livewire check %q -details\n", outPath)
-	return nil
+	if _, err := fmt.Printf("saved %d packet(s) with embedded secrets for %d captured TLS session(s)\n", n, sessions); err != nil {
+		return err
+	}
+	_, err = fmt.Printf("inspect supported application replay: livewire check %q -details\n", outPath)
+	return err
 }
