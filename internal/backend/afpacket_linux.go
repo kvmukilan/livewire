@@ -4,10 +4,10 @@ package backend
 
 import (
 	"fmt"
+	"golang.org/x/sys/unix"
 	"net"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/kvmukilan/livewire/internal/wire"
 )
@@ -24,11 +24,10 @@ func htons(v uint16) uint16 { return v<<8 | v>>8 }
 // crafted TCP still needs the host kernel's RST suppressed (see
 // internal/hoststack), or the kernel tears the flow down first.
 type AFPacket struct {
-	fd    int
-	ifi   *net.Interface
-	sll   syscall.SockaddrLinklayer
-	now   func() time.Time
-	promc bool
+	fd  int
+	ifi *net.Interface
+	sll syscall.SockaddrLinklayer
+	now func() time.Time
 
 	// Filter, if set, gates received frames: Recv only returns ones it accepts.
 	// Drops traffic outside the replayed 4-tuple.
@@ -54,54 +53,15 @@ func OpenAFPacket(ifname string, promisc bool) (*AFPacket, error) {
 		syscall.Close(fd)
 		return nil, fmt.Errorf("afpacket: bind %s: %w", ifname, err)
 	}
-	b := &AFPacket{fd: fd, ifi: ifi, sll: sll, now: time.Now, promc: promisc}
+	b := &AFPacket{fd: fd, ifi: ifi, sll: sll, now: time.Now}
 	if promisc {
-		if err := setPromisc(ifname, true); err != nil {
+		membership := &unix.PacketMreq{Ifindex: int32(ifi.Index), Type: unix.PACKET_MR_PROMISC}
+		if err := unix.SetsockoptPacketMreq(fd, unix.SOL_PACKET, unix.PACKET_ADD_MEMBERSHIP, membership); err != nil {
 			syscall.Close(fd)
-			return nil, err
+			return nil, fmt.Errorf("afpacket: promiscuous socket membership: %w", err)
 		}
 	}
 	return b, nil
-}
-
-// iffPromisc is IFF_PROMISC from <linux/if.h>.
-const iffPromisc = 0x100
-
-// setPromisc toggles IFF_PROMISC via SIOCGIFFLAGS/SIOCSIFFLAGS. Needed because
-// server replies are unicast to the spoofed client MAC, which the interface
-// doesn't own.
-func setPromisc(ifname string, on bool) error {
-	ctl, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, 0)
-	if err != nil {
-		return fmt.Errorf("afpacket: promisc ctl socket: %w", err)
-	}
-	defer syscall.Close(ctl)
-
-	// struct ifreq: 16-byte name followed by a union; the flags are a c_short.
-	var ifr [40]byte
-	copy(ifr[:15], ifname)
-	if err := ioctl(ctl, syscall.SIOCGIFFLAGS, unsafe.Pointer(&ifr[0])); err != nil {
-		return fmt.Errorf("afpacket: SIOCGIFFLAGS: %w", err)
-	}
-	flags := *(*uint16)(unsafe.Pointer(&ifr[syscall.IFNAMSIZ]))
-	if on {
-		flags |= iffPromisc
-	} else {
-		flags &^= iffPromisc
-	}
-	*(*uint16)(unsafe.Pointer(&ifr[syscall.IFNAMSIZ])) = flags
-	if err := ioctl(ctl, syscall.SIOCSIFFLAGS, unsafe.Pointer(&ifr[0])); err != nil {
-		return fmt.Errorf("afpacket: SIOCSIFFLAGS: %w", err)
-	}
-	return nil
-}
-
-func ioctl(fd int, req uint, arg unsafe.Pointer) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(fd), uintptr(req), uintptr(arg))
-	if errno != 0 {
-		return errno
-	}
-	return nil
 }
 
 // Send transmits one Ethernet frame on the bound interface.

@@ -30,6 +30,9 @@ jobs:
           cache: true
       - run: go mod verify
       - run: go run ./scripts/task build vet test dashboard corpus
+      - name: Record TLS applications and replay the single PCAPNG
+        if: matrix.go == '1.26.7'
+        run: sudo env "PATH=$PATH" "GOPATH=$(go env GOPATH)" "GOCACHE=$(go env GOCACHE)" GOTOOLCHAIN=local LIVEWIRE_NATIVE_CAPTURE_TEST=1 unshare -n sh -c 'ip link set lo up && exec go test ./cmd/livewire ./internal/backend -run "TestTLSRecordingNativeLoopback|TestAFPacketPromiscOwnership" -count=1 -v'
 
   windows-runtime:
     name: Windows runtime tests
