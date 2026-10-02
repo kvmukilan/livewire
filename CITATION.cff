@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use Livewire in published work, please cite it as below."
+title: "Livewire: stateful network replay and protocol robustness testing for industrial systems"
+abstract: >-
+  Livewire replays a captured TCP session against a live host while realigning
+  sequence and acknowledgement numbers into the new session's sequence space, so
+  the peer treats the traffic as a genuine conversation rather than a replay. It
+  dissects Modbus/TCP, DNP3 and MQTT, runs on Windows as well as Linux, and
+  carries no runtime dependencies.
+type: software
+authors:
+  - family-names: "V"
+    given-names: "Karmukilan"
+repository-code: "https://github.com/kvmukilan/livewire"
+url: "https://kvmukilan.github.io/livewire/"
+license: MIT
+version: 1.2.0
+date-released: "2026-10-01"
+keywords:
+  - industrial control systems
+  - operational technology
+  - network security
+  - protocol dissection
+  - Modbus
+  - DNP3
+  - traffic replay
+  - robustness testing
