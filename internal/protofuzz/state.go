@@ -157,9 +157,6 @@ func NewScheduler(seeds []Seed, cov *Coverage) *Scheduler {
 	}
 }
 
-// Len reports the corpus size.
-func (s *Scheduler) Len() int { return len(s.seeds) }
-
 // Seed returns the seed at an index.
 func (s *Scheduler) Seed(i int) Seed { return s.seeds[i] }
 

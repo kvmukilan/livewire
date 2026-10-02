@@ -83,13 +83,6 @@ func (m *MockTarget) Addr() string { return m.ln.Addr().String() }
 // Close stops the target.
 func (m *MockTarget) Close() error { return m.ln.Close() }
 
-// Requests is how many frames have arrived, for tests that care.
-func (m *MockTarget) Requests() int {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.requests
-}
-
 func (m *MockTarget) serve() {
 	for {
 		c, err := m.ln.Accept()

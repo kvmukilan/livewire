@@ -86,7 +86,7 @@ func TestSchedulerCoversCorpusBeforeFavouring(t *testing.T) {
 	sched := NewScheduler(seeds, cov)
 	r := rand.New(rand.NewSource(7))
 
-	// Untried seeds outrank everything, so the first Len() picks should between
+	// Untried seeds outrank everything, so the first picks should between
 	// them touch every seed rather than hammering one.
 	seen := make(map[int]bool)
 	for i := 0; i < len(seeds)*20; i++ {
