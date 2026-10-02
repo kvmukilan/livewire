@@ -45,6 +45,7 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 livewire check issue.pcap                      # what is in the capture, can it be replayed
 livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
 livewire reproduce issue.pcap -i eth0          # stateless replay of the recorded packets
+livewire fuzz -demo                            # protocol-fuzz (robustness-test) a Modbus/TCP endpoint
 livewire web                                   # the same workflow in a browser
 ```
 
@@ -59,6 +60,32 @@ It does not establish TCP/TLS sessions or check responses. Use `-dry-run` to
 preview and `-report packets.json` to retain transmission counts. `replay` is
 a compatibility alias for this same packet sender. Neither primary command
 requires a mode choice.
+
+### `fuzz` in two clips
+
+The run below sends mutated Modbus frames until the target stops answering a
+well-formed liveness probe, then stops itself rather than carrying on against a
+device that is no longer in a known state:
+
+![livewire fuzz detecting a wedged target and stopping](docs/assets/livewire-fuzz-wedge.gif)
+
+The second clip is the one that makes the first worth anything -- the same tool
+against a conforming device, finding nothing and saying so:
+
+![livewire fuzz reporting no findings against a conforming target](docs/assets/livewire-fuzz-clean.gif)
+
+Both are `livewire fuzz -demo`, which runs against a built-in target, so there is
+nothing to set up and no device at risk.
+
+**`fuzz` is protocol fuzzing used as robustness testing, not session reproduction.** It sends mutated
+Modbus/TCP frames to an endpoint and reports which states it reached and where it
+departed from the spec, reusing the same Modbus dissector the replay commands use.
+Silence is not treated as a fault, because the spec lets a device discard a frame
+whose length field disagrees with what arrived; instead a well-formed liveness
+probe runs throughout, and the run stops if that goes unanswered. `livewire fuzz
+-demo` runs the whole thing against a built-in target, so there is nothing to set
+up and no device to risk. A non-loopback target needs `-allow-remote`. See
+[`fuzz`](docs/COMMANDS.md#fuzz).
 
 **Upgrading from 1.0.x:** application commands formerly written as
 `reproduce capture.pcap -t ...` must use `live capture.pcap -t ...` in 1.1.

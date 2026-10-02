@@ -330,6 +330,54 @@ Needs a hand-written topology file, so it is genuinely a power-user tool. Actors
 wait for preceding traffic to cross the DUT, so a delayed or dropped request
 cannot receive a prerecorded response.
 
+### `fuzz`
+
+Protocol fuzzing for robustness testing of a Modbus/TCP endpoint: send mutated application frames and
+report how it answered — which states it reached, and where it departed from the
+spec. The replay commands reproduce a session; this one is pointed at framing and
+bounds handling instead.
+
+```sh
+livewire fuzz -target 192.0.2.10:502 -cases 2000 -pace 20ms -allow-remote
+livewire fuzz -demo    # built-in mock target, no hardware needed
+```
+
+| Option | Meaning |
+|---|---|
+| `-target <host:port>` | the Modbus endpoint |
+| `-cases <n>` | mutated frames to send (default 500) |
+| `-unit <id>` | unit id the seed requests address (default 1) |
+| `-timeout <d>` | per-reply read deadline (default 2s) |
+| `-pace <d>` | delay between cases, for a device that cannot keep up |
+| `-seed <n>` | PRNG seed; the same seed replays the same run |
+| `-probe-every <n>` | liveness probe interval (default 25, 0 disables) |
+| `-allow-remote` | permit a non-loopback target |
+| `-fail-on-findings` | exit non-zero if anything was reported, for CI |
+| `-demo` | fuzz a built-in mock target instead of a device |
+| `-demo-defect <name>` | fault the demo target exhibits: `none`, `trust-length`, `skip-quantity-check`, `no-txid-echo`, `bad-protocol-id`, `wedge` |
+
+Seeds are well-formed requests, one per function code. Mutators are
+structure-aware: the MBAP length field, quantity against the per-function ceiling,
+starting address including sums that overflow the address space, byte count against
+quantity, function code, frame truncation, the 253-byte PDU cap, and the MBAP
+header. A bitflip baseline is kept because structure-aware mutators only look where
+their author thought to look.
+
+Which seed is mutated next depends on what the device has been answering. Seeds that
+elicit a rarely-seen response are tried more often, following AFLNet: a black-box
+device will not hand over code coverage, so the response code it chooses stands in
+for the state it is in.
+
+Silence is not reported as a fault. The spec lets a device discard a frame whose
+MBAP length disagrees with what arrived, so a dropped malformed frame is correct
+behaviour, and reporting it would bury the real findings. A well-formed liveness
+probe runs every `-probe-every` cases and the run stops if that goes unanswered — a
+device that has stopped answering is no longer in a known state, so the cases after
+that teach nothing.
+
+Refuses a non-loopback target without `-allow-remote`, because pointing this at the
+wrong address can take a device off line.
+
 ### `replay`
 
 Compatibility alias for stateless [`reproduce`](#reproduce). It uses the same

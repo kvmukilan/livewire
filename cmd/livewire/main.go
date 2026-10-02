@@ -64,6 +64,8 @@ var commands = []command{
 		summary: "open the browser dashboard"},
 	{name: "lab", group: groupAdvanced, run: cmdLab,
 		summary: "two-sided replay through a DUT with topology, faults, and PCAPNG evidence"},
+	{name: "fuzz", group: groupAdvanced, run: cmdFuzz,
+		summary: "send mutated Modbus/TCP frames to an endpoint and report how it answers"},
 	{name: "replay", group: groupCompat, run: cmdReplay, replacement: "reproduce",
 		summary: "stateless captured-packet replay (compatibility alias for reproduce)"},
 	{name: "rewrite", group: groupAdvanced, run: cmdRewrite,
