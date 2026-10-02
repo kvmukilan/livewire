@@ -8,14 +8,6 @@ import (
 	"github.com/kvmukilan/livewire/internal/dissect"
 )
 
-// Mutator derives one case from a seed. It returns the bytes to put on the wire
-// and a short label naming what it changed, so a finding can be read and
-// reproduced without anyone having to diff a hex dump.
-type Mutator interface {
-	Name() string
-	Mutate(r *rand.Rand, s Seed) (frame []byte, what string)
-}
-
 // clone copies a seed ADU so a mutator can edit fields in place without
 // corrupting the corpus. Seeds are reused for the whole run, and a mutator that
 // wrote through to the stored Data would quietly poison every later case.
@@ -49,7 +41,8 @@ type lengthFieldMutator struct{}
 
 func (lengthFieldMutator) Name() string { return "length-field" }
 
-func (lengthFieldMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (lengthFieldMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	honest := uint16(len(m.Data) + 2)
 	length := pickU16(r)
@@ -63,7 +56,8 @@ type quantityMutator struct{}
 
 func (quantityMutator) Name() string { return "quantity" }
 
-func (quantityMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (quantityMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	if len(m.Data) < offQuantity+2 {
 		return encodeConsistent(m), "quantity: seed has no quantity field, sent unchanged"
@@ -87,7 +81,8 @@ type addressMutator struct{}
 
 func (addressMutator) Name() string { return "address" }
 
-func (addressMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (addressMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	if len(m.Data) < offStartAddress+2 {
 		return encodeConsistent(m), "address: seed has no address field, sent unchanged"
@@ -111,7 +106,8 @@ type byteCountMutator struct{}
 
 func (byteCountMutator) Name() string { return "byte-count" }
 
-func (byteCountMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (byteCountMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	fn := m.Function & 0x7f
 	if fn != 0x0f && fn != 0x10 {
@@ -133,7 +129,8 @@ type functionMutator struct{}
 
 func (functionMutator) Name() string { return "function-code" }
 
-func (functionMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (functionMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	fn := byte(r.Intn(256))
 	m.Function = fn
@@ -151,7 +148,8 @@ type truncateMutator struct{}
 
 func (truncateMutator) Name() string { return "truncate" }
 
-func (truncateMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (truncateMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	full := encodeConsistent(clone(s))
 	if len(full) <= mbapHeaderLen+1 {
 		return full, "truncate: frame already minimal, sent unchanged"
@@ -167,7 +165,8 @@ type oversizeMutator struct{}
 
 func (oversizeMutator) Name() string { return "oversize" }
 
-func (oversizeMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (oversizeMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	target := maxPDU + 1 + r.Intn(512)
 	pad := make([]byte, target-len(m.Data)-1)
@@ -186,7 +185,8 @@ type headerMutator struct{}
 
 func (headerMutator) Name() string { return "mbap-header" }
 
-func (headerMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (headerMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	if r.Intn(2) == 0 {
 		m.ProtocolID = pickU16(r)
@@ -203,7 +203,8 @@ type bitflipMutator struct{}
 
 func (bitflipMutator) Name() string { return "bitflip" }
 
-func (bitflipMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
+func (bitflipMutator) Mutate(r *rand.Rand, sc SeedCase) ([]byte, string) {
+	s := sc.(Seed)
 	m := clone(s)
 	if len(m.Data) == 0 {
 		return encodeConsistent(m), "bitflip: seed has no data, sent unchanged"
@@ -218,7 +219,7 @@ func (bitflipMutator) Mutate(r *rand.Rand, s Seed) ([]byte, string) {
 	return encodeConsistent(m), fmt.Sprintf("%d bit(s) flipped in the pdu", flips)
 }
 
-// DefaultMutators is the set the fuzz command uses. Order is not significant --
+// DefaultMutators is the Modbus mutator set. Order is not significant --
 // the engine picks uniformly -- but the structure-aware mutators are listed first
 // because they are the ones worth reading about in a report.
 func DefaultMutators() []Mutator {

@@ -25,7 +25,16 @@ type Defects struct {
 	// WedgeAfter stops answering anything once this many requests have arrived,
 	// standing in for a device that has fallen over.
 	WedgeAfter int
+
+	// TrustBadCRC answers a DNP3 frame whose link-header or data-block CRC does
+	// not hold up, instead of discarding it. DNP3 only.
+	TrustBadCRC bool
 }
+
+// For a DNP3 target the shared fields carry the nearest equivalent meaning:
+// TrustLengthField answers a frame whose LEN octet disagrees with what arrived,
+// DontEchoTxID replies with the wrong application sequence, and WedgeAfter behaves
+// identically. SkipQuantityCheck and BadProtocolID are Modbus-only.
 
 // DefectByName maps the -demo-defect flag onto a Defects value. "none" is a
 // conforming server, which is the more useful demo of the two: it shows the
@@ -44,9 +53,11 @@ func DefectByName(name string) (Defects, error) {
 		return Defects{BadProtocolID: true}, nil
 	case "wedge":
 		return Defects{WedgeAfter: 40}, nil
+	case "trust-bad-crc":
+		return Defects{TrustBadCRC: true}, nil
 	}
 	return Defects{}, fmt.Errorf("unknown defect %q (try none, trust-length, "+
-		"skip-quantity-check, no-txid-echo, bad-protocol-id, wedge)", name)
+		"skip-quantity-check, no-txid-echo, bad-protocol-id, wedge, trust-bad-crc)", name)
 }
 
 // MockTarget is a deliberately conforming Modbus/TCP server with optional

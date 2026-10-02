@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"sort"
 	"time"
 
@@ -21,8 +22,9 @@ import (
 // a failed test.
 func cmdFuzz(args []string) error {
 	fs := flag.NewFlagSet("fuzz", flag.ContinueOnError)
-	target := fs.String("target", "", "host:port of the Modbus/TCP endpoint to test")
-	unit := fs.Int("unit", 1, "Modbus unit id the seed requests address")
+	target := fs.String("target", "", "host:port of the endpoint to test")
+	protocol := fs.String("protocol", "modbus", "application protocol to speak: modbus or dnp3")
+	unit := fs.Int("unit", 1, "Modbus unit id, or DNP3 outstation address, the seeds are sent to")
 	cases := fs.Int("cases", 500, "number of mutated frames to send")
 	timeout := fs.Duration("timeout", 2*time.Second, "per-reply read deadline")
 	pace := fs.Duration("pace", 0, "delay between cases; raise it for a device that cannot keep up")
@@ -44,7 +46,7 @@ func cmdFuzz(args []string) error {
 		fmt.Println("every -probe-every cases and the run stops if the device stops answering it.")
 		fmt.Println("\n-demo runs the whole thing against a built-in mock target. Use it to see what")
 		fmt.Println("a report looks like, and -demo-defect none to watch a clean run stay clean.")
-		printFlags(fs, "target", "unit", "cases", "timeout", "pace", "seed", "probe-every",
+		printFlags(fs, "target", "protocol", "unit", "cases", "timeout", "pace", "seed", "probe-every",
 			"allow-remote", "quiet", "fail-on-findings", "demo", "demo-defect")
 	}
 	if err := fs.Parse(args); err != nil {
@@ -52,6 +54,15 @@ func cmdFuzz(args []string) error {
 	}
 	if handleAllFlags(fs, *allFlags, nil) {
 		return errAllFlags
+	}
+
+	proto, err := protofuzz.ProtocolByName(*protocol)
+	if err != nil {
+		return err
+	}
+	// A Modbus unit id is one octet; a DNP3 address is two.
+	if proto.Name() == "modbus" && *unit > 255 {
+		return fmt.Errorf("-unit must be between 0 and 255 for modbus")
 	}
 
 	if *demo {
@@ -62,20 +73,31 @@ func cmdFuzz(args []string) error {
 		if err != nil {
 			return err
 		}
-		mock, err := protofuzz.ServeMock("127.0.0.1:0", defects)
-		if err != nil {
-			return fmt.Errorf("starting the demo target: %w", err)
+		var mock io.Closer
+		var addr string
+		if proto.Name() == "dnp3" {
+			m, err := protofuzz.ServeDNP3Mock("127.0.0.1:0", uint16(*unit), defects)
+			if err != nil {
+				return fmt.Errorf("starting the demo target: %w", err)
+			}
+			mock, addr = m, m.Addr()
+		} else {
+			m, err := protofuzz.ServeMock("127.0.0.1:0", defects)
+			if err != nil {
+				return fmt.Errorf("starting the demo target: %w", err)
+			}
+			mock, addr = m, m.Addr()
 		}
 		defer mock.Close()
-		*target = mock.Addr()
-		fmt.Printf("demo target listening on %s (injected fault: %s)\n", *target, *demoDefect)
+		*target = addr
+		fmt.Printf("demo %s target listening on %s (injected fault: %s)\n", proto.Name(), *target, *demoDefect)
 	}
 
 	if *target == "" {
 		return fmt.Errorf("-target is required (host:port of the Modbus endpoint), or use -demo")
 	}
-	if *unit < 0 || *unit > 255 {
-		return fmt.Errorf("-unit must be between 0 and 255")
+	if *unit < 0 || *unit > 65535 {
+		return fmt.Errorf("-unit must be between 0 and 65535")
 	}
 	if *cases < 1 {
 		return fmt.Errorf("-cases must be at least 1")
@@ -90,7 +112,8 @@ func cmdFuzz(args []string) error {
 
 	cfg := protofuzz.Config{
 		Target:     *target,
-		UnitID:     uint8(*unit),
+		Protocol:   proto,
+		Unit:       uint16(*unit),
 		Cases:      *cases,
 		Timeout:    *timeout,
 		Pace:       *pace,
