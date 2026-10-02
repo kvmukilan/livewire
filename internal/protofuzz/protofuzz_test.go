@@ -287,8 +287,8 @@ func fuzzConfig(addr string, cases int) Config {
 }
 
 func TestRunAgainstConformingMockFindsNothing(t *testing.T) {
-	m := newMockServer(t, mockDefects{})
-	res, err := Run(context.Background(), fuzzConfig(m.addr(), 150))
+	m := newMockTarget(t, Defects{})
+	res, err := Run(context.Background(), fuzzConfig(m.Addr(), 150))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -306,8 +306,8 @@ func TestRunAgainstConformingMockFindsNothing(t *testing.T) {
 }
 
 func TestRunDetectsTrustedLengthField(t *testing.T) {
-	m := newMockServer(t, mockDefects{trustLengthField: true})
-	res, err := Run(context.Background(), fuzzConfig(m.addr(), 400))
+	m := newMockTarget(t, Defects{TrustLengthField: true})
+	res, err := Run(context.Background(), fuzzConfig(m.Addr(), 400))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -320,8 +320,8 @@ func TestRunDetectsTrustedLengthField(t *testing.T) {
 }
 
 func TestRunDetectsTransactionIDNotEchoed(t *testing.T) {
-	m := newMockServer(t, mockDefects{dontEchoTxID: true})
-	res, err := Run(context.Background(), fuzzConfig(m.addr(), 40))
+	m := newMockTarget(t, Defects{DontEchoTxID: true})
+	res, err := Run(context.Background(), fuzzConfig(m.Addr(), 40))
 	if err == nil {
 		for _, o := range res.Occurrences {
 			if o.Finding.Kind == "transaction-id-not-echoed" {
@@ -335,8 +335,8 @@ func TestRunDetectsTransactionIDNotEchoed(t *testing.T) {
 }
 
 func TestRunDetectsWedge(t *testing.T) {
-	m := newMockServer(t, mockDefects{wedgeAfter: 8})
-	cfg := fuzzConfig(m.addr(), 60)
+	m := newMockTarget(t, Defects{WedgeAfter: 8})
+	cfg := fuzzConfig(m.Addr(), 60)
 	cfg.ProbeEvery = 5
 	res, err := Run(context.Background(), cfg)
 	if err != nil {
@@ -375,10 +375,10 @@ func TestRunRefusesATargetThatNeverAnswered(t *testing.T) {
 }
 
 func TestRunStopsOnCancelledContext(t *testing.T) {
-	m := newMockServer(t, mockDefects{})
+	m := newMockTarget(t, Defects{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	res, err := Run(ctx, fuzzConfig(m.addr(), 500))
+	res, err := Run(ctx, fuzzConfig(m.Addr(), 500))
 	if err != nil {
 		t.Fatalf("a cancelled run should return its result, not an error: %v", err)
 	}

@@ -31,15 +31,21 @@ func cmdFuzz(args []string) error {
 	allowRemote := fs.Bool("allow-remote", false, "permit a non-loopback target; only with authorisation to test the device")
 	quiet := fs.Bool("quiet", false, "report only the summary, not each new state as it is reached")
 	failOnFindings := fs.Bool("fail-on-findings", false, "exit non-zero if any finding is reported")
+	demo := fs.Bool("demo", false, "fuzz a built-in mock Modbus target, so the command can be tried without a device")
+	demoDefect := fs.String("demo-defect", "trust-length",
+		"fault the -demo target exhibits: none, trust-length, skip-quantity-check, no-txid-echo, bad-protocol-id, wedge")
 	allFlags := registerAllFlags(fs)
 	fs.Usage = func() {
 		fmt.Println("usage: livewire fuzz -target host:port [-cases 500] [-unit 1]")
+		fmt.Println("       livewire fuzz -demo [-demo-defect none]")
 		fmt.Println("\nSend mutated Modbus/TCP frames to an endpoint and report how it answers.")
 		fmt.Println("Seeds are well-formed requests; mutators target the length field, quantities,")
 		fmt.Println("addresses, byte counts, function codes and frame size. A liveness probe runs")
 		fmt.Println("every -probe-every cases and the run stops if the device stops answering it.")
+		fmt.Println("\n-demo runs the whole thing against a built-in mock target. Use it to see what")
+		fmt.Println("a report looks like, and -demo-defect none to watch a clean run stay clean.")
 		printFlags(fs, "target", "unit", "cases", "timeout", "pace", "seed", "probe-every",
-			"allow-remote", "quiet", "fail-on-findings")
+			"allow-remote", "quiet", "fail-on-findings", "demo", "demo-defect")
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -48,8 +54,25 @@ func cmdFuzz(args []string) error {
 		return errAllFlags
 	}
 
+	if *demo {
+		if *target != "" {
+			return fmt.Errorf("use either -demo or -target, not both")
+		}
+		defects, err := protofuzz.DefectByName(*demoDefect)
+		if err != nil {
+			return err
+		}
+		mock, err := protofuzz.ServeMock("127.0.0.1:0", defects)
+		if err != nil {
+			return fmt.Errorf("starting the demo target: %w", err)
+		}
+		defer mock.Close()
+		*target = mock.Addr()
+		fmt.Printf("demo target listening on %s (injected fault: %s)\n", *target, *demoDefect)
+	}
+
 	if *target == "" {
-		return fmt.Errorf("-target is required (host:port of the Modbus endpoint)")
+		return fmt.Errorf("-target is required (host:port of the Modbus endpoint), or use -demo")
 	}
 	if *unit < 0 || *unit > 255 {
 		return fmt.Errorf("-unit must be between 0 and 255")
@@ -126,11 +149,23 @@ func printFuzzReport(res *protofuzz.Result, target string, seed int64) {
 		fmt.Printf("\n      %s\n", o.Finding.Detail)
 		fmt.Printf("      first at case %d, mutator %s on seed %s\n", o.FirstAt, o.Mutator, o.SeedName)
 		fmt.Printf("      changed: %s\n", o.What)
-		fmt.Printf("      frame:  % x\n", o.Frame)
+		fmt.Printf("      frame:  %s\n", frameHex(o.Frame))
 	}
 
 	if res.Wedged {
 		fmt.Printf("\nthe target stopped answering a well-formed request at case %d; the run stopped there.\n", res.WedgedAt)
 		fmt.Println("re-run with the same -seed to reproduce, and -cases just past that point to narrow it.")
 	}
+}
+
+// frameHex renders a frame for the report, truncated. An oversize case can run to
+// several hundred bytes, and dumping all of it buries the rest of the report for
+// no gain: the header and the first of the payload are what identify the case, and
+// the exact bytes are reproducible from -seed.
+func frameHex(frame []byte) string {
+	const show = 32
+	if len(frame) <= show {
+		return fmt.Sprintf("% x", frame)
+	}
+	return fmt.Sprintf("% x ... (%d bytes total)", frame[:show], len(frame))
 }
