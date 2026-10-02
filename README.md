@@ -45,7 +45,7 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 livewire check issue.pcap                      # what is in the capture, can it be replayed
 livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
 livewire reproduce issue.pcap -i eth0          # stateless replay of the recorded packets
-livewire fuzz -demo                            # robustness-test a Modbus endpoint
+livewire fuzz -demo                            # protocol-fuzz (robustness-test) a Modbus/TCP endpoint
 livewire web                                   # the same workflow in a browser
 ```
 
@@ -61,7 +61,7 @@ preview and `-report packets.json` to retain transmission counts. `replay` is
 a compatibility alias for this same packet sender. Neither primary command
 requires a mode choice.
 
-**`fuzz` tests robustness rather than reproducing a session.** It sends mutated
+**`fuzz` is protocol fuzzing used as robustness testing, not session reproduction.** It sends mutated
 Modbus/TCP frames to an endpoint and reports which states it reached and where it
 departed from the spec, reusing the same Modbus dissector the replay commands use.
 Silence is not treated as a fault, because the spec lets a device discard a frame

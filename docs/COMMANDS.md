@@ -332,7 +332,7 @@ cannot receive a prerecorded response.
 
 ### `fuzz`
 
-Robustness testing for a Modbus/TCP endpoint: send mutated application frames and
+Protocol fuzzing for robustness testing of a Modbus/TCP endpoint: send mutated application frames and
 report how it answered — which states it reached, and where it departed from the
 spec. The replay commands reproduce a session; this one is pointed at framing and
 bounds handling instead.
