@@ -11,6 +11,9 @@ type Seed struct {
 	ADU  dissect.MBAP
 }
 
+// SeedName identifies the seed in a report, satisfying SeedCase.
+func (s Seed) SeedName() string { return s.Name }
+
 // Request-field layouts, so a mutator knows where a quantity or byte count
 // lives in the PDU it is editing rather than hard-coding offsets per call site.
 const (

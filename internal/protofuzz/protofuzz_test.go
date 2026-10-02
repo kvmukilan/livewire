@@ -81,7 +81,7 @@ func TestCoverageObserveAndSummary(t *testing.T) {
 }
 
 func TestSchedulerCoversCorpusBeforeFavouring(t *testing.T) {
-	seeds := BuiltinSeeds(1)
+	seeds := modbusProtocol{}.Seeds(1)
 	cov := NewCoverage()
 	sched := NewScheduler(seeds, cov)
 	r := rand.New(rand.NewSource(7))
@@ -101,7 +101,7 @@ func TestSchedulerCoversCorpusBeforeFavouring(t *testing.T) {
 }
 
 func TestSchedulerPrefersRareState(t *testing.T) {
-	seeds := []Seed{{Name: "common"}, {Name: "rare"}}
+	seeds := []SeedCase{Seed{Name: "common"}, Seed{Name: "rare"}}
 	cov := NewCoverage()
 	sched := NewScheduler(seeds, cov)
 
@@ -278,7 +278,7 @@ func TestMutatorsLeaveTheCorpusIntact(t *testing.T) {
 func fuzzConfig(addr string, cases int) Config {
 	return Config{
 		Target:     addr,
-		UnitID:     1,
+		Unit:       1,
 		Cases:      cases,
 		Timeout:    200 * time.Millisecond,
 		Seed:       42,

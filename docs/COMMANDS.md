@@ -332,7 +332,7 @@ cannot receive a prerecorded response.
 
 ### `fuzz`
 
-Protocol fuzzing for robustness testing of a Modbus/TCP endpoint: send mutated application frames and
+Protocol fuzzing for robustness testing of a Modbus/TCP or DNP3 endpoint: send mutated application frames and
 report how it answered — which states it reached, and where it departed from the
 spec. The replay commands reproduce a session; this one is pointed at framing and
 bounds handling instead.
@@ -344,9 +344,10 @@ livewire fuzz -demo    # built-in mock target, no hardware needed
 
 | Option | Meaning |
 |---|---|
-| `-target <host:port>` | the Modbus endpoint |
+| `-target <host:port>` | the endpoint |
+| `-protocol <name>` | `modbus` (default) or `dnp3` |
 | `-cases <n>` | mutated frames to send (default 500) |
-| `-unit <id>` | unit id the seed requests address (default 1) |
+| `-unit <id>` | Modbus unit id, or DNP3 outstation address (default 1) |
 | `-timeout <d>` | per-reply read deadline (default 2s) |
 | `-pace <d>` | delay between cases, for a device that cannot keep up |
 | `-seed <n>` | PRNG seed; the same seed replays the same run |
@@ -374,6 +375,34 @@ behaviour, and reporting it would bury the real findings. A well-formed liveness
 probe runs every `-probe-every` cases and the run stops if that goes unanswered — a
 device that has stopped answering is no longer in a known state, so the cases after
 that teach nothing.
+
+#### DNP3
+
+`-protocol dnp3` speaks DNP3 over TCP. The mutators follow the three layers IEEE
+1815 stacks: the link layer's start octets, header CRC and per-block CRCs; the
+transport layer's FIR and FIN flags and six-bit sequence, which is where a
+receiver has to track an assembly in progress and reject a gap, a second FIR
+before a FIN, or a continuation that never began; and the application layer's
+function code, control octet and object headers.
+
+**The default DNP3 corpus is reads and diagnostics only, deliberately.** DNP3
+carries functions that do physical work: select, operate and direct-operate
+actuate outputs, and cold restart and warm restart reboot the outstation. A
+Modbus write lands in a register map; a DNP3 operate lands on a breaker. Seeds
+are returned to and amplified by the scheduler, so a control function in the
+corpus would make repeatedly actuating plant equipment the tool's default
+behaviour. Mutators still reach those function codes, because an outstation's
+handling of an unexpected control request is worth knowing about, but they arrive
+one frame at a time rather than as a seed the engine keeps coming back to.
+
+As with Modbus, silence is not reported as a fault: IEEE 1815 requires a receiver
+to discard a frame whose start octets, LEN or CRCs do not hold up, so no reply is
+usually the device being correct.
+
+```sh
+livewire fuzz -protocol dnp3 -target 192.0.2.10:20000 -unit 4 -allow-remote
+livewire fuzz -protocol dnp3 -demo -demo-defect trust-bad-crc
+```
 
 Refuses a non-loopback target without `-allow-remote`, because pointing this at the
 wrong address can take a device off line.

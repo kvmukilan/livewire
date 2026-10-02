@@ -51,6 +51,11 @@ type State struct {
 	Kind      StateKind
 	Function  uint8 // function code of the reply, masked of the exception bit
 	Exception uint8 // exception code, when Kind is StateException
+	// Indications carries DNP3's two internal-indication octets. DNP3 has only
+	// one response function code and reports trouble through these bits instead,
+	// so without them the response-code heuristic would see one state forever and
+	// the feedback loop would be blind.
+	Indications uint16
 }
 
 // Key identifies a state for counting. Normal replies are keyed by function so
@@ -60,6 +65,9 @@ type State struct {
 func (s State) Key() string {
 	switch s.Kind {
 	case StateNormal:
+		if s.Indications != 0 {
+			return fmt.Sprintf("normal/0x%02x+iin:0x%04x", s.Function, s.Indications)
+		}
 		return fmt.Sprintf("normal/0x%02x", s.Function)
 	case StateException:
 		return fmt.Sprintf("exception/0x%02x", s.Exception)
@@ -72,6 +80,9 @@ func (s State) Key() string {
 func (s State) String() string {
 	switch s.Kind {
 	case StateNormal:
+		if s.Indications != 0 {
+			return fmt.Sprintf("normal %s (indications 0x%04x)", dissect.FunctionName(s.Function), s.Indications)
+		}
 		return fmt.Sprintf("normal %s", dissect.FunctionName(s.Function))
 	case StateException:
 		return fmt.Sprintf("exception %s", dissect.ExceptionName(s.Exception))
@@ -141,14 +152,14 @@ func (c *Coverage) Summary() []StateCount {
 // answer is the one whose code path is least exercised, so the seed that elicited
 // it is the one most likely to reach somewhere new on the next mutation.
 type Scheduler struct {
-	seeds []Seed
+	seeds []SeedCase
 	last  []State // last state each seed reached; zero value is StateNormal/0
 	known []bool  // whether this seed has been tried at all yet
 	cov   *Coverage
 }
 
 // NewScheduler builds a scheduler over a seed corpus.
-func NewScheduler(seeds []Seed, cov *Coverage) *Scheduler {
+func NewScheduler(seeds []SeedCase, cov *Coverage) *Scheduler {
 	return &Scheduler{
 		seeds: seeds,
 		last:  make([]State, len(seeds)),
@@ -158,7 +169,7 @@ func NewScheduler(seeds []Seed, cov *Coverage) *Scheduler {
 }
 
 // Seed returns the seed at an index.
-func (s *Scheduler) Seed(i int) Seed { return s.seeds[i] }
+func (s *Scheduler) Seed(i int) SeedCase { return s.seeds[i] }
 
 // weight scores a seed for selection. An untried seed outranks everything, so a
 // run always covers the whole corpus before it starts favouring anything; after

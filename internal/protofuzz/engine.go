@@ -8,27 +8,29 @@ import (
 	"math/rand"
 	"net"
 	"time"
-
-	"github.com/kvmukilan/livewire/internal/dissect"
 )
 
 // Config describes one run. The defaults the fuzz command fills in are
 // deliberately gentle: a device on a plant floor is not a laptop, and a run that
 // outpaces it tells you about the pacing rather than the parser.
 type Config struct {
-	Target     string        // host:port of the Modbus endpoint
-	UnitID     uint8         // unit id the seeds address
+	Target     string        // host:port of the endpoint
+	Protocol   Protocol      // what to speak; Modbus if nil
+	Unit       uint16        // Modbus unit id, or DNP3 outstation address
 	Cases      int           // how many mutated frames to send
 	Timeout    time.Duration // per-reply read deadline
 	Pace       time.Duration // delay between cases
 	Seed       int64         // PRNG seed; the same seed replays the same run
 	ProbeEvery int           // send a liveness probe every N cases, 0 to disable
-	Seeds      []Seed        // corpus; BuiltinSeeds if empty
-	Mutators   []Mutator     // DefaultMutators if empty
+	Seeds      []SeedCase    // corpus; the protocol's own seeds if empty
+	Mutators   []Mutator     // the protocol's own mutators if empty
 	Log        func(string)  // progress sink; nil discards
 }
 
 func (c *Config) applyDefaults() {
+	if c.Protocol == nil {
+		c.Protocol = modbusProtocol{}
+	}
 	if c.Timeout <= 0 {
 		c.Timeout = 2 * time.Second
 	}
@@ -39,10 +41,10 @@ func (c *Config) applyDefaults() {
 		c.ProbeEvery = 25
 	}
 	if len(c.Seeds) == 0 {
-		c.Seeds = BuiltinSeeds(c.UnitID)
+		c.Seeds = c.Protocol.Seeds(c.Unit)
 	}
 	if len(c.Mutators) == 0 {
-		c.Mutators = DefaultMutators()
+		c.Mutators = c.Protocol.Mutators()
 	}
 	if c.Log == nil {
 		c.Log = func(string) {}
@@ -87,6 +89,7 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 	if len(cfg.Seeds) == 0 {
 		return nil, errors.New("protofuzz: empty seed corpus")
 	}
+	p := cfg.Protocol
 
 	r := rand.New(rand.NewSource(cfg.Seed))
 	cov := NewCoverage()
@@ -99,13 +102,14 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 	// Confirm the target answers a well-formed request before mutating anything.
 	// Without this a run against a wrong address or a closed port produces a page
 	// of silence that looks like findings.
-	if err := probe(c, cfg.UnitID, 0); err != nil {
-		return nil, fmt.Errorf("protofuzz: target did not answer a well-formed request: %w", err)
+	if err := probeOnce(c, p, cfg.Unit, 0); err != nil {
+		return nil, fmt.Errorf("protofuzz: target did not answer a well-formed %s request: %w", p.Name(), err)
 	}
-	cfg.Log(fmt.Sprintf("target %s answered a baseline read; starting %d cases", cfg.Target, cfg.Cases))
+	cfg.Log(fmt.Sprintf("target %s answered a baseline %s request; starting %d cases",
+		cfg.Target, p.Name(), cfg.Cases))
 
 	index := make(map[string]int) // finding key -> position in res.Occurrences
-	var txid uint16
+	var ident uint16
 
 	for n := 1; n <= cfg.Cases; n++ {
 		if err := ctx.Err(); err != nil {
@@ -117,28 +121,16 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 		mut := cfg.Mutators[r.Intn(len(cfg.Mutators))]
 
 		frame, what := mut.Mutate(r, seed)
-		txid++
-		// Stamp a fresh transaction id unless the mutation truncated the frame
-		// below the header, in which case there is nothing to stamp.
-		if len(frame) >= 2 {
-			frame[0] = byte(txid >> 8)
-			frame[1] = byte(txid)
-		}
+		ident++
+		frame = p.Stamp(frame, ident)
 
-		// The request as the device should read it, for echo and function checks.
-		req := dissect.MBAP{TransactionID: txid, UnitID: seed.ADU.UnitID, Function: seed.ADU.Function}
-		if len(frame) >= 8 {
-			req.UnitID = frame[6]
-			req.Function = frame[7]
-		}
-
-		outcome, reply, err := c.exchange(frame)
+		outcome, reply, err := c.exchange(p, frame)
 		if err != nil {
 			return res, fmt.Errorf("protofuzz: case %d: %w", n, err)
 		}
 		res.Sent++
 
-		state, findings := Classify(req, frame, outcome, reply)
+		state, findings := p.Classify(frame, outcome, reply)
 		if cov.Observe(state) {
 			cfg.Log(fmt.Sprintf("case %d: new state %s (via %s: %s)", n, state, mut.Name(), what))
 		}
@@ -153,19 +145,19 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 			index[key] = len(res.Occurrences)
 			res.Occurrences = append(res.Occurrences, Occurrence{
 				Finding: f, FirstAt: n, Mutator: mut.Name(),
-				SeedName: seed.Name, What: what,
+				SeedName: seed.SeedName(), What: what,
 				Frame: append([]byte(nil), frame...), Count: 1,
 			})
 			cfg.Log(fmt.Sprintf("case %d: [%s] %s -- %s", n, f.Severity, f.Kind, f.Detail))
 		}
 
 		if cfg.ProbeEvery > 0 && n%cfg.ProbeEvery == 0 {
-			if err := probe(c, cfg.UnitID, txid+1); err != nil {
+			if err := probeOnce(c, p, cfg.Unit, ident+1); err != nil {
 				res.Wedged, res.WedgedAt = true, n
 				res.Occurrences = append(res.Occurrences, Occurrence{
 					Finding: Finding{SevHigh, "target-unresponsive",
 						fmt.Sprintf("a well-formed request went unanswered after case %d: %v", n, err)},
-					FirstAt: n, Mutator: mut.Name(), SeedName: seed.Name, What: what,
+					FirstAt: n, Mutator: mut.Name(), SeedName: seed.SeedName(), What: what,
 					Frame: append([]byte(nil), frame...), Count: 1,
 				})
 				cfg.Log(fmt.Sprintf("case %d: [high] target stopped answering a well-formed request; stopping", n))
@@ -180,32 +172,20 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 	return res, nil
 }
 
-// probe sends a minimal well-formed read and requires a parseable reply. It is
-// how the engine tells "this device discarded a bad frame" from "this device has
-// stopped working", which is the difference between a clean run and a finding.
-func probe(c *conn, unitID uint8, txid uint16) error {
-	m := dissect.MBAP{TransactionID: txid, UnitID: unitID, Function: 0x03}
-	m.Data = append(be16(0), be16(1)...)
-	outcome, reply, err := c.exchange(encodeConsistent(m))
+// probeOnce sends the protocol's well-formed probe and requires a usable answer.
+// It is how the engine tells "this device discarded a bad frame" from "this
+// device has stopped working", which is the difference between a clean run and a
+// finding.
+func probeOnce(c *conn, p Protocol, unit, ident uint16) error {
+	outcome, reply, err := c.exchange(p, p.Probe(unit, ident))
 	if err != nil {
 		return err
 	}
-	switch outcome {
-	case ReadTimeout:
-		return errors.New("no reply within the read deadline")
-	case ReadClosed:
-		return errors.New("peer closed the connection")
-	}
-	// An exception is a perfectly good answer here: the point is that something
-	// on the other end is still parsing Modbus and choosing a reply.
-	if _, _, err := dissect.ParseMBAP(reply); err != nil {
-		return fmt.Errorf("reply was not a Modbus ADU: %w", err)
-	}
-	return nil
+	return p.ProbeAnswered(outcome, reply)
 }
 
-// conn is a lazily dialled Modbus/TCP connection that reconnects when the peer
-// drops it, so one closed connection does not end a run.
+// conn is a lazily dialled connection that reconnects when the peer drops it, so
+// one closed connection does not end a run.
 type conn struct {
 	target  string
 	timeout time.Duration
@@ -234,7 +214,7 @@ func (k *conn) close() {
 // exchange writes one frame and reads whatever comes back. A write failure on a
 // connection the peer closed is retried once on a fresh connection; a failure to
 // dial at all is returned, because that is the run ending rather than a finding.
-func (k *conn) exchange(frame []byte) (ReadOutcome, []byte, error) {
+func (k *conn) exchange(p Protocol, frame []byte) (ReadOutcome, []byte, error) {
 	if err := k.dial(); err != nil {
 		return ReadClosed, nil, err
 	}
@@ -250,14 +230,15 @@ func (k *conn) exchange(frame []byte) (ReadOutcome, []byte, error) {
 			return ReadClosed, nil, nil
 		}
 	}
-	return k.readReply()
+	return k.readReply(p)
 }
 
-// readReply reads one reply. It first takes whatever arrives, then tops the
-// buffer up to the length the MBAP header declares, so a reply split across
-// segments is not mistaken for a short one. A declared length that never arrives
-// resolves as a timeout, which is itself the answer to a length-field mutation.
-func (k *conn) readReply() (ReadOutcome, []byte, error) {
+// readReply reads one reply. It takes whatever arrives and then, for a protocol
+// whose header declares a length, tops the buffer up to that length so a reply
+// split across segments is not mistaken for a short one. A declared length that
+// never arrives resolves as a timeout, which is itself the answer to a
+// length-field mutation.
+func (k *conn) readReply(p Protocol) (ReadOutcome, []byte, error) {
 	buf := make([]byte, 0, maxADU)
 	tmp := make([]byte, maxADU)
 
@@ -273,16 +254,15 @@ func (k *conn) readReply() (ReadOutcome, []byte, error) {
 		return ReadClosed, nil, nil
 	}
 
-	for len(buf) >= mbapHeaderLen {
-		want := 6 + int(uint16(buf[4])<<8|uint16(buf[5]))
-		if want <= len(buf) || want > maxADU*2 {
-			break
-		}
+	// Top up while the protocol says the frame is incomplete. Each pass must read
+	// something or the loop ends, so a peer that declares a length and then stops
+	// talking resolves as the short reply it is rather than hanging.
+	for need := p.WantMore(buf); need > 0; need = p.WantMore(buf) {
 		n, err := k.c.Read(tmp)
 		if n > 0 {
 			buf = append(buf, tmp[:n]...)
 		}
-		if err != nil {
+		if n == 0 || err != nil {
 			break
 		}
 	}
