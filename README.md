@@ -62,7 +62,7 @@ a compatibility alias for this same packet sender. Neither primary command
 requires a mode choice.
 
 **`fuzz` is protocol fuzzing used as robustness testing, not session reproduction.** It sends mutated
-Modbus/TCP frames to an endpoint and reports which states it reached and where it
+Modbus/TCP or DNP3 frames to an endpoint and reports which states it reached and where it
 departed from the spec, reusing the same Modbus dissector the replay commands use.
 Silence is not treated as a fault, because the spec lets a device discard a frame
 whose length field disagrees with what arrived; instead a well-formed liveness
