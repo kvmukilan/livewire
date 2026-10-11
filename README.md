@@ -144,4 +144,4 @@ Livewire is licensed under the [MIT License](LICENSE).
 
 ## Deployment readiness
 
-See [deployment setup, checks, and rollback](docs/production.md).
+See [deployment setup, checks, and rollback](docs/PRODUCTION.md).

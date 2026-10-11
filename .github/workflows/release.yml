@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.7"
+          go-version: "1.26.9"
           cache: true
       - name: Require qualification for stable tags
         shell: bash
@@ -47,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.26.7", "1.27.x"]
+        go: ["1.26.9", "1.27.x"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -58,7 +58,7 @@ jobs:
       - run: go mod verify
       - run: go run ./scripts/task build vet test dashboard corpus
       - name: Native TLS recording and replay
-        if: matrix.go == '1.26.7'
+        if: matrix.go == '1.26.9'
         run: sudo env "PATH=$PATH" "GOPATH=$(go env GOPATH)" "GOCACHE=$(go env GOCACHE)" GOTOOLCHAIN=local LIVEWIRE_NATIVE_CAPTURE_TEST=1 unshare -n sh -c 'ip link set lo up && exec go test ./cmd/livewire ./internal/backend -run "TestTLSRecordingNativeLoopback|TestAFPacketPromiscOwnership" -count=1 -v'
 
   quality:
@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.7"
+          go-version: "1.26.9"
           cache: true
       - run: go run ./scripts/task lint race shuffle fuzz cover
       - run: python3 -m unittest discover -s scripts -p 'test_*.py'
@@ -87,7 +87,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.7"
+          go-version: "1.26.9"
           cache: true
 
       - name: Derive version from tag

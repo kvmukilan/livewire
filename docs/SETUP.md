@@ -208,7 +208,7 @@ report file.
 
 ## Build from source
 
-Only needed if you are changing Livewire. Compatibility starts at **Go 1.26.7**,
+Only needed if you are changing Livewire. Compatibility starts at **Go 1.26.9**,
 which is also the toolchain the official artifacts are reproducibly built with.
 [CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) covers the full developer workflow.
 

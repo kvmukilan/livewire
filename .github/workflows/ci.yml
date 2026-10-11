@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE_GO: "1.26.7"
+  RELEASE_GO: "1.26.9"
   GOTOOLCHAIN: local
 
 # Go gates are targets of scripts/task, with the same pinned tool versions.
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.26.7", "1.27.x"]
+        go: ["1.26.9", "1.27.x"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -31,7 +31,7 @@ jobs:
       - run: go mod verify
       - run: go run ./scripts/task build vet test dashboard corpus
       - name: Record TLS applications and replay the single PCAPNG
-        if: matrix.go == '1.26.7'
+        if: matrix.go == '1.26.9'
         run: sudo env "PATH=$PATH" "GOPATH=$(go env GOPATH)" "GOCACHE=$(go env GOCACHE)" GOTOOLCHAIN=local LIVEWIRE_NATIVE_CAPTURE_TEST=1 unshare -n sh -c 'ip link set lo up && exec go test ./cmd/livewire ./internal/backend -run "TestTLSRecordingNativeLoopback|TestAFPacketPromiscOwnership" -count=1 -v'
 
   windows-runtime:
