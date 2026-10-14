@@ -2,6 +2,23 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.2.1] - 2026-10-15
+
+Maintenance release. Replay, capture and the command contract are unchanged
+from 1.2.0; no Livewire Go source changed apart from the version string.
+
+- Build every release, CI and qualification job with Go 1.26.9, which fixes the
+  standard-library vulnerability GO-2026-6617 reported by `govulncheck`.
+- Update `golang.org/x/crypto` to 0.58.0, `golang.org/x/sys` to 0.49.0 and
+  `golang.org/x/term` to 0.47.0, and the pinned `actions/upload-artifact`
+  (7.0.2) and `actions/setup-node` (7.1.0) actions.
+- Add `CITATION.cff` so the repository can be cited.
+- Show a replay demo in the README and ship a small Modbus/TCP example capture
+  with a matching lab server under `examples/`.
+- Add winget and Scoop manifests under `packaging/`.
+- Check website deployment paths and publish GitHub Pages only from `main`.
+- Requalify the rebuilt binaries in the software-lab profile.
+
 ## [1.2.0] - 2026-10-01
 
 Record a supported application's TLS exchange and replay it from **one PCAPNG**:
