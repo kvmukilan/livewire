@@ -364,7 +364,7 @@ def run_job(args):
     require(output(['git', 'rev-parse', 'HEAD']) == args.commit, 'checkout differs from candidate commit')
     require(source_digest(root) == args.source, 'source digest mismatch')
     go_version = output(['go', 'version'])
-    require(go_version == 'go version go1.26.7 ' + native.replace('-', '/'), 'native pinned Go1.26.7 required')
+    require(go_version == 'go version go1.26.9 ' + native.replace('-', '/'), 'native pinned Go1.26.9 required')
     require(not scratch.exists(), 'scratch directory already exists')
     # tcpdump may drop to its dedicated user while recording synthetic raw
     # traffic. Keep scratch traversable; CLI reports remain private at 0600.

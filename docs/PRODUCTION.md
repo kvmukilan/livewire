@@ -192,8 +192,8 @@ Build the final versioned packages before qualification, then record results aga
 those exact bytes. The builder refuses an existing version directory; use a
 fresh `-OutputRoot` for reproducibility checks. It validates the source version
 before creating an output directory and never deletes a previous release.
-Run `GOTOOLCHAIN=go1.26.7` with the existing release builder (on PowerShell, set
-`$env:GOTOOLCHAIN='go1.26.7'` first).
+Run `GOTOOLCHAIN=go1.26.9` with the existing release builder (on PowerShell, set
+`$env:GOTOOLCHAIN='go1.26.9'` first).
 After the declared profile's gates pass, tag/publish the tested version using the existing
 release workflow. Do not rename an RC and assume different binaries were tested.
 
@@ -204,3 +204,16 @@ are not guaranteed in older versions. Returning to 0.8 reintroduces known replay
 regressions and lacks candidate fixes; it is a troubleshooting comparison, not a
 security recommendation. Preserve immutable artifacts and publish fixes as new
 patch versions rather than replacing existing downloads.
+
+
+## Website deployment checks
+
+PR CI now builds and runs the browser, accessibility, link, and responsive checks for both `/` and the production `/livewire/` base path. Changes to the Pages workflow also trigger these checks. Playwright launches a foreground preview process even when Astro detects a coding agent, so the test runner owns its lifetime.
+
+Locally, run `PUBLIC_SITE_URL=https://kvmukilan.github.io PUBLIC_BASE_PATH=/livewire/ npm run build` and the same environment with `npm test` from `website/`. Run `npx playwright install chromium` first.
+
+The Pages workflow accepts deployment only from main, including manual dispatch, and publishes the exact verified static output. Inspect the published site and retain the previous Pages deployment for rollback. These changes preserve the existing binary release and field-qualification gates; no release qualification is claimed by website tests.
+
+## Go maintenance toolchain
+
+Build new release artifacts and qualification exports with Go 1.26.9. The previous 1.26.7 compiler is affected by nine reachable standard-library vulnerabilities identified by govulncheck. CI, the release builder and native qualification exporter now agree on 1.26.9; vulnerability checks remain mandatory. Retain historical release records unchanged, and generate new source/binary hashes and evidence for a new candidate before publication. This change does not qualify or republish previous artifacts.
