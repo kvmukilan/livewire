@@ -45,3 +45,9 @@ dist/*
 dist/v*/*
 !dist/v*/SHA256SUMS
 !dist/v*/*.cdx.json
+
+# The example capture is deliberately tracked; the blanket *.pcap rule above is
+# there so nobody commits a real one by accident.
+!examples/*.pcap
+# Replay writes its report next to the capture, so running the example leaves one.
+examples/*.report.json
