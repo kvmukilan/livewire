@@ -152,3 +152,7 @@ explicit 1.1 migration described above.
 | [CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) | building, testing, and releasing from source |
 
 Livewire is licensed under the [MIT License](LICENSE).
+
+## Deployment readiness
+
+See [deployment setup, checks, and rollback](docs/PRODUCTION.md).
