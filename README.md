@@ -6,6 +6,17 @@ field problems on SCADA and
 industrial equipment (Modbus, DNP3) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
 FTPS, TLS, SSH, and ordinary TCP, UDP, and ICMP.
 
+![livewire replaying a captured Modbus session against a live device](docs/assets/livewire-replay-short.gif)
+
+Replayed against a device still in its recorded state, that reports
+`matched=true`. Against one whose setpoint register has since changed, it says so
+and names the values that differ:
+
+![livewire reporting a response-data difference after the device drifted](docs/assets/livewire-replay-drift.gif)
+
+There is a capture and a small Modbus server in [examples/](examples/) if you want
+to run that yourself before pointing it at anything real.
+
 Support depends on the protocol variant and captured context. HTTP/2/3
 application replay, TLS client-certificate authentication (mTLS), MQTT enhanced
 authentication, and DNP3 Secure Authentication are unsupported. TLS application
@@ -141,3 +152,7 @@ explicit 1.1 migration described above.
 | [CONTRIBUTING.md](https://github.com/kvmukilan/livewire/blob/v1.0.1/CONTRIBUTING.md) | building, testing, and releasing from source |
 
 Livewire is licensed under the [MIT License](LICENSE).
+
+## Deployment readiness
+
+See [deployment setup, checks, and rollback](docs/PRODUCTION.md).
