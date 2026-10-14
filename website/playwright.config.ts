@@ -15,5 +15,7 @@ export default defineConfig({
   fullyParallel: true,
   workers: process.env.CI ? 2 : 4,
   use: { baseURL, browserName: 'chromium', trace: 'retain-on-failure' },
-  webServer: remoteURL ? undefined : { command: 'npm run preview -- --port 4321', url: baseURL, reuseExistingServer: false },
+  // Playwright owns this process. Astro's agent auto-backgrounding would exit
+  // the launcher before Playwright can observe or stop its server.
+  webServer: remoteURL ? undefined : { command: 'npm run preview -- --port 4321 --ignore-lock', url: baseURL, reuseExistingServer: false },
 });
