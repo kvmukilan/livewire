@@ -159,21 +159,6 @@ conservative byte-pattern guard can also reject a continuation that resembles
 authentication. Primary data-link control requests needing a link-state adapter
 are unsupported. Transport and wire modes do not add authentication support.
 
-IEC 60870-5-104 sessions, plain or inside TLS (IEC 62351-3), are replayed as
-the controlling station. Every I and S frame is sent with the live send and
-receive sequence numbers, because a controlled station closes a connection whose
-numbers do not follow its own traffic. Periodic, background-scan and spontaneous
-station data, station acknowledgements, link tests, and data a station still
-sends for an earlier connection's command are serviced live and recorded as
-outside captured-response comparison; received data is acknowledged at the
-standard window of eight frames. Only the responses to captured client frames
-are compared: type identification, cause of transmission, common address,
-object count and addresses are structural checks; lenient mode tolerates time
-tags and the originator address, strict mode compares every ASDU byte. Type
-identifications without a fixed object layout are compared as opaque ASDU
-bytes. Only U and S frames and interrogation, read and test commands restart
-automatically.
-
 FTP/FTPS renegotiates passive (`PASV`/`EPSV`) and active (`PORT`/`EPRT`) data
 connections and verifies transfer direction, byte count, and SHA-256. Accepted
 `PROT C`/`PROT P` replies determine each transfer's protection, including switches
@@ -197,8 +182,8 @@ MQTT identifiers, and rule-pack `copyFromLive` values even with verification off
 Comparison/correlation do not mutate state. Persistent framing retains split,
 coalesced, and partial following messages. Keyed replies can arrive out of order.
 Additional MQTT publishes are acknowledged while awaiting a captured response;
-additional HTTP informational, DNP3 unsolicited and IEC 104 station-originated
-replies are observed separately. These extra messages are explicitly recorded as outside
+additional HTTP informational and DNP3 unsolicited replies are observed
+separately. These extra messages are explicitly recorded as outside
 captured-response comparison.
 
 HTTP lenient comparison checks status and decoded body bytes (chunked, gzip,

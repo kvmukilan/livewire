@@ -135,12 +135,12 @@ historical results rather than a memory-leak guarantee for new builds.
 Validate the current release checkout with verified artifacts present:
 
 ```sh
-GOTOOLCHAIN=go1.26.9 go run ./scripts/qualify validate -version 1.2.1 -artifacts dist/v1.2.1 qualification/stable.json
+GOTOOLCHAIN=go1.26.9 go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/stable.json
 ```
 
 ## Repeat the software labs
 
-The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.2.1/.github/workflows/qualification.yml)
+The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.3.0/.github/workflows/qualification.yml)
 runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
 with the full candidate commit, reviewed source digest, version and frozen
 Windows/Linux amd64 executable hashes. It checks out that commit, builds with
@@ -166,16 +166,16 @@ $env:GOTOOLCHAIN = 'go1.26.9'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
-./coverage/replaylab.exe -binary ./dist/v1.2.1/livewire-1.2.1-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab.exe -binary ./dist/v1.3.0/livewire-1.3.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 Linux shell:
 
 ```sh
 mkdir -p coverage
-chmod +x dist/v1.2.1/livewire-1.2.1-linux-amd64
+chmod +x dist/v1.3.0/livewire-1.3.0-linux-amd64
 GOTOOLCHAIN=go1.26.9 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
-./coverage/replaylab -binary "$PWD/dist/v1.2.1/livewire-1.2.1-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab -binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 The packet harness requires root, Python 3, `iproute2`, `iptables`, `tcpdump`,
@@ -184,9 +184,9 @@ only its own interfaces/namespaces. Set `SOURCE_DIGEST` to the source digest
 from the exact release's reviewed manifest before running these commands:
 
 ```sh
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.1/livewire-1.2.1-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.2.1 --command live --duration 7200 --round-gap 20 --netem
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.1/livewire-1.2.1-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.2.1 --command reproduce --duration 7200 --round-gap 20
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.2.1/livewire-1.2.1-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.2.1 --command replay --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command live --duration 7200 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command reproduce --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command replay --duration 7200 --round-gap 20
 ```
 
 Application labs create private capture keys and credentials. Publish only

@@ -2,29 +2,11 @@
 
 All notable changes to Livewire are documented here.
 
-## [1.3.0-rc.2] - 2026-10-21
+## [1.3.0] - 2026-10-21
 
-Release candidate: replay every TLS session of a capture in one run.
-
-- `live` no longer stops at "capture contains more than one TLS session".
-  Selected TLS sessions to one server run in capture order on one fresh
-  connection each, sharing the embedded or `-keylog` secrets; each session's
-  secrets are matched by its own client random. The report lists every
-  session under `outcome.sessions` with its own status, and the console prints
-  one line per session before the overall result.
-- Sessions whose capture holds a client offer but no server handshake run as
-  a fresh TLS handshake only; sessions that cannot be prepared at all, for
-  example a lone server alert, are reported as skipped with the reason
-  instead of blocking the job. A job with no replayable session still fails
-  before any network use. TLS sessions to different servers remain blocked.
-- Add `-session port:<port>`, which selects every session on that port that
-  carries application data, so a mixed capture can be replayed for one
-  service without listing session IDs.
-
-## [1.3.0-rc.1] - 2026-10-21
-
-Release candidate: adds IEC 60870-5-104 application replay. Field qualification
-of this candidate remains pending; the 1.2.x evidence does not cover it.
+Add IEC 60870-5-104 application replay and replay every TLS session of a
+capture in one run. Qualified in the software-lab profile; see the
+[release audit](docs/RELEASE_AUDIT.md).
 
 - Add an `iec104` adapter for IEC 60870-5-104 controlling-station sessions on
   TCP port 2404 and inside TLS (IEC 62351-3, port 19998), with content
@@ -43,9 +25,24 @@ of this candidate remains pending; the 1.2.x evidence does not cover it.
   type identification, cause of transmission, common address, object count and
   addresses are structural; lenient mode tolerates time tags and the originator
   address, strict mode compares every ASDU byte. Sequence numbers are never
-  compared.
-- Report the adapter as `iec104` version 1 in replay reports; existing adapter
+  compared. The adapter reports as `iec104` version 1; existing adapter
   versions are unchanged.
+- `live` no longer stops at "capture contains more than one TLS session".
+  Selected TLS sessions to one server run in capture order on one fresh
+  connection each, sharing the embedded or `-keylog` secrets; each session's
+  secrets are matched by its own client random. The report lists every
+  session under `outcome.sessions`, and the console prints one line per
+  session before the overall result.
+- Sessions whose capture holds a client offer but no server handshake run as
+  a fresh TLS handshake only; sessions that cannot be prepared at all, for
+  example a lone server alert, are reported as skipped with the reason
+  instead of blocking the job. A job with no replayable session still fails
+  before any network use. TLS sessions to different servers remain blocked.
+- Add `-session port:<port>`, which selects every session on that port that
+  carries application data, so a mixed capture can be replayed for one
+  service without listing session IDs.
+- Published as release candidates 1.3.0-rc.1 and 1.3.0-rc.2 before
+  qualification; the stable build carries the same source.
 
 ## [1.2.1] - 2026-10-15
 
