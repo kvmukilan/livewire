@@ -2,6 +2,25 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.3.0-rc.2] - 2026-10-21
+
+Release candidate: replay every TLS session of a capture in one run.
+
+- `live` no longer stops at "capture contains more than one TLS session".
+  Selected TLS sessions to one server run in capture order on one fresh
+  connection each, sharing the embedded or `-keylog` secrets; each session's
+  secrets are matched by its own client random. The report lists every
+  session under `outcome.sessions` with its own status, and the console prints
+  one line per session before the overall result.
+- Sessions whose capture holds a client offer but no server handshake run as
+  a fresh TLS handshake only; sessions that cannot be prepared at all, for
+  example a lone server alert, are reported as skipped with the reason
+  instead of blocking the job. A job with no replayable session still fails
+  before any network use. TLS sessions to different servers remain blocked.
+- Add `-session port:<port>`, which selects every session on that port that
+  carries application data, so a mixed capture can be replayed for one
+  service without listing session IDs.
+
 ## [1.3.0-rc.1] - 2026-10-21
 
 Release candidate: adds IEC 60870-5-104 application replay. Field qualification

@@ -87,6 +87,21 @@ func Select(t *replay.Trace, ids []string, registry *replay.Registry) (*replay.T
 		known["raw-0"] = true
 	}
 	for _, id := range ids {
+		if port, ok := strings.CutPrefix(id, "port:"); ok {
+			matched := false
+			// Connection attempts without application data have nothing to
+			// replay and would only block the selection.
+			for _, s := range t.Sessions {
+				if (fmt.Sprint(s.Server.Port) == port || fmt.Sprint(s.Client.Port) == port) && hasPayload(s) {
+					selected[s.ID] = true
+					matched = true
+				}
+			}
+			if !matched {
+				return nil, fmt.Errorf("no session in this capture uses port %s; use check -details to list them", port)
+			}
+			continue
+		}
 		if !known[id] {
 			resolved, err := resolveFingerprint(id, byFingerprint)
 			if err != nil {
@@ -129,6 +144,15 @@ func Select(t *replay.Trace, ids []string, registry *replay.Registry) (*replay.T
 		exclude("raw-0", "", replay.TransportRaw, t.Raw)
 	}
 	return out, nil
+}
+
+func hasPayload(s *replay.Session) bool {
+	for _, e := range s.Events {
+		if len(e.Payload) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveFingerprint maps a session fingerprint, or a unique prefix of one,
@@ -220,7 +244,7 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			if e.Excluded {
 				continue
 			}
-			belongs := route.Session != nil && e.SessionID == route.Session.ID
+			belongs := route.Includes(e.SessionID)
 			if !belongs {
 				if route.Kind == FTP && NeedsKeyLog(route.Session) && len(opts.KeyLog) == 0 {
 					block("FTPS negotiation requires matching TLS secrets (embedded in PCAPNG or supplied with -keylog) to identify related data sessions before replay")
@@ -229,8 +253,14 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 				}
 				continue
 			}
+			routeSession := route.Session
+			for _, s := range route.All() {
+				if s.ID == e.SessionID {
+					routeSession = s
+				}
+			}
 			truncated := false
-			for _, event := range route.Session.Events {
+			for _, event := range routeSession.Events {
 				if event.Record != nil && event.Record.OrigLen > event.Record.CapLen {
 					truncated = true
 				}
@@ -252,7 +282,7 @@ func Inspect(records []*pcapio.Record, opts Options, registry *replay.Registry) 
 			e.Driver = string(route.Kind) + "-reterminate"
 			e.Adapter = e.Driver
 			if route.Kind == TLS && len(opts.KeyLog) == 0 {
-				client, _, err := replay.TCPPayloadStreams(route.Session)
+				client, _, err := replay.TCPPayloadStreams(routeSession)
 				if err == nil {
 					_, err = tlsreplay.ParseClientHello(client)
 				}

@@ -127,6 +127,9 @@ func Prepare(c Config) (*Prepared, error) {
 	if route.Kind == replayintent.SSH {
 		return prepareSSH(c)
 	}
+	if route.Kind == replayintent.TLS && len(route.Sessions) > 1 {
+		return prepareTLSSessions(c, host)
+	}
 	if route.Kind == replayintent.TLS && len(c.KeyLog) == 0 {
 		return prepareTLSHandshake(c, host)
 	}

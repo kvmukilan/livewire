@@ -58,6 +58,7 @@ type Outcome struct {
 	Differences                []replay.Difference            `json:"differences,omitempty"`
 	Commands                   []CommandEvidence              `json:"commands,omitempty"`
 	Transfers                  []ftpreplay.TransferResult     `json:"transfers,omitempty"`
+	Sessions                   []SessionOutcome               `json:"sessions,omitempty"`
 	Error                      string                         `json:"error,omitempty"`
 }
 

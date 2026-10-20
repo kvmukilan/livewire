@@ -22,8 +22,32 @@ const (
 type Route struct {
 	Kind    Kind
 	Session *replay.Session
-	Trace   *replay.Trace
-	Reason  string
+	// Sessions lists every TLS session the route executes, in capture order,
+	// when a capture holds more than one. Session is then the first of them.
+	Sessions []*replay.Session
+	Trace    *replay.Trace
+	Reason   string
+}
+
+// All returns the sessions this route executes.
+func (r Route) All() []*replay.Session {
+	if len(r.Sessions) > 0 {
+		return r.Sessions
+	}
+	if r.Session != nil {
+		return []*replay.Session{r.Session}
+	}
+	return nil
+}
+
+// Includes reports whether the route executes the session with this ID.
+func (r Route) Includes(id string) bool {
+	for _, s := range r.All() {
+		if s.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func IsTLS(s *replay.Session) bool {
@@ -101,7 +125,15 @@ func Detect(trace *replay.Trace, registry *replay.Registry) Route {
 		return Route{Kind: Opaque, Trace: trace, Reason: "capture contains more than one SSH session; isolate the intended exchange first so credentials and commands cannot be applied to the wrong device. No ciphertext was sent"}
 	}
 	if len(tlsSessions) > 1 {
-		return Route{Kind: Opaque, Trace: trace, Reason: "capture contains more than one TLS session; isolate the intended exchange first so key material is not applied by guesswork. No ciphertext was sent"}
+		// Several TLS exchanges to one server run in capture order as one
+		// job. Secrets match each session's own client random, never by
+		// guesswork. Different servers would need different targets.
+		for _, s := range tlsSessions[1:] {
+			if s.Server != tlsSessions[0].Server {
+				return Route{Kind: Opaque, Trace: trace, Reason: "capture contains TLS sessions to different servers; select the sessions for one target with --session <id> or --session port:<port>. No ciphertext was sent"}
+			}
+		}
+		return Route{Kind: TLS, Session: tlsSessions[0], Sessions: tlsSessions, Trace: trace}
 	}
 	if len(opaqueSessions) > 0 && len(sshSessions)+len(tlsSessions) > 0 {
 		return Route{Kind: Opaque, Trace: trace, Reason: "capture includes a recognized secure session and another opaque session with no safe driver. Isolate the intended exchange first; no ciphertext was sent"}

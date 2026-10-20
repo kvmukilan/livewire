@@ -38,7 +38,7 @@ exact flag to add.
 | HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, IEC 60870-5-104, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | UDP or ICMP | live datagram/echo driver with reply checking |
 | ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
-| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
+| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS; several TLS sessions to one server run in capture order, one fresh connection each |
 | TLS without secrets | fresh verified handshake from captured ClientHello metadata; application replay remains incomplete and unverified |
 | explicit or implicit FTPS with matching embedded secrets or `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |

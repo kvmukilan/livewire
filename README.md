@@ -116,6 +116,7 @@ When you need to be precise about what is replayed:
 livewire check issue.pcap -details                                        # list the sessions
 livewire live issue.pcap -session tcp-0 -dry-run   # preview, send nothing
 livewire live issue.pcap -session tcp-0 -t 192.168.1.50
+livewire live issue.pcap -session port:19998 -t 192.168.1.50 -keylog keys.log   # every TLS session of one service
 livewire live issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
 livewire compare issue.pcap issue.actual.pcap                             # where did it diverge
 ```
