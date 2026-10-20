@@ -10,11 +10,11 @@ func FuzzBuiltInDecoders(f *testing.F) {
 	for _, seed := range [][]byte{
 		[]byte("GET / HTTP/1.1\r\nHost: example\r\n\r\n"),
 		dnsQuery("example.com", 1), mqttConnect("client"),
-		{0, 1, 0, 0, 0, 6, 1, 3, 0, 0, 0, 1}, {0x05, 0x64},
+		{0, 1, 0, 0, 0, 6, 1, 3, 0, 0, 0, 1}, {0x05, 0x64}, {0x68, 0x04, 0x07, 0, 0, 0},
 	} {
 		f.Add(seed)
 	}
-	adapters := []replay.Adapter{HTTP{}, DNS{Transport: replay.TransportUDP}, DNS{Transport: replay.TransportTCP}, MQTT{}, Modbus{}, DNP3{}, TLS{}, SSH{}}
+	adapters := []replay.Adapter{HTTP{}, DNS{Transport: replay.TransportUDP}, DNS{Transport: replay.TransportTCP}, MQTT{}, Modbus{}, DNP3{}, IEC104{}, TLS{}, SSH{}}
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 1<<20 {
 			t.Skip()

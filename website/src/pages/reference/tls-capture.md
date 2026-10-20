@@ -23,7 +23,7 @@ and embeds the matching entries as PCAPNG TLSK Decryption Secrets Blocks. A
 successful recording leaves one capture, with no separate key-log file to manage.
 `live` then decrypts the recorded messages and executes them through a **fresh
 verified TLS connection**, including non-HTTP protocols such as Modbus, DNS/TCP,
-MQTT and DNP3. `reproduce` continues to send packets statelessly.
+MQTT, DNP3 and IEC 60870-5-104 (IEC 62351-3, usually port 19998). `reproduce` continues to send packets statelessly.
 
 The original application must cooperate by exporting its session keys:
 

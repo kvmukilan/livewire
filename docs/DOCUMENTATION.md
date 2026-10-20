@@ -834,6 +834,9 @@ missing identity check as a limitation.
   and client ID or credential substitution.
 - **Modbus/TCP and DNP3:** framing and transaction/sequence comparison. DNP3
   Secure Authentication needs a security-aware adapter.
+- **IEC 60870-5-104:** APCI framing, live send/receive sequence numbers,
+  acknowledgement of station data, and ASDU comparison of the responses to
+  captured client frames; spontaneous station data is observed, not compared.
 - **FTP/FTPS:** multiline control replies, pipelining, coordinated active/passive
   data connections, transfer digests, and fresh verified FTPS retermination.
 - **IPv6:** extension parsing, fragment classification/reassembly, NDP,

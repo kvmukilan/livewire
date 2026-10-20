@@ -2,6 +2,32 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.3.0-rc.1] - 2026-10-21
+
+Release candidate: adds IEC 60870-5-104 application replay. Field qualification
+of this candidate remains pending; the 1.2.x evidence does not cover it.
+
+- Add an `iec104` adapter for IEC 60870-5-104 controlling-station sessions on
+  TCP port 2404 and inside TLS (IEC 62351-3, port 19998), with content
+  detection on other ports. Captured secure 104 exchanges with matching secrets
+  previously fell back to opaque plaintext replay and stopped with
+  `reading server message N: unexpected EOF` or `context deadline exceeded`.
+- Send every I and S frame with the live connection's send and receive
+  sequence numbers instead of the captured ones, which a controlled station
+  rejects by closing the connection.
+- Service station-scheduled traffic live instead of expecting it byte-for-byte:
+  periodic, background-scan and spontaneous data, station acknowledgements,
+  TESTFR link tests, and data a station still sends for an earlier
+  connection's command. Received data is acknowledged at the standard window of
+  eight frames, except after STOPDT.
+- Compare only the responses to captured client frames: U-frame function,
+  type identification, cause of transmission, common address, object count and
+  addresses are structural; lenient mode tolerates time tags and the originator
+  address, strict mode compares every ASDU byte. Sequence numbers are never
+  compared.
+- Report the adapter as `iec104` version 1 in replay reports; existing adapter
+  versions are unchanged.
+
 ## [1.2.1] - 2026-10-15
 
 Maintenance release. Replay, capture and the command contract are unchanged

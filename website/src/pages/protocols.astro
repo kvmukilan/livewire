@@ -7,6 +7,7 @@ const rows = [
  ['DNS over TCP', 'Framed queries and response comparison', 'DNS over UDP uses a packet/datagram route and has different interface requirements.'],
  ['Modbus TCP / TLS', 'Transaction-aware application replay on fresh connections', 'TLS requires recoverable Modbus messages. Client-certificate authentication and full Modbus Security are not supported. Use a dedicated test device for state-changing operations.'],
  ['DNP3', 'Supported application exchanges and fragment confirmations', 'Unsupported object layouts and Secure Authentication stop with an explanation.'],
+ ['IEC 60870-5-104 / TLS', 'Controlling-station replay with live sequence numbers; responses to captured frames compared', 'Spontaneous, periodic and background station data is acknowledged and observed, not compared. Secure 104 needs matching TLS secrets; client certificates are not supported.'],
  ['MQTT 3.1.1 / 5', 'Fresh connect, identifier handling, maintenance', 'Keepalive handling is supported; enhanced authentication is not.'],
  ['FTP / FTPS', 'Coordinated control and data transfers', 'Secure control/data recovery requires matching keys and complete transfer evidence.'],
  ['TLS', 'Fresh verified handshake; application replay when secrets are available', 'Without secrets, application replay stays incomplete. Embedded TLSK or an explicit matching key log enables supported inner protocols.'],

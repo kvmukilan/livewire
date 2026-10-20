@@ -8,7 +8,7 @@ const BuiltInAdapterVersion = "3"
 // packs without mutating process-global state.
 func DefaultRegistry() *replay.Registry {
 	return replay.NewRegistry(
-		HTTP{}, DNS{Transport: replay.TransportUDP}, DNS{Transport: replay.TransportTCP}, MQTT{}, Modbus{}, DNP3{}, FTP{}, TLS{}, SSH{},
+		HTTP{}, DNS{Transport: replay.TransportUDP}, DNS{Transport: replay.TransportTCP}, MQTT{}, Modbus{}, DNP3{}, IEC104{}, FTP{}, TLS{}, SSH{},
 	)
 }
 
