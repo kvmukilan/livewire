@@ -1,0 +1,167 @@
+[
+  {
+    "package": "./cmd/livewire",
+    "tests": [
+      "TestGzipHTTPReplaysWithExplicitApplicationIntent",
+      "TestCLIReportUsesOriginalSnapshotDuringReplay",
+      "TestUnifiedLiveReterminatesVerifiedTLS",
+      "TestLiveTLSWithoutSecretsCompletesOnlyFreshHandshake",
+      "TestLiveTLSUsesEmbeddedSecretsWithoutExternalKeylog",
+      "TestLiveInTLSWithoutSecureFlagsUsesFreshSession",
+      "TestEmbeddedTLSSecretsFailClosedAndExplicitKeylogTakesPriority",
+      "TestReproduceAndReplaySendExactFramesWithUnverifiedReports",
+      "TestReproduceDoesNotOpenApplicationOrTLSConnections",
+      "TestReproduceRejectsApplicationFlagsBeforeCaptureOrNetwork",
+      "TestRSTDropReleasesGuardOnOutputFailure",
+      "TestRSTDropReleasesBeforeFinalOutput",
+      "TestProgressOutputFailureCancelsReplay"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "cmd-livewire.jsonl",
+      "sha256": "94ec1d7325a28859129727514b96a01f48b6f7814950c42c686b96a73a45679a"
+    }
+  },
+  {
+    "package": "./internal/webui",
+    "tests": [
+      "TestDashboardTLSCaptureHandshakeAndEmbeddedSecrets"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-webui.jsonl",
+      "sha256": "cbfe77a4cebc01e8cfc2bf6093d55e85c8537ee14c50f8baac6a3dc054e25142"
+    }
+  },
+  {
+    "package": "./internal/tlsreplay",
+    "tests": [
+      "TestHandshakeContextFreshVerifiedSessionWithoutApplication",
+      "TestHandshakeContextCancellationAndDeadlineCloseBlockedPeer"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-tlsreplay.jsonl",
+      "sha256": "44401c6e70c7912fbfc2513f663d6f2980046501c9bbcad30d0dc4c1bf4ddfbb"
+    }
+  },
+  {
+    "package": "./internal/secureexec",
+    "tests": [
+      "TestTLSKeySourcePrecedenceAndFailClosed",
+      "TestSSHPreparedReplayVerifiesPinnedPeerAndOutcome"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-secureexec.jsonl",
+      "sha256": "f751eebf9ee79237bfe331978a63d5b86d525c405720742471fb06674494df00"
+    }
+  },
+  {
+    "package": "./internal/qualification",
+    "tests": [
+      "TestLabTranscriptsRejectRehashedSuspendedExecutions",
+      "TestTLSHandshakeProofRequiresFreshConnectionWithoutApplicationClaims"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-qualification.jsonl",
+      "sha256": "8aadb050de18dea61ba4a41b3f523f1053cfc01ab5bef9af67da5b62e6e358ce"
+    }
+  },
+  {
+    "package": "./internal/replayintent",
+    "tests": [
+      "TestIntentPolicyAndPacketAccounting",
+      "TestInvalidOptionsAndTruncatedCapture"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-replayintent.jsonl",
+      "sha256": "d0b75b6755f4ad15649386f71d3aa7f5372c6d7ddec184747ea649f535e93a74"
+    }
+  },
+  {
+    "package": "./internal/pcapio",
+    "tests": [
+      "TestPCAPNGTLSSecretsBoundedAndPrivate",
+      "TestPCAPNGTLSSecretsRejectMalformedBlocks",
+      "TestPCAPNGTLSSecretsByteOrderAndSections"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-pcapio.jsonl",
+      "sha256": "49d40bf80a632c8e963a369bbda70e8bee51f9ebdc62067525cef21d98e0d8a4"
+    }
+  },
+  {
+    "package": "./internal/ftpreplay",
+    "tests": [
+      "TestPassiveFTPReplayCoordinatesDataAndCredentials",
+      "TestProtectedPassiveDataConnection",
+      "TestFTPCancellationReleasesBlockedControlRead",
+      "TestFTPDataReadCancellationAndDeadline"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-ftpreplay.jsonl",
+      "sha256": "042d1e8a0ed9dd29f8187c676d5dd57a5cf259517a4ec01a8291c662190a56ba"
+    }
+  },
+  {
+    "package": "./internal/sshreplay",
+    "tests": [
+      "TestSSHBoundsChannelOpenAfterSuccessfulHandshake"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-sshreplay.jsonl",
+      "sha256": "a7e063f9db21d0849a551012111d3d94d322918bdcb3a66a2f9a5bd759875fe2"
+    }
+  },
+  {
+    "package": "./internal/replay",
+    "tests": [
+      "TestRunUDPWithBackend",
+      "TestRunICMPEchoWithBackend"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-replay.jsonl",
+      "sha256": "1f88d80a95b2db8b8d576582273416362ed998b92671ddb69345d6a69d68844b"
+    }
+  },
+  {
+    "package": "./internal/livereplay",
+    "tests": [
+      "TestRunContextReleasesBackendAndGuardOnSuccessErrorAndCancellation"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-livereplay.jsonl",
+      "sha256": "730d93664eb82118c60cd17ba6ee15e76a78a4cf95bd24dad9377cd98a8f63d3"
+    }
+  },
+  {
+    "package": "./internal/securefile",
+    "tests": [
+      "TestWriteFileAtomicNeverReplacesExistingTarget"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-securefile.jsonl",
+      "sha256": "63f5ab7550376390247d0e509e9e0d25d83b9c244c7611c9d389a17ebfb72df5"
+    }
+  },
+  {
+    "package": "./internal/iterate",
+    "tests": [
+      "TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch"
+    ],
+    "passed": true,
+    "evidence": {
+      "path": "internal-iterate.jsonl",
+      "sha256": "fb975300664b117db50683c152120ee9d037427e4e9ec64cd78e187bc641054f"
+    }
+  }
+]

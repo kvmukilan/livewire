@@ -1,0 +1,15 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-count=1",
+    "./internal/runstate",
+    "./internal/replay"
+  ],
+  "started": "2026-10-20T21:36:49.540239Z",
+  "finished": "2026-10-20T21:36:56.430854Z",
+  "exitCode": 0,
+  "sourceDigest": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "sourceDigestAfter": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "platform": "windows-amd64"
+}

@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "compare-releases",
+    "-output",
+    "C:\\Users\\kvmuk\\AppData\\Local\\Temp\\claude\\c--Users-kvmuk-dev-livewire\\526b5835-2939-4e51-a7f1-147917a39945\\scratchpad\\windows-checks-work\\release-comparison"
+  ],
+  "started": "2026-10-20T21:37:06.137637Z",
+  "finished": "2026-10-20T21:37:31.889605Z",
+  "exitCode": 0,
+  "sourceDigest": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "sourceDigestAfter": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "platform": "windows-amd64"
+}

@@ -126,7 +126,8 @@ faults, recovery/cleanup, loader limits and published-version comparisons.
 Current completion evidence belongs in [RELEASE_AUDIT.md](RELEASE_AUDIT.md).
 The changed 1.2 source is not qualified by the prior version's passing runs.
 
-The [v1.2.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/README.md)
+The [v1.3.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/README.md)
+holds the five completed matrices for this release. The [v1.2.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/README.md)
 retains its five completed matrices. The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
 retains its seven completed matrices, and [v1.0.0](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
 retains its original six. Their additional single-process HTTP checks remain

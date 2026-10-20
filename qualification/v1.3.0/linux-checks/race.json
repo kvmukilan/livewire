@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "race"
+  ],
+  "started": "2026-10-20T20:50:09.927614Z",
+  "finished": "2026-10-20T20:50:52.913363Z",
+  "exitCode": 0,
+  "sourceDigest": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "sourceDigestAfter": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "platform": "linux-amd64"
+}

@@ -1,0 +1,54 @@
+{
+  "blockingFindings": [],
+  "profile": "software-lab",
+  "schemaVersion": 1,
+  "softwareLab": {
+    "checks": [
+      {
+        "path": "v1.2.0/windows-checks/checks.json",
+        "sha256": "fd653396910ddca3a63f50a843a1123841f41575b8d05dafe6373313d9d3adcf"
+      },
+      {
+        "path": "v1.2.0/linux-checks/checks.json",
+        "sha256": "c73e2fb4d18fd32956d3a4bf3db726adfd67ad78e9956b99d817c5a3fa9e6787"
+      }
+    ],
+    "humanPilotQualified": false,
+    "limitations": [
+      "Software-lab qualification only; no physical NIC/device or uncoached human-pilot qualification.",
+      "Windows application checks use independent loopback peers; Windows Npcap physical-driver fault behavior is unqualified.",
+      "Linux arm64 is cross-built and has no runtime qualification in this profile.",
+      "MQTT enhanced authentication, unsupported DNP3 authentication/object/link-control forms, HTTP/2 and HTTP/3 remain unsupported.",
+      "Fault observations and compared responses do not establish an industrial-device crash or other field fault without target-side evidence.",
+      "The five two-hour matrices run on GitHub-hosted native Windows/Linux workers; Linux packet peers use owned namespaces and virtual Ethernet. Hosted provenance and independent validation proofs are retained.",
+      "The tls-handshake case observes fresh verified TLS handshakes only. Captured application replay remains incomplete and no application response match is claimed without usable TLS secrets.",
+      "TLS client-certificate authentication and HTTP/2/3 application replay are outside the supported CLI scope.",
+      "Two-hour matrices cover the built-in cases; custom rule packs, IPv6 TCP/UDP and captured TLS 1.3 combinations have regression coverage, not additional two-hour matrix qualification."
+    ],
+    "physicalQualified": false,
+    "runs": [
+      {
+        "path": "v1.2.0/windows-live/report.json",
+        "sha256": "63bf7f6fb2794f730214a8265a8651757bbfca7129695685ce1b3d9f1824f662"
+      },
+      {
+        "path": "v1.2.0/linux-live/report.json",
+        "sha256": "77fd8a66583294ee7e7fbff0f8737d8d65a6d981be27473599ef64cae8972eb7"
+      },
+      {
+        "path": "v1.2.0/linux-packet/live.run.json",
+        "sha256": "a0a8208cb62b2c3d86366aad749f29e03f485235611adfa3527b6bd31af9e9a5"
+      },
+      {
+        "path": "v1.2.0/linux-stateless-reproduce/reproduce.run.json",
+        "sha256": "a1ce3addd5851a178a64d922a37defd7a688f0e8e776dfddeb53402f4a310dd3"
+      },
+      {
+        "path": "v1.2.0/linux-stateless-replay/replay.run.json",
+        "sha256": "9ae6db856345b6505e1b260a1f961fae57aaff45e3101769c48fe58bb3a5be3a"
+      }
+    ]
+  },
+  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
+  "version": "1.2.0"
+}

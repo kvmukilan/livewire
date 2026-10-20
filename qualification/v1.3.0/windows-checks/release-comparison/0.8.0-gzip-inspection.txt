@@ -1,0 +1,19 @@
+file format:     classic pcap
+link type(s):    Ethernet (5)
+timestamps:      microsecond resolution
+packets:         5
+capture length:  min 54, max 4243, avg 901 bytes
+time span:       2023-11-14T22:13:20Z -> 2023-11-14T22:13:20.004Z (4ms)
+network:         IPv4 5, IPv6 0, non-IP 0
+transport:       TCP 5, UDP 0, other 0
+tcp handshakes:  SYN 1, SYN-ACK 1, RST 0, FIN 0
+distinct flows:  1
+bad checksums:   IP 0, transport 0
+
+Automatic route: BLOCKED (a TCP session appears encrypted or opaque, but Livewire cannot identify a safe fresh-session driver. No ciphertext was sent; inspect with 'livewire check <capture> -details' or use explicit --wire only when raw injection is truly intended)
+Preflight: 100% replay confidence (5 packets, 1 session(s): 1 TCP, 0 UDP, 0 ICMP; 0 raw)
+  note:   client payloads are available for application-level replay and comparison
+
+Protocol coverage (functional profile):
+  session      proto   driver       fidelity     adapter          notes
+  tcp-0        tcp     semantic-tcp semantic     http/1           

@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "shuffle"
+  ],
+  "started": "2026-10-20T20:50:52.999596Z",
+  "finished": "2026-10-20T20:51:21.064775Z",
+  "exitCode": 0,
+  "sourceDigest": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "sourceDigestAfter": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "platform": "linux-amd64"
+}

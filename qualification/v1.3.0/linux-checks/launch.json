@@ -1,0 +1,14 @@
+{
+  "sourceDigest": "0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1",
+  "commit": "fd0202e5d1d1ae3bc83f4fc0b850fa0b4c5b8ef9",
+  "platform": "linux-amd64",
+  "started": "2026-10-20T20:48:37.036581Z",
+  "goEnvironment": {
+    "GOAMD64": "v1",
+    "GOARCH": "amd64",
+    "GOEXPERIMENT": "",
+    "GOFLAGS": "",
+    "GOOS": "linux"
+  },
+  "goVersion": "go version go1.26.9 linux/amd64"
+}
