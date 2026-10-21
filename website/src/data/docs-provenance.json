@@ -3,9 +3,9 @@
   "files": [
     {
       "source": "docs/SETUP.md",
-      "sourceSHA256": "9811a3f85af96ec48afc0816f89d9d1b15f95eb8b90e030d83bbdfcc03df1050",
+      "sourceSHA256": "096a0f8f275f98d146745b0f184f410b6b7131d50eda5d013a217cf5a824f44f",
       "output": "src/pages/reference/setup.md",
-      "generatedSHA256": "86dfc87c5930c58084cede99bd0581cb41d72f26c8969b146e33bd0fcef12172"
+      "generatedSHA256": "ddfba0e42dab0e4a11382397d6fee2a85c1b8dccf4ab15718345c66c3f3f85dc"
     },
     {
       "source": "docs/COMMANDS.md",
@@ -27,9 +27,9 @@
     },
     {
       "source": "docs/PRODUCTION.md",
-      "sourceSHA256": "bf9c762c8b640203720eaca4389795b6b0e48bbd702a7d4f7978f12e5ebf2422",
+      "sourceSHA256": "34cca7cb9c06a0a34333b10bf6bee2e9cf1be7896e32408c799758b8a97bd824",
       "output": "src/pages/reference/operations.md",
-      "generatedSHA256": "9d1ed2dad28854e007eab1bc8a5d1979a5082db378cea3b7bdc44f85347b2c97"
+      "generatedSHA256": "5a06ef9079129553567d2ee8e50d741a90c8f72efe4e6700f6c34108f1f7aa46"
     },
     {
       "source": "docs/TLS_CAPTURE_REPLAY.md",
