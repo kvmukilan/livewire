@@ -1,0 +1,8 @@
+{"Time":"2026-10-21T10:47:25.136152569+05:30","Action":"start","Package":"github.com/kvmukilan/livewire/internal/iterate"}
+{"Time":"2026-10-21T10:47:25.138627952+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/iterate","Test":"TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch"}
+{"Time":"2026-10-21T10:47:25.138660824+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/iterate","Test":"TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch","Output":"=== RUN   TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch\n"}
+{"Time":"2026-10-21T10:47:25.138686171+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/iterate","Test":"TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch","Output":"--- PASS: TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch (0.00s)\n"}
+{"Time":"2026-10-21T10:47:25.138689638+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/iterate","Test":"TestCancelledSummaryPreservesEvidenceWithoutClaimingOverallMatch","Elapsed":0}
+{"Time":"2026-10-21T10:47:25.138693024+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/iterate","Output":"PASS\n"}
+{"Time":"2026-10-21T10:47:25.139109445+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/iterate","Output":"ok  \tgithub.com/kvmukilan/livewire/internal/iterate\t0.003s\n"}
+{"Time":"2026-10-21T10:47:25.139134873+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/iterate","Elapsed":0.003}

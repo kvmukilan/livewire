@@ -35,10 +35,10 @@ exact flag to add.
 
 | Capture contains | Automatic route |
 |---|---|
-| HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
+| HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, IEC 60870-5-104, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | UDP or ICMP | live datagram/echo driver with reply checking |
 | ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
-| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
+| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS; several TLS sessions to one server run in capture order, one fresh connection each |
 | TLS without secrets | fresh verified handshake from captured ClientHello metadata; application replay remains incomplete and unverified |
 | explicit or implicit FTPS with matching embedded secrets or `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
@@ -117,8 +117,10 @@ MQTT 3.1.1/5 supports bidirectional QoS handshakes and keepalive servicing durin
 captured timing gaps; MQTT 5 applies negotiated limits and rebuilds topic aliases.
 DNP3 reassembles supported transport/application fragments, accepts changed live
 fragmentation, and generates required confirmations. Unknown DNP3 object layouts,
-unsupported link control, and secure authentication remain explicit limits. See
-the [protocol details](RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+unsupported link control, and secure authentication remain explicit limits.
+IEC 60870-5-104 (port 2404, or 19998 inside TLS) sends live sequence numbers,
+acknowledges station data, and compares only the responses to captured client
+frames. See the [protocol details](RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 `-strict`, `-profile`, `-set`, `-rules`, `-report`, `-actual-out`, and
 `-no-rst-guard` are available behind `-all-flags`.

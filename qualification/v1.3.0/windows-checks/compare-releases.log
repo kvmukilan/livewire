@@ -1,0 +1,70 @@
+$ gh release download v0.7.0 --repo kvmukilan/livewire --pattern livewire-0.7.0-windows-amd64.exe --dir C:\Users\kvmuk\AppData\Local\Temp\livewire-compare-683426558\v0.7.0
+$ gh release download v0.8.0 --repo kvmukilan/livewire --pattern livewire-0.8.0-windows-amd64.exe --dir C:\Users\kvmuk\AppData\Local\Temp\livewire-compare-683426558\v0.8.0
+$ go build -buildvcs=false -o C:\Users\kvmuk\AppData\Local\Temp\livewire-compare-683426558\livewire.exe ./cmd/livewire
+{
+  "0.7.0": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "f60fccb4189a5aff98cf5b29a5414d9d93b920cc047265489213cd6cef393887"
+    },
+    "gzip-replay": {
+      "exitCode": 0,
+      "outputSHA256": "135ec12f461ef494c58e7cccde2a453063b3aa095051fee2b1c405e87683532f"
+    },
+    "help": {
+      "exitCode": 2,
+      "outputSHA256": "58cef9bac79eebebffd3bf7e1ece43f2c6e96e0a8a1c8d1b683e26b679b63aff"
+    },
+    "localhostRequests": 1,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "b23308f00950bd1e0ab1ddbcab286e33c789046c567ab82ed1bcd5826a9788d2"
+    }
+  },
+  "0.8.0": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "6b990fa9ecef593e44371812e59d27ab563b840b58fc8b7d52c46efc94fb3092"
+    },
+    "gzip-replay": {
+      "exitCode": 1,
+      "outputSHA256": "10a353dc24b69320b1001163b14c2503a33357178c5a12d07857f85dbeb6b81a"
+    },
+    "help": {
+      "exitCode": 0,
+      "outputSHA256": "4da9aad82f51b09f09f6d59f3ce96a525f5de4d7b139eb1c9e52a046ea523711"
+    },
+    "localhostRequests": 0,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "c5ce8ac4de88c28a8e449cbd4d7d857a6ffe4e9722196edec03e686496d644bb"
+    }
+  },
+  "current": {
+    "gzip-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "6f571040c28d885fab591344c89d03ad5a2020f7595de7c189536a59b21895b9"
+    },
+    "gzip-replay": {
+      "exitCode": 0,
+      "outputSHA256": "7657327ca726fcf668b4dc57f1a7b46bcdfcc4f2b67eac64dd9f6e67928d3ece"
+    },
+    "help": {
+      "exitCode": 0,
+      "outputSHA256": "a6af1c1acd0d0e9337f90bf207e240a5876809ffab22ede575c9d39bbe1c5f6d"
+    },
+    "localhostRequests": 2,
+    "mixed-inspection": {
+      "exitCode": 0,
+      "outputSHA256": "411ddee8a13bc02297985d2b3a3e1d457bc3806234c678afd2e575959fff386f"
+    },
+    "selected-preview": {
+      "exitCode": 0,
+      "outputSHA256": "ed7c8e69b200cacf7698842055c329ce0beb1f9d5d47a640aa861b7fcfca8770"
+    },
+    "selected-replay": {
+      "exitCode": 0,
+      "outputSHA256": "d262f142a64e79458e3ddd97b1cc4676b649fea3d0d639503df51296d6b7712a"
+    }
+  }
+}

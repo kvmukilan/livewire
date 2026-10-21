@@ -2,6 +2,69 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.3.0] - 2026-10-21
+
+Add IEC 60870-5-104 application replay and replay every TLS session of a
+capture in one run. Qualified in the software-lab profile; see the
+[release audit](docs/RELEASE_AUDIT.md).
+
+- Add an `iec104` adapter for IEC 60870-5-104 controlling-station sessions on
+  TCP port 2404 and inside TLS (IEC 62351-3, port 19998), with content
+  detection on other ports. Captured secure 104 exchanges with matching secrets
+  previously fell back to opaque plaintext replay and stopped with
+  `reading server message N: unexpected EOF` or `context deadline exceeded`.
+- Send every I and S frame with the live connection's send and receive
+  sequence numbers instead of the captured ones, which a controlled station
+  rejects by closing the connection.
+- Service station-scheduled traffic live instead of expecting it byte-for-byte:
+  periodic, background-scan and spontaneous data, station acknowledgements,
+  TESTFR link tests, and data a station still sends for an earlier
+  connection's command. Received data is acknowledged at the standard window of
+  eight frames, except after STOPDT.
+- Compare only the responses to captured client frames: U-frame function,
+  type identification, cause of transmission, common address, object count and
+  addresses are structural; lenient mode tolerates time tags and the originator
+  address, strict mode compares every ASDU byte. Sequence numbers are never
+  compared. The adapter reports as `iec104` version 1; existing adapter
+  versions are unchanged.
+- `live` no longer stops at "capture contains more than one TLS session".
+  Selected TLS sessions to one server run in capture order on one fresh
+  connection each, sharing the embedded or `-keylog` secrets; each session's
+  secrets are matched by its own client random. The report lists every
+  session under `outcome.sessions`, and the console prints one line per
+  session before the overall result.
+- Sessions whose capture holds a client offer but no server handshake run as
+  a fresh TLS handshake only; sessions that cannot be prepared at all, for
+  example a lone server alert, are reported as skipped with the reason
+  instead of blocking the job. A job with no replayable session still fails
+  before any network use. TLS sessions to different servers remain blocked.
+- Add `-session port:<port>`, which selects every session on that port that
+  carries application data, so a mixed capture can be replayed for one
+  service without listing session IDs.
+- Build every release, CI and qualification job with Go 1.26.10, which fixes
+  the standard-library certificate verification vulnerability GO-2026-6809
+  reported by `govulncheck` against Go 1.26.9.
+- Published as release candidates 1.3.0-rc.1 and 1.3.0-rc.2 before
+  qualification; the stable build carries the same Livewire source on the
+  updated toolchain.
+
+## [1.2.1] - 2026-10-15
+
+Maintenance release. Replay, capture and the command contract are unchanged
+from 1.2.0; no Livewire Go source changed apart from the version string.
+
+- Build every release, CI and qualification job with Go 1.26.9, which fixes the
+  standard-library vulnerability GO-2026-6617 reported by `govulncheck`.
+- Update `golang.org/x/crypto` to 0.58.0, `golang.org/x/sys` to 0.49.0 and
+  `golang.org/x/term` to 0.47.0, and the pinned `actions/upload-artifact`
+  (7.0.2) and `actions/setup-node` (7.1.0) actions.
+- Add `CITATION.cff` so the repository can be cited.
+- Show a replay demo in the README and ship a small Modbus/TCP example capture
+  with a matching lab server under `examples/`.
+- Add winget and Scoop manifests under `packaging/`.
+- Check website deployment paths and publish GitHub Pages only from `main`.
+- Requalify the rebuilt binaries in the software-lab profile.
+
 ## [1.2.0] - 2026-10-01
 
 Record a supported application's TLS exchange and replay it from **one PCAPNG**:

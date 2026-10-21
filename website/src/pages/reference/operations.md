@@ -3,13 +3,13 @@ layout: "../../layouts/Reference.astro"
 title: "Operations reference"
 description: "Operational diagnostics, recovery, and qualification requirements."
 sourcePath: "docs/PRODUCTION.md"
-sourceRef: "v1.2.0"
+sourceRef: "v1.3.0"
 ---
 
 
 Livewire's supported use case is repeatable testing on an explicitly selected
 device and isolated network. The CLI is the primary interface. Version 1 has a
-separate [software-lab release profile](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md), using controlled
+separate [software-lab release profile](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/V1_QUALIFICATION.md), using controlled
 Windows/Linux protocol peers and Linux virtual packet networks. Physical
 NIC/device qualification and the human pilot remain pending. See the release's
 manifest for its completed evidence; historical RC results do not qualify a
@@ -133,7 +133,7 @@ captures and leave memory headroom. Reproduce measurements for the target host.
 
 The release workflow validates the profile declared by the manifest. Version 1
 uses `software-lab`, whose required protocol matrices and two-hour command soaks
-are described in [V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md). A lab manifest must
+are described in [V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/V1_QUALIFICATION.md). A lab manifest must
 explicitly keep physical and human-pilot qualification false. It cannot satisfy
 the field profile. The following procedure retains the full `physical` profile
 for later device qualification; an omitted profile also means `physical`.
@@ -143,7 +143,7 @@ go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.2.0 -artifacts dist/v1.2.0 qualification/physical-candidate.json
+go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -199,8 +199,8 @@ Build the final versioned packages before qualification, then record results aga
 those exact bytes. The builder refuses an existing version directory; use a
 fresh `-OutputRoot` for reproducibility checks. It validates the source version
 before creating an output directory and never deletes a previous release.
-Run `GOTOOLCHAIN=go1.26.7` with the existing release builder (on PowerShell, set
-`$env:GOTOOLCHAIN='go1.26.7'` first).
+Run `GOTOOLCHAIN=go1.26.10` with the existing release builder (on PowerShell, set
+`$env:GOTOOLCHAIN='go1.26.10'` first).
 After the declared profile's gates pass, tag/publish the tested version using the existing
 release workflow. Do not rename an RC and assume different binaries were tested.
 
@@ -211,3 +211,16 @@ are not guaranteed in older versions. Returning to 0.8 reintroduces known replay
 regressions and lacks candidate fixes; it is a troubleshooting comparison, not a
 security recommendation. Preserve immutable artifacts and publish fixes as new
 patch versions rather than replacing existing downloads.
+
+
+## Website deployment checks
+
+PR CI now builds and runs the browser, accessibility, link, and responsive checks for both `/` and the production `/livewire/` base path. Changes to the Pages workflow also trigger these checks. Playwright launches a foreground preview process even when Astro detects a coding agent, so the test runner owns its lifetime.
+
+Locally, run `PUBLIC_SITE_URL=https://kvmukilan.github.io PUBLIC_BASE_PATH=/livewire/ npm run build` and the same environment with `npm test` from `website/`. Run `npx playwright install chromium` first.
+
+The Pages workflow accepts deployment only from main, including manual dispatch, and publishes the exact verified static output. Inspect the published site and retain the previous Pages deployment for rollback. These changes preserve the existing binary release and field-qualification gates; no release qualification is claimed by website tests.
+
+## Go maintenance toolchain
+
+Build new release artifacts and qualification exports with Go 1.26.10. The previous 1.26.7 compiler is affected by nine reachable standard-library vulnerabilities identified by govulncheck. CI, the release builder and native qualification exporter now agree on 1.26.10; vulnerability checks remain mandatory. Retain historical release records unchanged, and generate new source/binary hashes and evidence for a new candidate before publication. This change does not qualify or republish previous artifacts.

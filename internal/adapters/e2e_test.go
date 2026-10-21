@@ -48,6 +48,7 @@ func TestBuiltInAdaptersCompleteControlledTCPTargets(t *testing.T) {
 		{"mqtt", MQTT{}, 1883, mqttConnect("e2e"), []byte{0x20, 0x02, 0, 0}},
 		{"modbus", Modbus{}, 502, modbusRequest, modbusResponse},
 		{"dnp3", DNP3{}, 20000, dnpFrame(4, 1, 0x01), dnpFrame(1, 4, 0x81)},
+		{"iec104", IEC104{}, 2404, dissect.IEC104UFrame(dissect.IEC104StartDTAct), dissect.IEC104UFrame(dissect.IEC104StartDTCon)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

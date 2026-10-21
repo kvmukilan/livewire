@@ -136,7 +136,7 @@ go run ./scripts/qualify corpus -output coverage/corpus-new
 go run ./scripts/qualify benchmark -output coverage/benchmark-new
 go run ./scripts/qualify init qualification/physical-candidate.json
 go run ./scripts/qualify record -output coverage/doctor-new -- livewire doctor -json
-go run ./scripts/qualify validate -version 1.2.0 -artifacts dist/v1.2.0 qualification/physical-candidate.json
+go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/physical-candidate.json
 ```
 
 Output directories/files must be new. The corpus generates synthetic fixtures
@@ -192,8 +192,8 @@ Build the final versioned packages before qualification, then record results aga
 those exact bytes. The builder refuses an existing version directory; use a
 fresh `-OutputRoot` for reproducibility checks. It validates the source version
 before creating an output directory and never deletes a previous release.
-Run `GOTOOLCHAIN=go1.26.9` with the existing release builder (on PowerShell, set
-`$env:GOTOOLCHAIN='go1.26.9'` first).
+Run `GOTOOLCHAIN=go1.26.10` with the existing release builder (on PowerShell, set
+`$env:GOTOOLCHAIN='go1.26.10'` first).
 After the declared profile's gates pass, tag/publish the tested version using the existing
 release workflow. Do not rename an RC and assume different binaries were tested.
 
@@ -216,4 +216,4 @@ The Pages workflow accepts deployment only from main, including manual dispatch,
 
 ## Go maintenance toolchain
 
-Build new release artifacts and qualification exports with Go 1.26.9. The previous 1.26.7 compiler is affected by nine reachable standard-library vulnerabilities identified by govulncheck. CI, the release builder and native qualification exporter now agree on 1.26.9; vulnerability checks remain mandatory. Retain historical release records unchanged, and generate new source/binary hashes and evidence for a new candidate before publication. This change does not qualify or republish previous artifacts.
+Build new release artifacts and qualification exports with Go 1.26.10. The previous 1.26.7 compiler is affected by nine reachable standard-library vulnerabilities identified by govulncheck. CI, the release builder and native qualification exporter now agree on 1.26.10; vulnerability checks remain mandatory. Retain historical release records unchanged, and generate new source/binary hashes and evidence for a new candidate before publication. This change does not qualify or republish previous artifacts.

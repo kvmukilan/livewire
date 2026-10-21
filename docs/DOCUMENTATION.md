@@ -104,8 +104,8 @@ offline plan inspection, custom output paths, and advanced fidelity profiles.
 
 ### 2.1 Install the runtime requirements
 
-1. Install Go 1.26.9 or newer if you are building from source. Release
-   artifacts use the exact Go 1.26.9 maintenance toolchain. Use the official
+1. Install Go 1.26.10 or newer if you are building from source. Release
+   artifacts use the exact Go 1.26.10 maintenance toolchain. Use the official
    [Go installer](https://go.dev/doc/install).
 2. Install [Npcap](https://npcap.com/). Select **Install Npcap in WinPcap
    API-compatible Mode**. Npcap provides capture, frame injection, ARP, and NDP.
@@ -273,7 +273,7 @@ sudo apt-get update
 sudo apt-get install -y git iproute2 iptables ca-certificates
 ```
 
-Install Go 1.26.9 or newer from the official [Go installation
+Install Go 1.26.10 or newer from the official [Go installation
 guide](https://go.dev/doc/install), then start in the Livewire source directory:
 
 ```bash
@@ -834,6 +834,9 @@ missing identity check as a limitation.
   and client ID or credential substitution.
 - **Modbus/TCP and DNP3:** framing and transaction/sequence comparison. DNP3
   Secure Authentication needs a security-aware adapter.
+- **IEC 60870-5-104:** APCI framing, live send/receive sequence numbers,
+  acknowledgement of station data, and ASDU comparison of the responses to
+  captured client frames; spontaneous station data is observed, not compared.
 - **FTP/FTPS:** multiline control replies, pipelining, coordinated active/passive
   data connections, transfer digests, and fresh verified FTPS retermination.
 - **IPv6:** extension parsing, fragment classification/reassembly, NDP,
@@ -1114,11 +1117,11 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o livewire-windows-amd64.exe .
 Windows ZIP, and writes SHA-256 checksums into `dist/v<version>/`:
 
 ```powershell
-$env:GOTOOLCHAIN='go1.26.9'
+$env:GOTOOLCHAIN='go1.26.10'
 ./scripts/release.ps1 -Version <x.y.z>
 ```
 
-It refuses to build unless the toolchain is exactly Go 1.26.9 and
+It refuses to build unless the toolchain is exactly Go 1.26.10 and
 `go run ./cmd/livewire version` reports the requested version. Version data is
 centralized in `internal/buildinfo`. Inputs are sorted, VCS metadata is disabled,
 paths are trimmed, ZIP timestamps are fixed, and the script emits a deterministic

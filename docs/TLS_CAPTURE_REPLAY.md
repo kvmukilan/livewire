@@ -16,7 +16,7 @@ and embeds the matching entries as PCAPNG TLSK Decryption Secrets Blocks. A
 successful recording leaves one capture, with no separate key-log file to manage.
 `live` then decrypts the recorded messages and executes them through a **fresh
 verified TLS connection**, including non-HTTP protocols such as Modbus, DNS/TCP,
-MQTT and DNP3. `reproduce` continues to send packets statelessly.
+MQTT, DNP3 and IEC 60870-5-104 (IEC 62351-3, usually port 19998). `reproduce` continues to send packets statelessly.
 
 The original application must cooperate by exporting its session keys:
 
@@ -128,6 +128,19 @@ exchange from a mixed capture uses `-session <id>`, as shown by `check -details`
 ```sh
 livewire live issue.pcap -t 192.0.2.20:443 -ca device-ca.pem -n 5 -gap 1s
 livewire live issue.pcap -t device.example:443 -keylog session.keys
+```
+
+A capture with several TLS sessions to the same server replays them all in
+capture order, each on its own fresh connection, sharing the embedded or
+`-keylog` secrets; each session's secrets are matched by its own client random.
+`-session port:<port>` selects every data-bearing session of one service in a
+mixed capture, and the report lists each session's own result under
+`outcome.sessions`. Sessions whose capture holds no server handshake run as a
+fresh handshake only; sessions that cannot be prepared are reported as skipped.
+TLS sessions to different servers remain blocked.
+
+```sh
+livewire live issue.pcap -t device.example:19998 -keylog session.keys -session port:19998
 ```
 
 For Modbus/TCP carried over TLS, a PCAPNG with matching embedded secrets needs

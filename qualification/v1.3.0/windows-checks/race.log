@@ -1,0 +1,43 @@
+==> race
+$ go test -race -count=1 ./...
+ok  	github.com/kvmukilan/livewire/cmd/livewire	23.252s
+ok  	github.com/kvmukilan/livewire/internal/adapters	2.259s
+ok  	github.com/kvmukilan/livewire/internal/backend	1.606s
+?   	github.com/kvmukilan/livewire/internal/buildinfo	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/compare	2.306s
+ok  	github.com/kvmukilan/livewire/internal/dissect	1.700s
+ok  	github.com/kvmukilan/livewire/internal/edit	1.531s
+ok  	github.com/kvmukilan/livewire/internal/engine	1.574s
+ok  	github.com/kvmukilan/livewire/internal/evidence	1.518s
+?   	github.com/kvmukilan/livewire/internal/flow	[no test files]
+ok  	github.com/kvmukilan/livewire/internal/ftpreplay	3.282s
+ok  	github.com/kvmukilan/livewire/internal/hoststack	1.419s
+ok  	github.com/kvmukilan/livewire/internal/ipreasm	1.502s
+ok  	github.com/kvmukilan/livewire/internal/iterate	1.490s
+ok  	github.com/kvmukilan/livewire/internal/lab	2.573s
+ok  	github.com/kvmukilan/livewire/internal/livereplay	1.424s
+ok  	github.com/kvmukilan/livewire/internal/orchestration	1.511s
+ok  	github.com/kvmukilan/livewire/internal/pcapio	1.559s
+ok  	github.com/kvmukilan/livewire/internal/planexec	2.193s
+ok  	github.com/kvmukilan/livewire/internal/qualification	194.619s
+ok  	github.com/kvmukilan/livewire/internal/recording	4.450s
+ok  	github.com/kvmukilan/livewire/internal/replay	5.182s
+ok  	github.com/kvmukilan/livewire/internal/replayintent	1.636s
+ok  	github.com/kvmukilan/livewire/internal/replaylab	13.582s
+ok  	github.com/kvmukilan/livewire/internal/runstate	2.149s
+ok  	github.com/kvmukilan/livewire/internal/runvars	1.434s
+ok  	github.com/kvmukilan/livewire/internal/secureexec	2.070s
+ok  	github.com/kvmukilan/livewire/internal/securefile	1.468s
+ok  	github.com/kvmukilan/livewire/internal/sshreplay	2.777s
+ok  	github.com/kvmukilan/livewire/internal/stateless	1.394s
+ok  	github.com/kvmukilan/livewire/internal/supportbundle	1.898s
+ok  	github.com/kvmukilan/livewire/internal/tlsreplay	5.084s
+ok  	github.com/kvmukilan/livewire/internal/tui	1.677s
+ok  	github.com/kvmukilan/livewire/internal/units	1.735s
+ok  	github.com/kvmukilan/livewire/internal/webui	3.901s
+ok  	github.com/kvmukilan/livewire/internal/wire	1.605s
+?   	github.com/kvmukilan/livewire/scripts/qualify	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/replaylab	[no test files]
+?   	github.com/kvmukilan/livewire/scripts/task	[no test files]
+?   	github.com/kvmukilan/livewire/test/echoserver	[no test files]
+==> race ok (3m39.305s)

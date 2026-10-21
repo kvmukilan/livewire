@@ -447,6 +447,17 @@ func runProtocolAttempts(kind protocolKind, opts orchestratorOptions) error {
 			path := protocolAttemptReportPath(opts.report, attempt, opts.times)
 			publicationErr = report.write(path)
 			runErr = errors.Join(runErr, publicationErr)
+			for _, s := range outcome.Sessions {
+				line := iterate.ClassifyVerified(s.Completed, s.Verified, s.Matched, false).Plain()
+				if s.Skipped != "" {
+					line = "skipped: " + s.Skipped
+				} else if s.Adapter == "tls-handshake" {
+					line = "fresh TLS handshake only"
+				} else if s.Error != "" {
+					line += " (" + s.Error + ")"
+				}
+				fmt.Printf("  %s: %s\n", s.SessionID, line)
+			}
 			fmt.Printf("RESULT: %s\n", iterate.ClassifyVerified(outcome.Completed, outcome.Verified, outcome.Matched, false).Plain())
 			if publicationErr == nil {
 				fmt.Printf("Report: %s\n", path)

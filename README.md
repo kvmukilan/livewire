@@ -3,7 +3,7 @@
 Livewire replays a recorded network exchange against a live device and reports
 whether the checked responses match the capture. It is built for reproducing
 field problems on SCADA and
-industrial equipment (Modbus, DNP3) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
+industrial equipment (Modbus, DNP3, IEC 60870-5-104) and also handles HTTP/1, DNS, MQTT 3.1.1/5, FTP and
 FTPS, TLS, SSH, and ordinary TCP, UDP, and ICMP.
 
 ![livewire replaying a captured Modbus session against a live device](docs/assets/livewire-replay-short.gif)
@@ -46,8 +46,8 @@ Copy-paste steps for a fresh Windows or Linux machine are in
 - **Linux**: download the `linux-amd64` or `linux-arm64` binary, make it
   executable, and run it with `sudo` or grant it `cap_net_raw,cap_net_admin`.
 
-Socket-based application replays (HTTP, DNS/TCP, MQTT, Modbus, DNP3, TLS, FTP,
-and SSH) need no packet driver and no elevation. They create fresh connections;
+Socket-based application replays (HTTP, DNS/TCP, MQTT, Modbus, DNP3, IEC 104,
+TLS, FTP, and SSH) need no packet driver and no elevation. They create fresh connections;
 captured TCP state and TLS ciphertext are not reused as a live session.
 
 ## Use
@@ -87,7 +87,8 @@ livewire live issue.pcapng -t device.example:1502
 The application must support TLS session-key export. Livewire supplies a private
 `SSLKEYLOGFILE`, embeds only secrets matching recorded handshakes, and removes
 the temporary key log. The resulting **single PCAPNG** supports fresh TLS
-application replay through the existing adapters, including Modbus; no separate
+application replay through the existing adapters, including Modbus and IEC 104;
+no separate
 key-log file or HTTP request file is needed. See the
 [recording guide](docs/TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
 for client compatibility and recording limits. Treat this PCAPNG as a credential.
@@ -115,6 +116,7 @@ When you need to be precise about what is replayed:
 livewire check issue.pcap -details                                        # list the sessions
 livewire live issue.pcap -session tcp-0 -dry-run   # preview, send nothing
 livewire live issue.pcap -session tcp-0 -t 192.168.1.50
+livewire live issue.pcap -session port:19998 -t 192.168.1.50 -keylog keys.log   # every TLS session of one service
 livewire live issue.pcap -t 192.168.1.50 -n 5                        # intermittent faults
 livewire compare issue.pcap issue.actual.pcap                             # where did it diverge
 ```
@@ -128,8 +130,9 @@ responses alone does not prove that the original device fault recurred.
 To check a response timeout explicitly, use
 `livewire live issue.pcap -t 192.168.1.50 -response-timeout 5s -expect-fault timeout`.
 This applies to TCP/TLS application replay and records the fault separately from
-response equivalence. MQTT keepalives and DNP3 fragment confirmations are serviced
-during replay; unsupported authentication and DNP3 object layouts stop with an
+response equivalence. MQTT keepalives, DNP3 fragment confirmations, and IEC 104
+sequence numbers, acknowledgements and spontaneous data are serviced during
+replay; unsupported authentication and DNP3 object layouts stop with an
 explanation. See the [reliability guide](docs/RELIABILITY_IMPLEMENTATION.md) for
 protocol limits and recovery rules. Historical command names and other flag
 aliases remain available; application-style `reproduce` calls require the

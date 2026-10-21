@@ -1,0 +1,14 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/task",
+    "corpus"
+  ],
+  "started": "2026-10-21T06:02:45.670408Z",
+  "finished": "2026-10-21T06:03:34.415989Z",
+  "exitCode": 0,
+  "sourceDigest": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718",
+  "sourceDigestAfter": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718",
+  "platform": "windows-amd64"
+}

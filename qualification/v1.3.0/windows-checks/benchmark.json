@@ -1,0 +1,16 @@
+{
+  "command": [
+    "go",
+    "run",
+    "./scripts/qualify",
+    "benchmark",
+    "-output",
+    "C:\\Users\\kvmuk\\AppData\\Local\\Temp\\claude\\c--Users-kvmuk-dev-livewire\\526b5835-2939-4e51-a7f1-147917a39945\\scratchpad\\windows-checks3-work\\benchmark"
+  ],
+  "started": "2026-10-21T06:03:59.505312Z",
+  "finished": "2026-10-21T06:04:06.604127Z",
+  "exitCode": 0,
+  "sourceDigest": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718",
+  "sourceDigestAfter": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718",
+  "platform": "windows-amd64"
+}

@@ -1,0 +1,60 @@
+{
+  "case": "10MiB",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "10MiB.metrics.json",
+      "sha256": "28d83bd9e61c99a7a5256c19fc2cd56d5c13aedab788ce9eb6886d9fae1efd2b"
+    }
+  ]
+}
+{
+  "case": "100MiB",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "100MiB.metrics.json",
+      "sha256": "97ee08cc92fa2c82f3deda949a818ea9b7be53cd466575678238ae85d17e98b3"
+    }
+  ]
+}
+{
+  "case": "512MiB",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "512MiB.metrics.json",
+      "sha256": "d2ef19267b73ef92846a317412308ee275f4ae9744056d8b1c8c2c84474d32d0"
+    }
+  ]
+}
+{
+  "case": "513MiB-limit",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "513MiB-limit.metrics.json",
+      "sha256": "0ab5cdb1a3460dfa4542608df62e29b3943332ba1d1d0cf6629e10514369b2c2"
+    }
+  ]
+}
+{
+  "case": "1000000-records",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "1000000-records.metrics.json",
+      "sha256": "8138651afd282b5ca7253d931503677873c41da02e0aff493ac7649e4662fa3d"
+    }
+  ]
+}
+{
+  "case": "1000001-records-limit",
+  "passed": true,
+  "evidence": [
+    {
+      "path": "1000001-records-limit.metrics.json",
+      "sha256": "8611e9a9e3f78c553690821bed362c1ca3da903fb7b5857d163bd3b693c6512f"
+    }
+  ]
+}
