@@ -1,8 +1,8 @@
 # Livewire v1.3.0 release audit
 
-Qualification record prepared 2026-10-21 for candidate `fd0202e5d1d1ae3bc83f4fc0b850fa0b4c5b8ef9` and executable source digest `0f5645de5168c07e698244f63155755e3aff0512cff7a975a88c024833d7a4c1`.
+Qualification record prepared 2026-10-21 for candidate `1694e5a5110386f73fb5592d6d46d6ebe9ac55f5` and executable source digest `a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718`.
 
-Five completed [hosted qualification jobs](https://github.com/kvmukilan/livewire/actions/runs/39494894674) cover **43 platform/suite/command/case combinations**, **14,874 CLI processes** and **44,622 repetitions**. Each case spans at least two hours, with zero recorded failures and verified owned-resource cleanup.
+Five completed [hosted qualification jobs](https://github.com/kvmukilan/livewire/actions/runs/39543811481) cover **43 platform/suite/command/case combinations**, **14,837 CLI processes** and **44,511 repetitions**. Each case spans at least two hours, with zero recorded failures and verified owned-resource cleanup.
 
 The [complete evidence index](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/README.md) contains exact times, case spans, counters and binary/report hashes.
 
@@ -22,7 +22,7 @@ Matching embedded or explicitly supplied secrets allow supported captured plaint
 
 ## Native and CI checks
 
-Native Windows and Linux gates passed build, vet, tests, dashboard, Python tests, lint/security, race, shuffle, fuzz, coverage, corpus, protocol-fault, recovery/cleanup and the loader benchmark cases. Windows also passed the published-version comparison. Each native corpus run checked 35 maintained cases. Aggregate coverage was Windows 69.7% and Linux 69.8%. Bound public-safe records are in [Windows checks](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/windows-checks/checks.json) and [Linux checks](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/linux-checks/checks.json). The Linux checks ran on a native Linux kernel under WSL2 with the same Go 1.26.10 toolchain.
+Native Windows and Linux gates passed build, vet, tests, dashboard, Python tests, lint/security, race, shuffle, fuzz, coverage, corpus, protocol-fault, recovery/cleanup and the loader benchmark cases. Windows also passed the published-version comparison. Each native corpus run checked 35 maintained cases. Aggregate coverage was Windows 69.7% and Linux 69.8%. Bound public-safe records are in [Windows checks](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/windows-checks/checks.json) and [Linux checks](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/linux-checks/checks.json). The Linux checks ran on a native Linux kernel under WSL2 with the same Go 1.26.10 toolchain. The release toolchain is Go 1.26.10, which fixes GO-2026-6809 in `crypto/x509`; an earlier Go 1.26.9 candidate was withdrawn before publication and requalified on the identical Livewire source.
 
 Release candidates 1.3.0-rc.1 and 1.3.0-rc.2 were published from the same adapter and routing source and passed the tag-triggered release workflow, including its compatibility, security, race, fuzz and coverage gates. These results do not substitute for CI on the final evidence/docs commit. Dashboard automated tests were rerun; no new manual dashboard visual test is claimed. Website publication and browser verification are separate from replay qualification.
 

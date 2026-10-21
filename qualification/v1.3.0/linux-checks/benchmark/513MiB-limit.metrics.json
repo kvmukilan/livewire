@@ -1,0 +1,21 @@
+{
+  "case": "513MiB-limit",
+  "decodedBytes": 537919488,
+  "error": "pcapio: capture limit exceeded: decoded packet data exceeds 536870912 bytes",
+  "expectedLimit": true,
+  "go": "go1.26.10",
+  "hostOS": "linux/amd64",
+  "loadSeconds": 0.444747422,
+  "logicalCPUs": 16,
+  "memoryMethod": "Go heap sampled every 10ms; runtime reservation is not process RSS",
+  "observedPeakRSSBytes": 613507072,
+  "passed": true,
+  "planSeconds": 0,
+  "platform": "linux/amd64",
+  "processor": "amd64",
+  "records": 525312,
+  "rssMethod": "Observed OS process high-water mark at 10ms intervals; excludes fixture file cache",
+  "runtimeReservedBytes": 621440408,
+  "sampledPeakHeapBytes": 584996560,
+  "sourceDigest": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718"
+}

@@ -1,0 +1,16 @@
+livewire 0.7.0 - protocol-adaptive traffic replay
+
+usage: livewire <command> [options]
+
+New here? To reproduce an issue we sent you, run:
+  livewire reproduce <capture.pcap>
+
+everyday commands:
+  reproduce   replay a capture against your device and say what happened
+  check       look at a capture: what's in it, and whether it can be replayed
+  capture     record traffic from a network connection into a file
+  ifaces      list your network connections
+  web         open the browser dashboard
+
+run 'livewire help <command>' for one command's options,
+or 'livewire help --all' for the advanced commands.

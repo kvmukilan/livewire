@@ -5,12 +5,12 @@
   "softwareLab": {
     "checks": [
       {
-        "path": "v1.2.0/windows-checks/checks.json",
-        "sha256": "fd653396910ddca3a63f50a843a1123841f41575b8d05dafe6373313d9d3adcf"
+        "path": "v1.3.0/windows-checks/checks.json",
+        "sha256": "d11a791ca74deb8a4442ae6a4af45940bb4c6c1ca3fbe58feb16e6de7f8a6fed"
       },
       {
-        "path": "v1.2.0/linux-checks/checks.json",
-        "sha256": "c73e2fb4d18fd32956d3a4bf3db726adfd67ad78e9956b99d817c5a3fa9e6787"
+        "path": "v1.3.0/linux-checks/checks.json",
+        "sha256": "84e64b125f2a8440b47a477aa8906e17998bc6d04bd68dec620173eac8eed946"
       }
     ],
     "humanPilotQualified": false,
@@ -23,32 +23,33 @@
       "The five two-hour matrices run on GitHub-hosted native Windows/Linux workers; Linux packet peers use owned namespaces and virtual Ethernet. Hosted provenance and independent validation proofs are retained.",
       "The tls-handshake case observes fresh verified TLS handshakes only. Captured application replay remains incomplete and no application response match is claimed without usable TLS secrets.",
       "TLS client-certificate authentication and HTTP/2/3 application replay are outside the supported CLI scope.",
-      "Two-hour matrices cover the built-in cases; custom rule packs, IPv6 TCP/UDP and captured TLS 1.3 combinations have regression coverage, not additional two-hour matrix qualification."
+      "Two-hour matrices cover the built-in cases; custom rule packs, IPv6 TCP/UDP and captured TLS 1.3 combinations have regression coverage, not additional two-hour matrix qualification.",
+      "IEC 60870-5-104 replay, plain and inside TLS, and multi-session TLS replay are covered by regression tests, a controlled loopback outstation and operator replay of a field capture, not by an additional two-hour matrix case."
     ],
     "physicalQualified": false,
     "runs": [
       {
-        "path": "v1.2.0/windows-live/report.json",
-        "sha256": "63bf7f6fb2794f730214a8265a8651757bbfca7129695685ce1b3d9f1824f662"
+        "path": "v1.3.0/windows-live/report.json",
+        "sha256": "92e072dd7b5ed98ccf1ff9fe692953db479172d4100ebf0e725732d5b64e9b52"
       },
       {
-        "path": "v1.2.0/linux-live/report.json",
-        "sha256": "77fd8a66583294ee7e7fbff0f8737d8d65a6d981be27473599ef64cae8972eb7"
+        "path": "v1.3.0/linux-live/report.json",
+        "sha256": "5610c44be4ec3542053090ad52b4181311957d47a407117ba3e8b54d8500ba22"
       },
       {
-        "path": "v1.2.0/linux-packet/live.run.json",
-        "sha256": "a0a8208cb62b2c3d86366aad749f29e03f485235611adfa3527b6bd31af9e9a5"
+        "path": "v1.3.0/linux-packet/live.run.json",
+        "sha256": "83c7b92bdb71ea53432ef3a41f21c9910f038e95d24c423dcf810161415a0043"
       },
       {
-        "path": "v1.2.0/linux-stateless-reproduce/reproduce.run.json",
-        "sha256": "a1ce3addd5851a178a64d922a37defd7a688f0e8e776dfddeb53402f4a310dd3"
+        "path": "v1.3.0/linux-stateless-reproduce/reproduce.run.json",
+        "sha256": "f50b347c61bf39fb8ed5d0db8bc376c7a513ee7cf599192b64a2cd3385a3a906"
       },
       {
-        "path": "v1.2.0/linux-stateless-replay/replay.run.json",
-        "sha256": "9ae6db856345b6505e1b260a1f961fae57aaff45e3101769c48fe58bb3a5be3a"
+        "path": "v1.3.0/linux-stateless-replay/replay.run.json",
+        "sha256": "fd39d2f3c2b437c332edeb8ce965733a9b761faf6d2c2c219b5db7f26e1c8089"
       }
     ]
   },
-  "sourceDigest": "3a1102ebe8db6e159c216ead76248995d187c35933fa20b3bfb7a67d8ed09a82",
-  "version": "1.2.0"
+  "sourceDigest": "a5b66f960b3194308d71ed509a2965410ba915b97ff5e3d305a369cf78b2d718",
+  "version": "1.3.0"
 }
