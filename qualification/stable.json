@@ -6,7 +6,7 @@
     "checks": [
       {
         "path": "v1.3.0/windows-checks/checks.json",
-        "sha256": "d11a791ca74deb8a4442ae6a4af45940bb4c6c1ca3fbe58feb16e6de7f8a6fed"
+        "sha256": "ab1f25bd00c87e01e0acec52e0bf85b31a236e49e0f631a1afb8afe9fb87ec1a"
       },
       {
         "path": "v1.3.0/linux-checks/checks.json",
