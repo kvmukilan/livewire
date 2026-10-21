@@ -237,7 +237,7 @@ class ExportTests(unittest.TestCase):
             path = self.base/'scratch'/('livewire.exe' if os.name == 'nt' else 'livewire')
             path.write_bytes(b'different executable')
             return 0
-        with mock.patch.object(exporter.subprocess, 'check_output', side_effect=['c'*40, 'go version go1.26.9 '+native]), mock.patch.object(exporter, 'source_digest', return_value='a'*64), mock.patch.object(exporter, 'execute', side_effect=build) as execute:
+        with mock.patch.object(exporter.subprocess, 'check_output', side_effect=['c'*40, 'go version go1.26.10 '+native]), mock.patch.object(exporter, 'source_digest', return_value='a'*64), mock.patch.object(exporter, 'execute', side_effect=build) as execute:
             with self.assertRaisesRegex(ValueError, 'binary differs'):
                 exporter.run_job(self.job_args())
         self.assertEqual(execute.call_count, 1)

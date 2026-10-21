@@ -1,5 +1,0 @@
-libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
-tcpdump: listening on vsadd49dbb88, link-type EN10MB (Ethernet), snapshot length 262144 bytes
-52 packets captured
-52 packets received by filter
-0 packets dropped by kernel

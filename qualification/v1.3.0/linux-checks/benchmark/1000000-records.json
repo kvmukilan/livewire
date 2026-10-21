@@ -1,1 +1,0 @@
-{"decodedBytes":60000000,"error":"","expectedLimit":false,"go":"go1.26.9","loadSeconds":0.292678473,"memoryMethod":"Go heap sampled every 10ms; runtime reservation is not process RSS","passed":true,"planSeconds":1.284752517,"platform":"linux/amd64","records":1000000,"runtimeReservedBytes":955210232,"sampledPeakHeapBytes":692555920}

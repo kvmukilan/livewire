@@ -1,3 +1,0 @@
-==> build
-$ go build ./...
-==> build ok (9.599s)

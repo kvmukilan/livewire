@@ -1,8 +1,0 @@
-{"Time":"2026-10-21T02:24:41.081004699+05:30","Action":"start","Package":"github.com/kvmukilan/livewire/internal/securefile"}
-{"Time":"2026-10-21T02:24:41.084736859+05:30","Action":"run","Package":"github.com/kvmukilan/livewire/internal/securefile","Test":"TestWriteFileAtomicNeverReplacesExistingTarget"}
-{"Time":"2026-10-21T02:24:41.084804305+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/securefile","Test":"TestWriteFileAtomicNeverReplacesExistingTarget","Output":"=== RUN   TestWriteFileAtomicNeverReplacesExistingTarget\n"}
-{"Time":"2026-10-21T02:24:41.086537147+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/securefile","Test":"TestWriteFileAtomicNeverReplacesExistingTarget","Output":"--- PASS: TestWriteFileAtomicNeverReplacesExistingTarget (0.00s)\n"}
-{"Time":"2026-10-21T02:24:41.086588663+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/securefile","Test":"TestWriteFileAtomicNeverReplacesExistingTarget","Elapsed":0}
-{"Time":"2026-10-21T02:24:41.086600636+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/securefile","Output":"PASS\n"}
-{"Time":"2026-10-21T02:24:41.087351773+05:30","Action":"output","Package":"github.com/kvmukilan/livewire/internal/securefile","Output":"ok  \tgithub.com/kvmukilan/livewire/internal/securefile\t0.006s\n"}
-{"Time":"2026-10-21T02:24:41.087585021+05:30","Action":"pass","Package":"github.com/kvmukilan/livewire/internal/securefile","Elapsed":0.007}

@@ -136,7 +136,7 @@ historical results rather than a memory-leak guarantee for new builds.
 Validate the current release checkout with verified artifacts present:
 
 ```sh
-GOTOOLCHAIN=go1.26.9 go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/stable.json
+GOTOOLCHAIN=go1.26.10 go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/stable.json
 ```
 
 ## Repeat the software labs
@@ -145,7 +145,7 @@ The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v
 runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
 with the full candidate commit, reviewed source digest, version and frozen
 Windows/Linux amd64 executable hashes. It checks out that commit, builds with
-Go 1.26.9 using the release flags, and refuses a mismatched binary before running
+Go 1.26.10 using the release flags, and refuses a mismatched binary before running
 the lab. An independent Go transcript check must actually run and pass before
 the workflow exports qualifying evidence. Cancellation, continuity failures or
 cleanup failures produce diagnostics instead of a passing bundle.
@@ -163,7 +163,7 @@ receives cancellation. Omitting `-cases` runs every application case.
 Windows PowerShell:
 
 ```powershell
-$env:GOTOOLCHAIN = 'go1.26.9'
+$env:GOTOOLCHAIN = 'go1.26.10'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
@@ -175,7 +175,7 @@ Linux shell:
 ```sh
 mkdir -p coverage
 chmod +x dist/v1.3.0/livewire-1.3.0-linux-amd64
-GOTOOLCHAIN=go1.26.9 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
+GOTOOLCHAIN=go1.26.10 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
 ./coverage/replaylab -binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
 ```
 

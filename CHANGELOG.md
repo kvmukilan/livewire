@@ -41,8 +41,12 @@ capture in one run. Qualified in the software-lab profile; see the
 - Add `-session port:<port>`, which selects every session on that port that
   carries application data, so a mixed capture can be replayed for one
   service without listing session IDs.
+- Build every release, CI and qualification job with Go 1.26.10, which fixes
+  the standard-library certificate verification vulnerability GO-2026-6809
+  reported by `govulncheck` against Go 1.26.9.
 - Published as release candidates 1.3.0-rc.1 and 1.3.0-rc.2 before
-  qualification; the stable build carries the same source.
+  qualification; the stable build carries the same Livewire source on the
+  updated toolchain.
 
 ## [1.2.1] - 2026-10-15
 
