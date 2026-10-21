@@ -3,12 +3,12 @@ layout: "../../layouts/Reference.astro"
 title: "Command reference"
 description: "Flags, replay outcomes, and compatibility commands for the pinned release."
 sourcePath: "docs/COMMANDS.md"
-sourceRef: "v1.2.0"
+sourceRef: "v1.3.0"
 ---
 
 
 Every Livewire command, its options, and what its output means. The everyday
-workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.2.0/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/SETUP.md).
+workflow is in the [README](https://github.com/kvmukilan/livewire/blob/v1.3.0/README.md); install steps are in [SETUP.md](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/SETUP.md).
 
 This reference describes the 1.2.0 command contract. When using a 1.0.1 binary,
 use its
@@ -42,10 +42,10 @@ exact flag to add.
 
 | Capture contains | Automatic route |
 |---|---|
-| HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, FTP, or a rule-pack protocol | semantic adapter and response comparison |
+| HTTP/1, DNS, MQTT 3.1.1/5, Modbus, DNP3, IEC 60870-5-104, FTP, or a rule-pack protocol | semantic adapter and response comparison |
 | UDP or ICMP | live datagram/echo driver with reply checking |
 | ordinary TCP without an adapter | blocked by default; advanced `-mode auto` or `-exact-tcp` retains the packet driver |
-| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS |
+| TLS with matching embedded PCAPNG secrets or `-keylog` | decrypt captured records, detect the inner protocol, then open fresh certificate-verified TLS; several TLS sessions to one server run in capture order, one fresh connection each |
 | TLS without secrets | fresh verified handshake from captured ClientHello metadata; application replay remains incomplete and unverified |
 | explicit or implicit FTPS with matching embedded secrets or `-keylog` | FTP control/data coordinator with fresh verified TLS |
 | SSH | fresh SSH using explicit credentials, commands, and a required pinned host key |
@@ -104,7 +104,7 @@ Response verification distinguishes these outcomes:
 
 Run `livewire help reliability` for TCP mode selection and repeatable workflows.
 Durable resume cannot restore a socket or the target's application state. See
-[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
+[RELIABILITY_IMPLEMENTATION.md](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/RELIABILITY_IMPLEMENTATION.md) for recovery limits.
 
 To reproduce an expected timeout rather than require matching responses:
 
@@ -124,8 +124,10 @@ MQTT 3.1.1/5 supports bidirectional QoS handshakes and keepalive servicing durin
 captured timing gaps; MQTT 5 applies negotiated limits and rebuilds topic aliases.
 DNP3 reassembles supported transport/application fragments, accepts changed live
 fragmentation, and generates required confirmations. Unknown DNP3 object layouts,
-unsupported link control, and secure authentication remain explicit limits. See
-the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
+unsupported link control, and secure authentication remain explicit limits.
+IEC 60870-5-104 (port 2404, or 19998 inside TLS) sends live sequence numbers,
+acknowledges station data, and compares only the responses to captured client
+frames. See the [protocol details](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/RELIABILITY_IMPLEMENTATION.md#protocol-session-state).
 
 `-strict`, `-profile`, `-set`, `-rules`, `-report`, `-actual-out`, and
 `-no-rst-guard` are available behind `-all-flags`.
@@ -239,7 +241,7 @@ The launched application must support `SSLKEYLOGFILE` or an explicit TLS
 key-export integration. The capture becomes sensitive. Recording stops after
 the application exits; interruption or missing/malformed/unmatched keys returns
 nonzero and preserves an explicitly partial capture. See the
-[TLS recording guide](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
+[TLS recording guide](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/TLS_CAPTURE_REPLAY.md#record-tls-applications-into-one-file)
 for supported clients, process ownership, limits, permissions and recovery.
 
 ### `ifaces`

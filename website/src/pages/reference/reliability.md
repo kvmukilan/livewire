@@ -3,12 +3,12 @@ layout: "../../layouts/Reference.astro"
 title: "Reliability reference"
 description: "Replay state, supported protocols, durable progress, and verification boundaries."
 sourcePath: "docs/RELIABILITY_IMPLEMENTATION.md"
-sourceRef: "v1.2.0"
+sourceRef: "v1.3.0"
 ---
 
 
 This describes the 1.1 command contract and replay implementation. The
-[software-lab qualification profile](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md) defines release evidence;
+[software-lab qualification profile](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/V1_QUALIFICATION.md) defines release evidence;
 physical-device qualification remains separate. The
 [2026-09-29 reliability review](https://github.com/kvmukilan/livewire/blob/v1.0.0/docs/RELIABILITY_REVIEW_2026-09-29.md) is an earlier
 implementation snapshot; protocol behavior below includes subsequent fixes.
@@ -159,6 +159,21 @@ conservative byte-pattern guard can also reject a continuation that resembles
 authentication. Primary data-link control requests needing a link-state adapter
 are unsupported. Transport and wire modes do not add authentication support.
 
+IEC 60870-5-104 sessions, plain or inside TLS (IEC 62351-3), are replayed as
+the controlling station. Every I and S frame is sent with the live send and
+receive sequence numbers, because a controlled station closes a connection whose
+numbers do not follow its own traffic. Periodic, background-scan and spontaneous
+station data, station acknowledgements, link tests, and data a station still
+sends for an earlier connection's command are serviced live and recorded as
+outside captured-response comparison; received data is acknowledged at the
+standard window of eight frames. Only the responses to captured client frames
+are compared: type identification, cause of transmission, common address,
+object count and addresses are structural checks; lenient mode tolerates time
+tags and the originator address, strict mode compares every ASDU byte. Type
+identifications without a fixed object layout are compared as opaque ASDU
+bytes. Only U and S frames and interrogation, read and test commands restart
+automatically.
+
 FTP/FTPS renegotiates passive (`PASV`/`EPSV`) and active (`PORT`/`EPRT`) data
 connections and verifies transfer direction, byte count, and SHA-256. Accepted
 `PROT C`/`PROT P` replies determine each transfer's protection, including switches
@@ -182,8 +197,8 @@ MQTT identifiers, and rule-pack `copyFromLive` values even with verification off
 Comparison/correlation do not mutate state. Persistent framing retains split,
 coalesced, and partial following messages. Keyed replies can arrive out of order.
 Additional MQTT publishes are acknowledged while awaiting a captured response;
-additional HTTP informational and DNP3 unsolicited replies are observed
-separately. These extra messages are explicitly recorded as outside
+additional HTTP informational, DNP3 unsolicited and IEC 104 station-originated
+replies are observed separately. These extra messages are explicitly recorded as outside
 captured-response comparison.
 
 HTTP lenient comparison checks status and decoded body bytes (chunked, gzip,
@@ -222,7 +237,7 @@ application peers, Linux virtual packet networking, and successful stateful
 `live` and stateless `reproduce`/`replay` executions spanning two hours per
 required case. A smoke
 run or an in-progress soak does not satisfy that gate. See
-[V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.2.0/docs/V1_QUALIFICATION.md) for the exact scope and final evidence.
+[V1_QUALIFICATION.md](https://github.com/kvmukilan/livewire/blob/v1.3.0/docs/V1_QUALIFICATION.md) for the exact scope and final evidence.
 The separate physical profile retains its three-consecutive-pass, device/firmware,
 physical-interface, browser, and human-pilot requirements. Unit/loopback tests,
 WSL, and cross-builds do not establish physical qualification.
