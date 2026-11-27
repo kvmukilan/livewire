@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -132,7 +133,9 @@ func TestLocalTLSIdentityPersistsAndRenews(t *testing.T) {
 			t.Errorf("certificate does not cover %s: %v", host, err)
 		}
 	}
-	if info, err := os.Stat(filepath.Join(state, localKeyFile)); err != nil || info.Mode().Perm()&0o077 != 0 {
+	// Windows reports no meaningful mode bits; the owner-only ACL applied there
+	// is covered by the recording package's own test.
+	if info, err := os.Stat(filepath.Join(state, localKeyFile)); err != nil || runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("private key not stored privately: %v %v", info, err)
 	}
 	again, err := LoadTLSIdentity(TLSOptions{StateDir: state, Hosts: hosts})

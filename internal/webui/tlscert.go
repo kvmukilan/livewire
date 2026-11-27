@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kvmukilan/livewire/internal/recording"
 	"github.com/kvmukilan/livewire/internal/securefile"
 )
 
@@ -170,6 +171,11 @@ func persistPair(dir string, certPEM, keyPEM []byte) error {
 		f, err := securefile.Create(target)
 		if err != nil {
 			return err
+		}
+		// Mode bits do not keep other local accounts out on Windows; the key
+		// needs an owner-only ACL there.
+		if err := recording.RestrictFile(f.File()); err != nil {
+			return errors.Join(err, f.Abort())
 		}
 		if _, err := f.Write(item.data); err != nil {
 			return errors.Join(err, f.Abort())
