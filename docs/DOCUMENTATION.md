@@ -860,7 +860,9 @@ Linux:
 sudo ./bin/livewire web -addr 127.0.0.1:8080 -dir ./captures
 ```
 
-Open `http://127.0.0.1:8080`. The UI is embedded and has no runtime web
+The dashboard opens at `https://127.0.0.1:8080`; there is no plain-HTTP
+listener, and the browser asks once to trust the locally generated certificate.
+The UI is embedded and has no runtime web
 dependencies. Keep it on localhost: it controls privileged packet operations
 and does not include user authentication. The server enforces a random CSRF
 token, same-origin JSON mutations, a 1 MiB request limit, strict fields, rooted

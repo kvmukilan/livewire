@@ -96,6 +96,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/api/ifaces", s.handleIfaces)
 	mux.HandleFunc("/api/pcaps", s.handlePcaps)
+	mux.HandleFunc(uploadPath, s.handleUpload)
 	mux.HandleFunc("/api/flows", s.handleFlows)
 	mux.HandleFunc("/api/plan", s.handlePlan)
 	mux.HandleFunc("/api/run", s.handleAdaptiveRun)
@@ -123,6 +124,7 @@ var apiMethods = map[string]string{
 	"/api/ssh": http.MethodPost, "/api/rstrule": http.MethodPost,
 	"/api/ftp":  http.MethodPost,
 	"/api/stop": http.MethodPost,
+	uploadPath:  http.MethodPost,
 }
 
 func (s *Server) secure(next http.Handler) http.Handler {
@@ -146,9 +148,13 @@ func (s *Server) secure(next http.Handler) http.Handler {
 			return
 		}
 		if api && want == http.MethodPost {
+			wantType := "application/json"
+			if r.URL.Path == uploadPath {
+				wantType = "application/octet-stream"
+			}
 			mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-			if err != nil || mediaType != "application/json" {
-				writeErr(w, http.StatusUnsupportedMediaType, fmt.Errorf("Content-Type must be application/json"))
+			if err != nil || mediaType != wantType {
+				writeErr(w, http.StatusUnsupportedMediaType, fmt.Errorf("Content-Type must be %s", wantType))
 				return
 			}
 			if origin := r.Header.Get("Origin"); origin != "" && !sameOrigin(origin, r.Host) {
@@ -262,7 +268,7 @@ func (s *Server) handlePcaps(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		n := e.Name()
-		if strings.HasSuffix(n, ".pcap") || strings.HasSuffix(n, ".pcapng") {
+		if lower := strings.ToLower(n); strings.HasSuffix(lower, ".pcap") || strings.HasSuffix(lower, ".pcapng") {
 			if fi, err := e.Info(); err == nil {
 				out = append(out, pcapFile{Name: n, Size: fi.Size()})
 			}

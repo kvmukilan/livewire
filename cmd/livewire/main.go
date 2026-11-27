@@ -93,7 +93,16 @@ var commands = []command{
 
 func main() {
 	if len(os.Args) < 2 {
-		printHelpHub(os.Stdout)
+		if !launchedWithoutTerminal() {
+			printHelpHub(os.Stdout)
+			return
+		}
+		// Double-clicked: there is nobody to read help text, so open the dashboard.
+		if err := cmdWeb(nil); err != nil {
+			fmt.Fprintf(os.Stderr, "livewire: %v\n", err)
+			holdWindowOpen()
+			os.Exit(1)
+		}
 		return
 	}
 	name := os.Args[1]

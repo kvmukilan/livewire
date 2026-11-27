@@ -252,8 +252,11 @@ quickest check that packet access is working at all.
 
 ### `web`
 
-Serve the browser dashboard: load captures, compile a plan, run one-sided or
-two-sided replays, watch progress, and download artifacts.
+Serve the browser dashboard over HTTPS and open it in the default browser: drop
+in a capture, name the device, start, and read whether the device answered as it
+did in the recording. Two-sided replays, capture, and every tuning option are
+under **Advanced options**. On Windows, double-clicking `livewire.exe` does the
+same thing.
 
 ```sh
 livewire web
@@ -264,7 +267,20 @@ livewire web -addr 127.0.0.1:9000 -dir ./captures
 |---|---|
 | `-addr <host:port>` | where to serve (default `127.0.0.1:8080`) |
 | `-dir <path>` | folder captures are read from and written to (default `.`) |
+| `-no-open` | do not open the default browser |
+| `-tls-cert <file>` `-tls-key <file>` | serve with your own PEM certificate and key |
 | `-unsafe-listen` | explicitly permit a non-loopback bind; the service remains unauthenticated |
+
+The dashboard has no plain-HTTP listener. Without `-tls-cert` it uses a
+self-signed certificate for `localhost`, kept with its key in the user
+configuration folder (`%AppData%\livewire` or `~/.config/livewire`) so the
+browser asks to trust it once rather than on every launch. The certificate's
+SHA-256 fingerprint is printed at startup for comparison with the browser's
+warning. If the default port is taken and `-addr` was not given, a free port is
+used.
+
+Captures, key logs, CA certificates and SSH key files chosen in the page are
+copied into `-dir`; an existing file is never overwritten.
 
 Binds to localhost by default and the page is embedded in the binary, so it works
 offline. Mutations require a per-process CSRF token and same-origin JSON requests;

@@ -2,6 +2,24 @@
 
 All notable changes to Livewire are documented here.
 
+## [Unreleased]
+
+- Rework the dashboard into a guided flow: capture, target, run, result. A
+  capture is inspected as soon as it is chosen, and the result states whether
+  the device answered the same as the recording, differently, or did not
+  complete, with the differing values listed. Expert controls are unchanged
+  under **Advanced options**.
+- Add captures, TLS key logs, CA certificates and SSH key files from the browser
+  by drag-and-drop or file picker; they are copied into the working folder
+  without overwriting existing files.
+- Serve the dashboard over HTTPS only, with a persisted local self-signed
+  certificate or `-tls-cert`/`-tls-key`. `http://` URLs for the dashboard no
+  longer work.
+- `livewire web` opens the default browser (`-no-open` disables this) and falls
+  back to a free port when the default one is taken. Double-clicking
+  `livewire.exe` on Windows starts the dashboard instead of printing help.
+- List captures with upper-case `.PCAP`/`.PCAPNG` extensions in the dashboard.
+
 ## [1.3.0] - 2026-10-21
 
 Add IEC 60870-5-104 application replay and replay every TLS session of a
