@@ -87,9 +87,18 @@ func ParseKeyLogStrict(data []byte) (*KeyLog, error) {
 			valid = len(secret) == 48
 		case "CLIENT_HANDSHAKE_TRAFFIC_SECRET", "SERVER_HANDSHAKE_TRAFFIC_SECRET", "CLIENT_TRAFFIC_SECRET_0", "SERVER_TRAFFIC_SECRET_0", "CLIENT_EARLY_TRAFFIC_SECRET", "EARLY_EXPORTER_SECRET", "EXPORTER_SECRET":
 			valid = len(secret) == 32 || len(secret) == 48
+		default:
+			// Wireshark and newer clients write labels replay has no use for
+			// (ECH, later traffic-secret generations, QUIC). A well-formed
+			// entry under such a label is skipped rather than failing the
+			// whole capture; it never counts as usable key material.
+			if !nssLabel(f[0]) || len(secret) == 0 {
+				return nil, fmt.Errorf("embedded TLS secrets contain a malformed NSS entry")
+			}
+			continue
 		}
 		if !valid {
-			return nil, fmt.Errorf("embedded TLS secrets contain an unsupported label or invalid secret length")
+			return nil, fmt.Errorf("embedded TLS secrets contain an invalid secret length")
 		}
 		id := f[0] + "/" + strings.ToLower(f[1])
 		if previous, ok := seen[id]; ok && !bytes.Equal(previous, secret) {
@@ -105,6 +114,19 @@ func ParseKeyLogStrict(data []byte) (*KeyLog, error) {
 		return nil, fmt.Errorf("embedded TLS secrets contain no usable NSS entries")
 	}
 	return ParseKeyLog(bytes.NewReader(data))
+}
+
+// nssLabel reports whether s has the shape of an NSS key log label.
+func nssLabel(s string) bool {
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '_' {
+			return false
+		}
+	}
+	return true
 }
 
 // Secret returns the secret for a client random and label, if present.

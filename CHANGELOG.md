@@ -2,6 +2,18 @@
 
 All notable changes to Livewire are documented here.
 
+## [Unreleased]
+
+- Decrypt TLS 1.2 sessions protected with ChaCha20-Poly1305 and with AES-CBC
+  (HMAC-SHA1, SHA-256 and SHA-384, MAC-then-encrypt or encrypt-then-MAC), and
+  accept DHE key exchange. These previously stopped with
+  `unsupported cipher suite`.
+- Follow TLS 1.3 KeyUpdate in both directions instead of failing at the first
+  record after it.
+- Stop with an explicit message for TLS 1.0 and 1.1 captures.
+- Skip well-formed embedded PCAPNG secrets under labels replay does not use
+  instead of rejecting the capture.
+
 ## [1.5.0] - 2026-11-27
 
 A guided HTTPS dashboard and a round of live-replay correctness fixes. This

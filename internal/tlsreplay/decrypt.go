@@ -14,8 +14,10 @@ import (
 )
 
 // Recovers plaintext from captured TLS records + an SSLKEYLOGFILE.
-// Handles TLS 1.2 with AES-128/256-GCM and TLS 1.3 with AES-GCM or
-// ChaCha20-Poly1305.
+// Handles TLS 1.2 with AES-GCM, ChaCha20-Poly1305 and AES-CBC (MAC-then-encrypt
+// or encrypt-then-MAC), and TLS 1.3 with AES-GCM or ChaCha20-Poly1305,
+// following KeyUpdate. The key exchange does not matter: the key log already
+// carries the master or traffic secrets.
 
 // tlsVersion tags the record layer in use.
 type tlsVersion uint8
@@ -25,23 +27,58 @@ const (
 	verTLS13
 )
 
-// suiteParams describes the AEAD parameters of a negotiated cipher suite.
+// cbcMAC names the HMAC of a TLS 1.2 CBC suite; zero means an AEAD suite.
+type cbcMAC uint8
+
+const (
+	macNone cbcMAC = iota
+	macSHA1
+	macSHA256
+	macSHA384
+)
+
+// suiteParams describes the record protection of a negotiated cipher suite.
+// sha384 selects the PRF/HKDF hash; mac is set only for TLS 1.2 CBC suites.
 type suiteParams struct {
 	keyLen  int
 	sha384  bool
 	isTLS13 bool
 	chacha  bool
+	mac     cbcMAC
 }
 
 // Suites we understand.
 var cipherSuites = map[uint16]suiteParams{
-	// TLS 1.2 AEAD (ECDHE and static-RSA key exchange).
+	// TLS 1.2 AES-GCM (ECDHE, DHE and static-RSA key exchange).
 	0xC02F: {keyLen: 16},               // ECDHE_RSA_AES_128_GCM_SHA256
 	0xC02B: {keyLen: 16},               // ECDHE_ECDSA_AES_128_GCM_SHA256
 	0xC030: {keyLen: 32, sha384: true}, // ECDHE_RSA_AES_256_GCM_SHA384
 	0xC02C: {keyLen: 32, sha384: true}, // ECDHE_ECDSA_AES_256_GCM_SHA384
 	0x009C: {keyLen: 16},               // RSA_AES_128_GCM_SHA256
 	0x009D: {keyLen: 32, sha384: true}, // RSA_AES_256_GCM_SHA384
+	0x009E: {keyLen: 16},               // DHE_RSA_AES_128_GCM_SHA256
+	0x009F: {keyLen: 32, sha384: true}, // DHE_RSA_AES_256_GCM_SHA384
+	// TLS 1.2 ChaCha20-Poly1305 (RFC 7905).
+	0xCCA8: {keyLen: 32, chacha: true}, // ECDHE_RSA_CHACHA20_POLY1305_SHA256
+	0xCCA9: {keyLen: 32, chacha: true}, // ECDHE_ECDSA_CHACHA20_POLY1305_SHA256
+	0xCCAA: {keyLen: 32, chacha: true}, // DHE_RSA_CHACHA20_POLY1305_SHA256
+	// TLS 1.2 AES-CBC with HMAC.
+	0x002F: {keyLen: 16, mac: macSHA1},                 // RSA_AES_128_CBC_SHA
+	0x0035: {keyLen: 32, mac: macSHA1},                 // RSA_AES_256_CBC_SHA
+	0x003C: {keyLen: 16, mac: macSHA256},               // RSA_AES_128_CBC_SHA256
+	0x003D: {keyLen: 32, mac: macSHA256},               // RSA_AES_256_CBC_SHA256
+	0x0033: {keyLen: 16, mac: macSHA1},                 // DHE_RSA_AES_128_CBC_SHA
+	0x0039: {keyLen: 32, mac: macSHA1},                 // DHE_RSA_AES_256_CBC_SHA
+	0x0067: {keyLen: 16, mac: macSHA256},               // DHE_RSA_AES_128_CBC_SHA256
+	0x006B: {keyLen: 32, mac: macSHA256},               // DHE_RSA_AES_256_CBC_SHA256
+	0xC009: {keyLen: 16, mac: macSHA1},                 // ECDHE_ECDSA_AES_128_CBC_SHA
+	0xC00A: {keyLen: 32, mac: macSHA1},                 // ECDHE_ECDSA_AES_256_CBC_SHA
+	0xC013: {keyLen: 16, mac: macSHA1},                 // ECDHE_RSA_AES_128_CBC_SHA
+	0xC014: {keyLen: 32, mac: macSHA1},                 // ECDHE_RSA_AES_256_CBC_SHA
+	0xC023: {keyLen: 16, mac: macSHA256},               // ECDHE_ECDSA_AES_128_CBC_SHA256
+	0xC027: {keyLen: 16, mac: macSHA256},               // ECDHE_RSA_AES_128_CBC_SHA256
+	0xC024: {keyLen: 32, sha384: true, mac: macSHA384}, // ECDHE_ECDSA_AES_256_CBC_SHA384
+	0xC028: {keyLen: 32, sha384: true, mac: macSHA384}, // ECDHE_RSA_AES_256_CBC_SHA384
 	// TLS 1.3.
 	0x1301: {keyLen: 16, isTLS13: true},               // AES_128_GCM_SHA256
 	0x1302: {keyLen: 32, sha384: true, isTLS13: true}, // AES_256_GCM_SHA384
@@ -125,89 +162,6 @@ func (d *Decryptor) decryptFlow(c2s, s2c []byte, clientCompletion, serverComplet
 	return out, nil
 }
 
-// --- TLS 1.2 ---
-
-func (d *Decryptor) decrypt12(c2s, s2c, clientRandom []byte, suite uint16, sp suiteParams, newHash func() hash.Hash, clientCompletion, serverCompletion RecordCompletion) ([]AppMessage, error) {
-	master, ok := d.kl.Secret(hex.EncodeToString(clientRandom), "CLIENT_RANDOM")
-	if !ok || len(master) != 48 {
-		return nil, fmt.Errorf("tlsreplay: TLS 1.2 needs a 48-byte CLIENT_RANDOM master secret in the keylog")
-	}
-	serverRandom, err := serverHelloRandom(s2c)
-	if err != nil {
-		return nil, err
-	}
-	// key_block = PRF(master, "key expansion", server_random + client_random).
-	// AEAD-GCM: no MAC key, 4-byte implicit IV per direction.
-	seed := append(append([]byte{}, serverRandom...), clientRandom...)
-	need := 2 * (sp.keyLen + 4)
-	kb := prf12(newHash, master, "key expansion", seed, need)
-	cliKey := kb[0:sp.keyLen]
-	srvKey := kb[sp.keyLen : 2*sp.keyLen]
-	cliIV := kb[2*sp.keyLen : 2*sp.keyLen+4]
-	srvIV := kb[2*sp.keyLen+4 : 2*sp.keyLen+8]
-
-	cli, err := decrypt12Dir(c2s, cliKey, cliIV, FromClient, clientCompletion)
-	if err != nil {
-		return nil, err
-	}
-	srv, err := decrypt12Dir(s2c, srvKey, srvIV, FromServer, serverCompletion)
-	if err != nil {
-		return nil, err
-	}
-	return append(cli, srv...), nil
-}
-
-// decrypt12Dir decrypts one direction of a TLS 1.2 GCM stream. The seq number
-// starts at 0 after ChangeCipherSpec; app_data records are returned, the
-// encrypted Finished is counted but dropped.
-func decrypt12Dir(stream, key, implicitIV []byte, role AppRole, completion RecordCompletion) ([]AppMessage, error) {
-	aead, err := newGCM(key)
-	if err != nil {
-		return nil, err
-	}
-	var out []AppMessage
-	var seq uint64
-	encrypting := false
-	records, err := parseRecords(stream)
-	if err != nil {
-		return nil, err
-	}
-	for _, rec := range records {
-		if rec.typ == 20 { // ChangeCipherSpec: everything after is encrypted
-			encrypting = true
-			continue
-		}
-		if !encrypting {
-			continue // plaintext handshake (ClientHello/ServerHello/...)
-		}
-		if len(rec.body) < 8+16 {
-			return nil, fmt.Errorf("tlsreplay: short TLS 1.2 GCM record")
-		}
-		nonce := append(append([]byte{}, implicitIV...), rec.body[:8]...) // 4 implicit + 8 explicit
-		ct := rec.body[8:]
-		aad := make([]byte, 13)
-		binary.BigEndian.PutUint64(aad[0:8], seq)
-		aad[8] = rec.typ
-		binary.BigEndian.PutUint16(aad[9:11], rec.ver)
-		binary.BigEndian.PutUint16(aad[11:13], uint16(len(ct)-16))
-		pt, err := aead.Open(nil, nonce, ct, aad)
-		if err != nil {
-			return nil, fmt.Errorf("tlsreplay: TLS 1.2 record %d auth failed: %w", seq, err)
-		}
-		seq++
-		if rec.typ == 23 && len(pt) > 0 {
-			message := AppMessage{Role: role, Data: pt}
-			if completion != nil {
-				if point, ok := completion(rec.start, rec.end); ok {
-					message.CapturedAt, message.CapturedPacket, message.HasCaptureTime = point.At, point.PacketIndex, true
-				}
-			}
-			out = append(out, message)
-		}
-	}
-	return out, nil
-}
-
 // --- TLS 1.3 ---
 
 func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams, newHash func() hash.Hash, role AppRole, completion RecordCompletion) ([]AppMessage, error) {
@@ -230,6 +184,7 @@ func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams,
 		}
 	}
 
+	_, hashLen := hashForSuite(sp.sha384)
 	var out []AppMessage
 	var appCtr, hsCtr uint64
 	records, err := parseRecords(stream)
@@ -244,6 +199,16 @@ func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams,
 		// Handshake-phase records fall through to the hs secret.
 		if pt, innerType, ok := tryOpen13(appAEAD, appIV, appCtr, rec); ok {
 			appCtr++
+			if innerType == 22 && isKeyUpdate(pt) {
+				// RFC 8446 section 7.2: the sender's next record uses the next
+				// generation of its application traffic secret, from sequence 0.
+				appSecret = hkdfExpandLabel(newHash, appSecret, "traffic upd", nil, hashLen)
+				if appAEAD, appIV, err = tls13KeyIV(appSecret, sp, newHash); err != nil {
+					return nil, err
+				}
+				appCtr = 0
+				continue
+			}
 			if innerType == 23 && len(pt) > 0 {
 				message := AppMessage{Role: role, Data: pt}
 				if completion != nil {
@@ -264,6 +229,12 @@ func (d *Decryptor) decrypt13(stream []byte, crHex, side string, sp suiteParams,
 		return nil, fmt.Errorf("tlsreplay: TLS 1.3 %s record failed to decrypt under both handshake and application secrets", side)
 	}
 	return out, nil
+}
+
+// isKeyUpdate reports whether a decrypted post-handshake record is exactly one
+// KeyUpdate message (type 24, one-byte request_update body).
+func isKeyUpdate(handshake []byte) bool {
+	return len(handshake) == 5 && handshake[0] == 24 && handshake[1] == 0 && handshake[2] == 0 && handshake[3] == 1 && handshake[4] <= 1
 }
 
 // tryOpen13 opens one TLS 1.3 record at seq, returning the inner plaintext, its

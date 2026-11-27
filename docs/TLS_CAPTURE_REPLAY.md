@@ -193,3 +193,21 @@ command inputs. They do not inherit the direct TLS handshake fallback.
 For stateless packet injection, `livewire reproduce issue.pcap -i <interface>`
 sends the captured frames without TLS negotiation or response verification.
 That remains a separate operation from a live TLS session.
+
+## What can be decrypted
+
+Recovering the recorded requests needs the matching secrets and a record
+protection Livewire implements. The key exchange (RSA, DHE, ECDHE) does not
+matter, because the key log already carries the resulting secrets.
+
+| Protocol | Record protection |
+|---|---|
+| TLS 1.3 | AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305; KeyUpdate is followed in both directions |
+| TLS 1.2 | AES-128/256-GCM, ChaCha20-Poly1305, and AES-128/256-CBC with HMAC-SHA1, SHA-256 or SHA-384, in MAC-then-encrypt or encrypt-then-MAC (RFC 7366) form |
+
+A CBC record that fails its MAC or padding check stops decryption; it is never
+returned as plaintext. TLS 1.0 and 1.1, TLS 1.3 early data (0-RTT),
+renegotiation, and suites outside this table (3DES, RC4, Camellia, ARIA, CCM)
+stop with an explicit error before anything is sent. Embedded PCAPNG secrets
+may contain entries under labels replay does not use; well-formed ones are
+skipped.
