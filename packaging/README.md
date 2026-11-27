@@ -18,18 +18,20 @@ To publish in a bucket later, create a repo (e.g. `kvmukilan/scoop-bucket`) with
 
 ## winget (needs a PR to microsoft/winget-pkgs, filed by the maintainer)
 
-`packaging/winget/manifests/k/kvmukilan/livewire/1.2.0/` follows the winget-pkgs layout (manifest schema 1.6.0).
+`packaging/winget/manifests/k/kvmukilan/livewire/<version>/` follows the winget-pkgs layout (manifest schema 1.6.0).
 The installer is the release zip with `livewire.exe` as a nested portable, exposed as the `livewire` command.
 
 Validate locally before filing:
 
 ```powershell
-winget validate --manifest packaging\winget\manifests\k\kvmukilan\livewire\1.2.0
-winget install --manifest packaging\winget\manifests\k\kvmukilan\livewire\1.2.0   # needs "Enable local manifest files" in winget settings
+winget validate --manifest packaging\winget\manifests\k\kvmukilan\livewire\1.3.0
+winget install --manifest packaging\winget\manifests\k\kvmukilan\livewire\1.3.0   # needs "Enable local manifest files" in winget settings
 ```
 
-Then copy the three YAML files into a fork of https://github.com/microsoft/winget-pkgs under
-`manifests/k/kvmukilan/livewire/1.2.0/` and open a PR titled `New package: kvmukilan.livewire version 1.2.0`.
+The first submission, `New package: kvmukilan.livewire version 1.2.0`, is
+[microsoft/winget-pkgs#452769](https://github.com/microsoft/winget-pkgs/pull/452769). After it merges, submit
+1.3.0 as a version update: copy the three YAML files into a fork under `manifests/k/kvmukilan/livewire/1.3.0/`
+and open a PR titled `New version: kvmukilan.livewire version 1.3.0`.
 The binary is unsigned (see `WINDOWS-UNSIGNED.txt` in the release); winget accepts unsigned portable packages,
 but SmartScreen may warn on first run. Future versions can be submitted with
 `wingetcreate update kvmukilan.livewire --version <ver> --urls <zip-url> --submit`.

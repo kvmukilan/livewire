@@ -1,13 +1,13 @@
 {
-    "version": "1.2.0",
-    "description": "Stateful replay of captured network sessions (Modbus, DNP3, MQTT, TLS) against live industrial devices",
+    "version": "1.3.0",
+    "description": "Stateful replay of captured network sessions (Modbus, DNP3, IEC 104, MQTT, TLS) against live industrial devices",
     "homepage": "https://github.com/kvmukilan/livewire",
     "license": "MIT",
     "notes": "Wire-mode capture on Windows needs Npcap (not installed by this manifest). See https://kvmukilan.github.io/livewire/",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/kvmukilan/livewire/releases/download/v1.2.0/livewire-1.2.0-windows-amd64.zip",
-            "hash": "58706f17c341226a9401af678e93e82106f101241f3071669b4a7b5bedbe933b"
+            "url": "https://github.com/kvmukilan/livewire/releases/download/v1.3.0/livewire-1.3.0-windows-amd64.zip",
+            "hash": "e2edb943c99ce8fc458447d3311ec6cff6f4a807dac567c679a8361b412040e4"
         }
     },
     "bin": "livewire.exe",
