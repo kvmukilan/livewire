@@ -96,6 +96,18 @@ func (o *executionFlags) openState(captureDigest string, configuration any, prev
 	}
 	return err
 }
+
+// incompleteExitError makes a replay that could not run to the end a failed
+// command on every route. A difference from the recording is a finding and
+// stays a success unless -strict-exit asks otherwise; an exchange that did not
+// complete produced no finding at all. An expected fault is judged separately.
+func incompleteExitError(ctx context.Context, expectFault string, summary iterate.Summary) error {
+	if n := summary.Sessions.Incomplete; n > 0 && expectFault == "" && ctx.Err() == nil {
+		return fmt.Errorf("%d exchange(s) did not complete", n)
+	}
+	return nil
+}
+
 func strictExitError(enabled bool, ctx context.Context, summary iterate.Summary) error {
 	if !enabled {
 		return nil

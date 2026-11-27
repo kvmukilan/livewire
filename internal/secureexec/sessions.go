@@ -34,10 +34,13 @@ type preparedSession struct {
 
 // prepareTLSSessions prepares every TLS session of the route individually and
 // returns one driver that runs them in capture order on the same target.
-// Sessions that cannot be prepared are reported as skipped rather than
-// stopping the whole job, as long as at least one session can run.
+// A session whose capture is not a complete TLS exchange is reported as skipped
+// as long as at least one session can run. A complete TLS exchange that the
+// supplied secrets cannot recover stops the job before anything is sent: a
+// partly covered capture must not be reported as a match of the whole selection.
 func prepareTLSSessions(c Config, host string) (*Prepared, error) {
 	var sessions []preparedSession
+	var undecryptable []error
 	for _, s := range c.Inspection.Route.All() {
 		single := c
 		inspection := *c.Inspection
@@ -55,10 +58,16 @@ func prepareTLSSessions(c Config, host string) (*Prepared, error) {
 			}
 		}
 		if err != nil {
+			if len(c.KeyLog) > 0 && replayintent.IsTLS(&replay.Session{Transport: s.Transport, Events: serverOnly(s)}) {
+				undecryptable = append(undecryptable, fmt.Errorf("%s: %w", s.ID, err))
+			}
 			sessions = append(sessions, preparedSession{id: s.ID, skipped: err.Error()})
 			continue
 		}
 		sessions = append(sessions, preparedSession{id: s.ID, prepared: p})
+	}
+	if len(undecryptable) > 0 {
+		return nil, fmt.Errorf("%d of %d selected TLS sessions cannot be replayed with the supplied secrets; supply secrets for them or select the others with -session: %w", len(undecryptable), len(sessions), errors.Join(undecryptable...))
 	}
 	return combineSessions(sessions)
 }
@@ -92,6 +101,7 @@ func combineSessions(sessions []preparedSession) (*Prepared, error) {
 		o.Scope = fmt.Sprintf("%d of %d selected TLS sessions replayed in capture order", runnable, len(sessions))
 		o.Cleanup = "complete"
 		var errs []error
+		applicationSessions, verifiedSessions := 0, 0
 		for _, s := range sessions {
 			if s.prepared == nil {
 				o.Sessions = append(o.Sessions, SessionOutcome{SessionID: s.id, Skipped: s.skipped, Status: "skipped"})
@@ -139,12 +149,19 @@ func combineSessions(sessions []preparedSession) (*Prepared, error) {
 				continue
 			}
 			o.Completed = o.Completed && result.Completed
-			o.Verified = o.Verified || result.Verified
+			applicationSessions++
+			if result.Verified {
+				verifiedSessions++
+			}
 			o.Matched = o.Matched && result.Matched
 			if result.Cleanup == "failed" {
 				o.Cleanup = "failed"
 			}
 		}
+		// One unverified session leaves the selection as a whole unverified;
+		// reporting it as verified would turn "not compared" into "different".
+		o.Verified = applicationSessions > 0 && verifiedSessions == applicationSessions
+		o.Matched = o.Matched && o.Verified
 		if len(errs) > 0 {
 			o.Error = errors.Join(errs...).Error()
 		}

@@ -136,7 +136,11 @@ capture order, each on its own fresh connection, sharing the embedded or
 `-session port:<port>` selects every data-bearing session of one service in a
 mixed capture, and the report lists each session's own result under
 `outcome.sessions`. Sessions whose capture holds no server handshake run as a
-fresh handshake only; sessions that cannot be prepared are reported as skipped.
+fresh handshake only; sessions whose capture is not a complete TLS exchange are reported as skipped.
+A complete TLS session that the supplied secrets do not cover stops the run
+before anything is sent, so a partly covered capture is never reported as a
+match of the whole selection; supply its secrets or choose the covered sessions
+with `-session`. The fresh ClientHello offers the captured SNI and ALPN.
 TLS sessions to different servers remain blocked.
 
 ```sh

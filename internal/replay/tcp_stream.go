@@ -226,6 +226,11 @@ func assembleTCPStreams(s *Session) (map[Direction]tcpStreamAssembly, map[Direct
 				}
 				start := segment.offset - base
 				if start < 0 || start+check > int64(len(stream)) || !bytes.Equal(stream[start:start+check], segment.data[:check]) {
+					if overlap == 1 && len(segment.data) == 1 {
+						// A TCP keep-alive probe resends sequence snd.nxt-1
+						// with one arbitrary byte. It carries no stream data.
+						continue
+					}
 					return nil, nil, fmt.Errorf("%s TCP stream has conflicting overlap at packet %d", direction, segment.packet)
 				}
 				if overlap >= int64(len(segment.data)) {

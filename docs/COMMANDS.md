@@ -68,7 +68,7 @@ for compatibility and also make no response-equivalence claim.
 | `-server-name <name>` / `-ca <file>` | TLS identity and optional private CA; verification is on by default; handshake-only TLS defaults to captured SNI, then target hostname |
 | `-user`, `-pass`/`-key`, `-host-key`, `-cmd` | SSH requirements; repeat `-cmd` and optionally pair each with `-expect` |
 | `-details` | also print the capture assessment, the replay plan, and every session's verdict |
-| `-strict-exit` | exit nonzero unless every selected exchange completes with positive matching response evidence |
+| `-strict-exit` | exit nonzero unless every selected exchange completes with positive matching response evidence. Without it, a difference from the recording exits 0 and an exchange that did not complete exits nonzero |
 | `-run-timeout <duration>` | bound the whole run, including repeated attempts and waits |
 | `-response-timeout <duration>` | bound one framed TCP/TLS application or UDP/ICMP response; 0 preserves protocol defaults; at most 10m; not available for the raw TCP engine, FTP/FTPS, SSH, or wire mode |
 | `-expect-fault reset\|timeout` | require that fault during an expected TCP/TLS application response read after a request was sent; recorded separately from response equivalence; conflicts with `-strict-exit` and `-stop-when-different` |

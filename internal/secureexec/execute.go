@@ -152,11 +152,24 @@ func Prepare(c Config) (*Prepared, error) {
 	}
 	var tc *tls.Config
 	if route.Kind == replayintent.TLS || replayintent.NeedsKeyLog(s) || ftpScript.ProtectData {
-		name := c.ServerName
+		// Offer what the captured client offered, as the handshake-only path
+		// does: a server that routes on SNI or requires ALPN must see the
+		// same virtual host and protocol the recorded requests were sent to.
+		name, alpn := c.ServerName, []string(nil)
+		if route.Kind == replayintent.TLS {
+			if stream, _, err := replay.TCPPayloadStreams(s); err == nil {
+				if hello, err := tlsreplay.ParseClientHello(stream); err == nil {
+					alpn = append(alpn, hello.ALPN...)
+					if name == "" {
+						name = hello.ServerName
+					}
+				}
+			}
+		}
 		if name == "" {
 			name = host
 		}
-		tc = &tls.Config{ServerName: name, InsecureSkipVerify: c.Insecure} // #nosec G402 -- explicit operator lab override
+		tc = &tls.Config{ServerName: name, NextProtos: alpn, InsecureSkipVerify: c.Insecure} // #nosec G402 -- explicit operator lab override
 		if len(c.CA) > 0 {
 			roots, err := x509.SystemCertPool()
 			if err != nil || roots == nil {
