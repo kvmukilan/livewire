@@ -22,6 +22,8 @@ const (
 	maxUploadName    = 120
 )
 
+var errUploadTooLarge = errors.New("file exceeds the upload limit")
+
 // uploadKinds maps the file's role to the extensions the run handlers accept
 // for it, so an uploaded file is always usable by name afterwards.
 var uploadKinds = map[string]struct {
@@ -53,13 +55,12 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("file exceeds %d bytes", kind.limit))
 		return
 	}
-	stored, err := s.storeUpload(name, http.MaxBytesReader(w, r.Body, kind.limit))
+	stored, err := s.storeUpload(name, r.Body, kind.limit)
+	if errors.Is(err, errUploadTooLarge) {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("file exceeds %d bytes", kind.limit))
+		return
+	}
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("file exceeds %d bytes", kind.limit))
-			return
-		}
 		writeErr(w, 400, err)
 		return
 	}
@@ -90,7 +91,7 @@ func uploadName(raw string, extensions []string) (string, error) {
 // storeUpload writes to a private temporary name and links the finished file
 // into place, so a partial upload is never visible as a capture and an existing
 // file is never overwritten. A taken name gets a numeric suffix.
-func (s *Server) storeUpload(name string, body io.Reader) (string, error) {
+func (s *Server) storeUpload(name string, body io.Reader, limit int64) (string, error) {
 	suffix := make([]byte, 8)
 	if _, err := rand.Read(suffix); err != nil {
 		return "", err
@@ -100,9 +101,12 @@ func (s *Server) storeUpload(name string, body io.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	n, copyErr := io.Copy(f, body)
+	n, copyErr := io.Copy(f, io.LimitReader(body, limit+1))
 	if err := errors.Join(copyErr, f.Close()); err != nil {
 		return "", errors.Join(err, s.root.Remove(temp))
+	}
+	if n > limit {
+		return "", errors.Join(errUploadTooLarge, s.root.Remove(temp))
 	}
 	if n == 0 {
 		return "", errors.Join(fmt.Errorf("file is empty"), s.root.Remove(temp))

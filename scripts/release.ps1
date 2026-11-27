@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$requiredGo = "go1.26.10"
+$requiredGo = "go1.26.11"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $distRoot = [IO.Path]::GetFullPath((Join-Path $repo $OutputRoot))
 $output = [IO.Path]::GetFullPath((Join-Path $distRoot ("v" + $Version)))
