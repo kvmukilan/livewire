@@ -351,6 +351,12 @@ class ApplicationMatrixTests(unittest.TestCase):
         self.assertEqual(exporter.application_cases('v1.6.2-rc.1'), exporter.APP_CASES | {'iec104', 'iec104-tls'})
         self.assertIn('iec104', exporter.application_cases('unparseable'))
 
+    def test_iec104_evidence_paths_are_exportable(self):
+        for case in ('iec104', 'iec104-tls', 'modbus-tcp'):
+            self.assertTrue(exporter.allowed('attempts/000001-' + case + '/report.json', 'application', 'live'), case)
+            self.assertTrue(exporter.allowed('attempts/000001-' + case + '/output.txt', 'application', 'live'), case)
+        self.assertFalse(exporter.allowed('attempts/000001-unknown/report.json', 'application', 'live'))
+
 
 if __name__ == '__main__':
     unittest.main()

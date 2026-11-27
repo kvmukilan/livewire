@@ -96,7 +96,7 @@ def allowed(reference, suite, command):
         if reference == 'transcript.jsonl':
             return True
         match = re.fullmatch(r'attempts/[0-9]{6}-(.+)/(output\.txt|report(?:\.attempt-[1-9][0-9]*)?\.json)', reference)
-        return bool(match and match[1] in APP_CASES)
+        return bool(match and match[1] in APP_CASES | IEC104_CASES)
     if reference in {'events.jsonl', 'peer.jsonl', 'peer-process.log'}:
         return True
     if suite == 'packet' and re.fullmatch(r'wire\.actual(?:-[1-9][0-9]*)?\.pcap', reference):
