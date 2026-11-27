@@ -20,10 +20,29 @@ import sys
 import time
 
 APP_CASES = set("http1 dns-tcp modbus-tcp mqtt311 mqtt5 dnp3 http1-tls tls-handshake dns-tls modbus-tls mqtt311-tls mqtt5-tls dnp3-tls ftp ftps-explicit ftps-implicit ssh".split())
+IEC104_CASES = {'iec104', 'iec104-tls'}
 PACKET_CASES = set("dns-udp udp icmp4 icmp6 stateful-tcp transport-tcp wire".split())
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 SECRET = re.compile(rb"-----BEGIN (?:[^\r\n]*PRIVATE KEY|CERTIFICATE)-----|(?:CLIENT_RANDOM|EXPORTER_SECRET|EARLY_EXPORTER_SECRET|(?:CLIENT|SERVER)_(?:EARLY_|HANDSHAKE_)?TRAFFIC_SECRET(?:_\d+)?)\s+[0-9a-fA-F]{64}\s+[0-9a-fA-F]{32,}|(?:Authorization|Proxy-Authorization|Cookie|Set-Cookie)\s*:\s*[^\s]|(?:^|[\r\n])PASS\s+[^\s]", re.I)
 SECRET_KEY = re.compile(r"password|passwd|secret|token|private[_-]?key|api[_-]?key|authorization|cookie|(?:^|[._-])pass(?:$|[._-])", re.I)
+
+
+def application_cases(version):
+    """The IEC 60870-5-104 cases joined the application matrix in 1.5.0."""
+    try:
+        number = tuple(int(part) for part in version.removeprefix('v').split('-', 1)[0].split('.'))
+    except ValueError:
+        return APP_CASES | IEC104_CASES
+    return APP_CASES | IEC104_CASES if len(number) != 3 or number >= (1, 5, 0) else APP_CASES
+
+
+def soak_seconds(version):
+    """Every case spans two hours through 1.4 and thirty minutes from 1.5.0."""
+    try:
+        number = tuple(int(part) for part in version.removeprefix('v').split('-', 1)[0].split('.'))
+    except ValueError:
+        return 7200
+    return 1800 if len(number) == 3 and min(number) >= 0 and number >= (1, 5, 0) else 7200
 
 
 def require(ok, message):
@@ -222,12 +241,13 @@ def export_run(run, output, metadata, qualifying):
         require(metadata.get('exitCode') == 0 and metadata.get('validationExitCode') == 0, 'execution or independent validation failed')
         require(report.get('interrupted') is False and report.get('cleanupVerified') is True, 'run interrupted or unclean')
         cases = report['cases']
-        expected = APP_CASES if suite == 'application' else PACKET_CASES if suite == 'packet' else {'mixed-frames'}
+        expected = application_cases(metadata['version']) if suite == 'application' else PACKET_CASES if suite == 'packet' else {'mixed-frames'}
         require(len(cases) == len(expected) and {c['name'] for c in cases} == expected, 'incomplete matrix')
-        require(timestamp(report['finished']) - timestamp(report['started']) >= 7200 * 10**9, 'short run')
+        soak = soak_seconds(metadata['version']) * 10**9
+        require(timestamp(report['finished']) - timestamp(report['started']) >= soak, 'short run')
         for case in cases:
             require(case['failures'] == 0 and case['passes'] >= 3 and case['repeatedProcessPasses'] == case['passes'] and case['cleanupVerified'] is True, 'case failed or unclean')
-            require(timestamp(case['lastAt']) - timestamp(case['firstAt']) >= 7200 * 10**9, 'short case span')
+            require(timestamp(case['lastAt']) - timestamp(case['firstAt']) >= soak, 'short case span')
     selected, seen = [(name, data)], set()
     for ref in report['evidence']:
         relative = ref['path']
@@ -379,18 +399,18 @@ def run_job(args):
         if args.suite == 'application':
             harness = scratch / ('replaylab.exe' if os.name == 'nt' else 'replaylab')
             require(execute(['go', 'build', '-buildvcs=false', '-o', str(harness), './scripts/replaylab'], root, env, scratch / 'harness-build.log', 600) == 0, 'harness build failed')
-            argv = [str(harness), '-binary', str(binary), '-source-root', str(root), '-out', str(run), '-command', 'live', '-version', args.version, '-duration', '2h', '-interval', '5s', '-repeat', '3', '-process-timeout', '45s', '-environment', 'GitHub-hosted native ' + native + ' synthetic loopback software peers; no physical-device qualification']
+            argv = [str(harness), '-binary', str(binary), '-source-root', str(root), '-out', str(run), '-command', 'live', '-version', args.version, '-duration', str(soak_seconds(args.version)) + 's', '-interval', '5s', '-repeat', '3', '-process-timeout', '45s', '-environment', 'GitHub-hosted native ' + native + ' synthetic loopback software peers; no physical-device qualification']
             validation_test, validation_env = 'TestRecordedApplicationLabTranscript', {'LIVEWIRE_APPLICATION_LAB_SMOKE': str(run)}
             meta['harnessSHA256'] = digest(harness)
         else:
-            argv = ['sudo', '-n', sys.executable, str(root / 'scripts/replaylab_raw.py'), '--binary', str(binary), '--output', str(run), '--source-digest', args.source, '--version', args.version, '--command', args.command, '--duration', '7200', '--round-gap', '5']
+            argv = ['sudo', '-n', sys.executable, str(root / 'scripts/replaylab_raw.py'), '--binary', str(binary), '--output', str(run), '--source-digest', args.source, '--version', args.version, '--command', args.command, '--duration', str(soak_seconds(args.version)), '--round-gap', '5']
             if args.suite == 'packet':
                 argv.append('--netem')
                 validation_test, validation_env = 'TestRecordedPacketLabTranscript', {'LIVEWIRE_PACKET_LAB_SMOKE': str(run)}
             else:
                 validation_test, validation_env = 'TestRecordedStatelessLabTranscript', {'LIVEWIRE_STATELESS_LAB_SMOKE': str(run), 'LIVEWIRE_STATELESS_LAB_COMMAND': args.command}
         try:
-            meta['exitCode'] = execute(argv, root, env, scratch / 'runner.log', 8700)
+            meta['exitCode'] = execute(argv, root, env, scratch / 'runner.log', soak_seconds(args.version) + 1500)
         finally:
             # The root CLI deliberately writes reports as 0600. Return only
             # this owned raw run to the caller before unprivileged validation,

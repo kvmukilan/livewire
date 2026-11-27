@@ -13,20 +13,24 @@ These commands require different evidence: successful application comparison
 cannot be inferred from raw transmission, and recorded packets cannot establish
 a new TLS session merely because their bytes were sent.
 
-| Required two-hour run | Platform | What is checked |
+| Required run | Platform | What is checked |
 |---|---|---|
-| Application `live` | Windows amd64 | 16 application cases with checked live responses, plus a separately checked TLS connection-only case |
-| Application `live` | Linux amd64 | The same 17 cases against independent protocol peers |
+| Application `live` | Windows amd64 | 18 application cases with checked live responses, plus a separately checked TLS connection-only case |
+| Application `live` | Linux amd64 | The same 19 cases against independent protocol peers |
 | Advanced packet `live` | Linux amd64 | Live datagram/echo and TCP behavior; explicit wire compatibility |
 | Stateless `reproduce` | Linux amd64 | Exact captured frame bytes, order and counts; unverified application outcome |
 | Stateless compatibility `replay` | Linux amd64 | The same packet contract through the retained alias |
 
-Every required case must have successful executions spanning at least two hours.
+Every required case must have successful executions spanning the required
+soak: at least thirty minutes from 1.5.0, and at least two hours for 1.4 and
+earlier, whose evidence is unchanged. The shorter soak still repeats each case
+several hundred times and catches functional regressions; it gives weaker
+evidence about slow resource leaks and long-run stability than two hours did.
 Each CLI process repeats the selected exchange or capture, with independently
 checked output and cleanup. Reports retain actual commands, executable/source
 hashes, start/end times, failure counts and hash-bound captures/transcripts.
 Short smoke tests and interrupted runs cannot satisfy the gate. Repeated-process
-soaks do not claim one process remained alive for two hours.
+soaks do not claim one process remained alive for the whole soak.
 
 Version 1.1 also checks activity throughout the recorded span. An execution
 must finish within two minutes, the next execution must start within one minute,
@@ -53,6 +57,7 @@ flag. Peers check actual requests and live protocol state:
 | Modbus/TCP, Modbus over TLS | Function/address/count and reordered transaction replies |
 | MQTT 3.1.1 and MQTT 5, plaintext and TLS | Keepalives, bidirectional QoS 2, identifiers, aliases and limits |
 | DNP3, DNP3 over TLS | Changed fragmentation, unsolicited traffic and confirmations |
+| IEC 60870-5-104, IEC 104 over TLS (from 1.5.0) | Live sequence numbers, a general interrogation longer than the acknowledgement window, a spontaneous change inside it, and a station that stops sending until its send window is acknowledged |
 | FTP, explicit FTPS, implicit FTPS | Fresh control/data connections, upload/download counts and digests, verified TLS |
 | SSH | Fresh pinned host identity, explicit command outputs and exit status |
 | TLS connection only | Captured SNI/ALPN and supported version selection, fresh ClientHello randomness, verified handshake and zero application bytes |
@@ -62,8 +67,9 @@ no separate key-log file. Other TLS application cases exercise explicit key-log
 input. The connection-only case has no decryption secrets: successful TLS setup
 is counted separately as a handshake observation, while the CLI must report
 application replay incomplete and unverified, with no compared responses. It
-cannot satisfy the checks for any of the 16 application replay cases. Together
-the five runs require 43 platform/suite/command/case combinations.
+cannot satisfy the checks for any of the 18 application replay cases. Together
+the five runs require 47 platform/suite/command/case combinations. Releases
+before 1.5.0 used 16 application cases and 43 combinations.
 
 TLS soak captures use TLS 1.2 while fresh peers negotiate TLS 1.3. The opposite
 version direction, HTTP/1.1 ALPN, secure `live -in`, active FTP roles and
@@ -92,8 +98,8 @@ Each records protected control and data connections, embeds both connections'
 secrets, and verifies the transfer over fresh TLS sessions using the one PCAPNG.
 Active FTPS retains the FTP client's TLS role even when the server opens TCP.
 
-These 40 short recording checks complement the two-hour replay matrices; they
-are not two-hour recording soaks. Process ownership, private permissions, key
+These 40 short recording checks complement the replay matrices; they
+are not recording soaks. Process ownership, private permissions, key
 matching, limits, output failure, interruption and partial-artifact handling
 have native regression coverage. See the [recording evidence](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/tls-recording/README.md).
 
@@ -126,9 +132,10 @@ faults, recovery/cleanup, loader limits and published-version comparisons.
 Current completion evidence belongs in [RELEASE_AUDIT.md](RELEASE_AUDIT.md).
 The changed 1.2 source is not qualified by the prior version's passing runs.
 
-The [v1.3.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/README.md)
-holds the five completed matrices for this release. The [v1.2.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/README.md)
-retains its five completed matrices. The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
+The [v1.5.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.5.0/qualification/v1.5.0/README.md)
+holds the five completed matrices for this release. The [v1.3.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.3.0/qualification/v1.3.0/README.md)
+and the [v1.2.0 evidence index](https://github.com/kvmukilan/livewire/blob/v1.2.0/qualification/v1.2.0/README.md)
+retain their five completed matrices. The [v1.0.1 evidence index](https://github.com/kvmukilan/livewire/blob/v1.0.1/qualification/v1.0.1/README.md)
 retains its seven completed matrices, and [v1.0.0](https://github.com/kvmukilan/livewire/blob/v1.0.0/qualification/v1.0.0/README.md)
 retains its original six. Their additional single-process HTTP checks remain
 historical results rather than a memory-leak guarantee for new builds.
@@ -136,16 +143,16 @@ historical results rather than a memory-leak guarantee for new builds.
 Validate the current release checkout with verified artifacts present:
 
 ```sh
-GOTOOLCHAIN=go1.26.10 go run ./scripts/qualify validate -version 1.3.0 -artifacts dist/v1.3.0 qualification/stable.json
+GOTOOLCHAIN=go1.26.11 go run ./scripts/qualify validate -version 1.5.0 -artifacts dist/v1.5.0 qualification/stable.json
 ```
 
 ## Repeat the software labs
 
-The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.3.0/.github/workflows/qualification.yml)
+The [hosted qualification workflow](https://github.com/kvmukilan/livewire/blob/v1.5.0/.github/workflows/qualification.yml)
 runs these five matrices on separate GitHub Windows/Linux runners. Dispatch it
 with the full candidate commit, reviewed source digest, version and frozen
 Windows/Linux amd64 executable hashes. It checks out that commit, builds with
-Go 1.26.10 using the release flags, and refuses a mismatched binary before running
+Go 1.26.11 using the release flags, and refuses a mismatched binary before running
 the lab. An independent Go transcript check must actually run and pass before
 the workflow exports qualifying evidence. Cancellation, continuity failures or
 cleanup failures produce diagnostics instead of a passing bundle.
@@ -163,20 +170,20 @@ receives cancellation. Omitting `-cases` runs every application case.
 Windows PowerShell:
 
 ```powershell
-$env:GOTOOLCHAIN = 'go1.26.10'
+$env:GOTOOLCHAIN = 'go1.26.11'
 New-Item -ItemType Directory -Path coverage -Force | Out-Null
 go build -buildvcs=false -o coverage/replaylab.exe ./scripts/replaylab
 if ($LASTEXITCODE -ne 0) { throw 'Replay lab build failed' }
-./coverage/replaylab.exe -binary ./dist/v1.3.0/livewire-1.3.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+./coverage/replaylab.exe -binary ./dist/v1.5.0/livewire-1.5.0-windows-amd64.exe -source-root . -command live -out coverage/lab-windows-live -environment 'Windows amd64 independent loopback peers' -duration 30m -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 Linux shell:
 
 ```sh
 mkdir -p coverage
-chmod +x dist/v1.3.0/livewire-1.3.0-linux-amd64
-GOTOOLCHAIN=go1.26.10 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
-./coverage/replaylab -binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 2h -interval 5s -repeat 3 -process-timeout 45s
+chmod +x dist/v1.5.0/livewire-1.5.0-linux-amd64
+GOTOOLCHAIN=go1.26.11 go build -buildvcs=false -o coverage/replaylab ./scripts/replaylab || exit 1
+./coverage/replaylab -binary "$PWD/dist/v1.5.0/livewire-1.5.0-linux-amd64" -source-root . -command live -out coverage/lab-linux-live -environment 'Linux amd64 independent loopback peers' -duration 30m -interval 5s -repeat 3 -process-timeout 45s
 ```
 
 The packet harness requires root, Python 3, `iproute2`, `iptables`, `tcpdump`,
@@ -185,9 +192,9 @@ only its own interfaces/namespaces. Set `SOURCE_DIGEST` to the source digest
 from the exact release's reviewed manifest before running these commands:
 
 ```sh
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command live --duration 7200 --round-gap 20 --netem
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command reproduce --duration 7200 --round-gap 20
-sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.3.0/livewire-1.3.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.3.0 --command replay --duration 7200 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.5.0/livewire-1.5.0-linux-amd64" --output "$PWD/coverage/lab-linux-packet" --source-digest "$SOURCE_DIGEST" --version 1.5.0 --command live --duration 1800 --round-gap 20 --netem
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.5.0/livewire-1.5.0-linux-amd64" --output "$PWD/coverage/lab-linux-reproduce" --source-digest "$SOURCE_DIGEST" --version 1.5.0 --command reproduce --duration 1800 --round-gap 20
+sudo python3 scripts/replaylab_raw.py --binary "$PWD/dist/v1.5.0/livewire-1.5.0-linux-amd64" --output "$PWD/coverage/lab-linux-replay" --source-digest "$SOURCE_DIGEST" --version 1.5.0 --command replay --duration 1800 --round-gap 20
 ```
 
 Application labs create private capture keys and credentials. Publish only

@@ -162,6 +162,8 @@ func applicationLabProtocol(name string) (kind, adapter string) {
 		adapter = "modbus-tcp"
 	case "dnp3":
 		adapter = "dnp3"
+	case "iec104":
+		adapter = "iec104"
 	}
 	return kind, adapter
 }

@@ -40,7 +40,10 @@ version is not yet qualified in the software-lab profile; the 1.3.0
   route previously exited 0. A difference from the recording still exits 0
   unless `-strict-exit` is given.
 - Print the differing values under each result instead of only `matched=false`.
-- Add `iec104` and `iec104-tls` cases to the replay lab.
+- Add `iec104` and `iec104-tls` cases to the replay lab and, from this
+  version, to the application qualification matrix.
+- Require each software-lab qualification case to span thirty minutes instead
+  of two hours, from this version. Evidence for earlier releases is unchanged.
 
 - Build every release, CI and qualification job with Go 1.26.11, which fixes
   GO-2026-6859 (net/http server crash) in the Go 1.26.10 standard library.

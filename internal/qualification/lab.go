@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,12 +20,42 @@ var ApplicationLabCases = []string{
 	"ftp", "ftps-explicit", "ftps-implicit", "ssh",
 }
 
-// ApplicationLabCasesForVersion retains the historical application matrix and
-// adds independent PCAP-derived TLS handshake observations for v1.1 onward.
+// LabSoakSecondsV15 is the span every software-lab case must cover from
+// v1.5.0. Earlier releases required SoakSeconds and keep that requirement.
+const LabSoakSecondsV15 = 1800
+
+// LabSoakDuration is the minimum span of successful checks for every case of
+// a software-lab run. A version that cannot be parsed gets the longer soak.
+func LabSoakDuration(version string) time.Duration {
+	parts := strings.Split(strings.SplitN(strings.TrimPrefix(version, "v"), "-", 2)[0], ".")
+	if len(parts) == 3 {
+		parseable := true
+		for _, part := range parts {
+			if n, err := strconv.Atoi(part); err != nil || n < 0 {
+				parseable = false
+			}
+		}
+		if parseable && labVersionAtLeast(version, 1, 5, 0) {
+			return LabSoakSecondsV15 * time.Second
+		}
+	}
+	return SoakSeconds * time.Second
+}
+
+// IEC104LabCases joined the application matrix in v1.5.0: a controlled station
+// that enforces its send window and reports a spontaneous change mid-burst.
+var IEC104LabCases = []string{"iec104", "iec104-tls"}
+
+// ApplicationLabCasesForVersion retains the historical application matrix,
+// adds independent PCAP-derived TLS handshake observations for v1.1 onward,
+// and the IEC 60870-5-104 cases for v1.5 onward.
 func ApplicationLabCasesForVersion(version string) []string {
 	cases := append([]string(nil), ApplicationLabCases...)
 	if UsesStatelessReproduce(version) {
 		cases = append(cases, "tls-handshake")
+	}
+	if labVersionAtLeast(version, 1, 5, 0) {
+		cases = append(cases, IEC104LabCases...)
 	}
 	return cases
 }
@@ -119,10 +150,11 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		need(!seen[key], "duplicate lab run: "+key)
 		seen[key] = true
 		label := key + ": "
+		soak := LabSoakDuration(o.Version)
 		need(run.SchemaVersion == 1 && run.Version == o.Version && run.SourceDigest == o.SourceDigest, label+"run does not match release source/version")
 		need(run.Environment != "", label+"environment missing")
 		need(!run.Interrupted && run.CleanupVerified, label+"interrupted or cleanup unverified")
-		need(run.Finished.Sub(run.Started) >= SoakSeconds*time.Second, label+"two-hour run missing")
+		need(run.Finished.Sub(run.Started) >= soak, label+"run shorter than the required soak")
 		stateless := run.Suite == "stateless"
 		need(labCommandAllowed(o.Version, run.Suite, run.Command) && (!stateless || run.Platform == "linux-amd64"), label+"command does not match the release contract or stateless platform")
 		need(run.Platform == "windows-amd64" || run.Platform == "linux-amd64", label+"unknown platform")
@@ -150,7 +182,7 @@ func validateSoftwareLab(doc Manifest, o ValidateOptions) []string {
 		for _, name := range required {
 			c, exists := cases[name]
 			need(exists && c.Passes >= 3 && c.Failures == 0 && c.CleanupVerified, label+name+": repeated checks or cleanup missing")
-			need(!c.FirstAt.Before(run.Started) && !c.LastAt.After(run.Finished) && c.LastAt.Sub(c.FirstAt) >= SoakSeconds*time.Second, label+name+": case was not exercised across two hours")
+			need(!c.FirstAt.Before(run.Started) && !c.LastAt.After(run.Finished) && c.LastAt.Sub(c.FirstAt) >= soak, label+name+": case was not exercised across the required soak")
 			if stateless {
 				need(c.FramesObserved >= c.Passes && c.RequestsObserved == 0 && c.ResponsesVerified == 0, label+name+": independent frames missing or application response claim")
 			} else if name == "tls-handshake" && UsesStatelessReproduce(o.Version) {

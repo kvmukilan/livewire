@@ -338,5 +338,19 @@ else: target.write_bytes(b'{"event":"synthetic"}\\n')
         self.assertEqual((run / 'reproduce-mixed-frames-00001.report.json').stat().st_uid, 0)
 
 
+class SoakLengthTests(unittest.TestCase):
+    def test_soak_is_thirty_minutes_from_1_5_0_only(self):
+        for version, want in (('1.3.0', 7200), ('1.4.9', 7200), ('1.5.0', 1800), ('v1.6.0-rc.1', 1800), ('unparseable', 7200), ('1.5', 7200)):
+            self.assertEqual(exporter.soak_seconds(version), want, version)
+
+
+class ApplicationMatrixTests(unittest.TestCase):
+    def test_iec104_cases_join_the_matrix_from_1_5_0(self):
+        self.assertEqual(exporter.application_cases('1.3.0'), exporter.APP_CASES)
+        self.assertEqual(exporter.application_cases('1.5.0'), exporter.APP_CASES | {'iec104', 'iec104-tls'})
+        self.assertEqual(exporter.application_cases('v1.6.2-rc.1'), exporter.APP_CASES | {'iec104', 'iec104-tls'})
+        self.assertIn('iec104', exporter.application_cases('unparseable'))
+
+
 if __name__ == '__main__':
     unittest.main()

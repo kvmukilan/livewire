@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLabCommandContractKeepsHistoricalGates(t *testing.T) {
@@ -180,5 +181,41 @@ func TestCorrectedStatelessContractRequiresProtocolBytesAndCommand(t *testing.T)
 				t.Fatalf("missing protocol accepted or wrong rejection: %v", err)
 			}
 		})
+	}
+}
+
+func TestIEC104CasesJoinApplicationMatrixFromV150(t *testing.T) {
+	has := func(version, name string) bool {
+		for _, c := range ApplicationLabCasesForVersion(version) {
+			if c == name {
+				return true
+			}
+		}
+		return false
+	}
+	for _, name := range IEC104LabCases {
+		if has("1.3.0", name) || has("1.4.9", name) {
+			t.Fatalf("%s required before 1.5.0", name)
+		}
+		if !has("1.5.0", name) || !has("v1.6.0-rc.1", name) {
+			t.Fatalf("%s not required from 1.5.0", name)
+		}
+		if kind, adapter := applicationLabProtocol(name); adapter != "iec104" || (kind == "tls") != (name == "iec104-tls") {
+			t.Fatalf("%s maps to %q/%q", name, kind, adapter)
+		}
+	}
+	if got := len(ApplicationLabCasesForVersion("1.5.0")); got != 19 {
+		t.Fatalf("1.5.0 application matrix has %d cases", got)
+	}
+}
+
+func TestLabSoakDurationShortensOnlyFromV150(t *testing.T) {
+	for version, want := range map[string]time.Duration{
+		"1.3.0": 2 * time.Hour, "1.4.9": 2 * time.Hour, "1.5.0": 30 * time.Minute,
+		"v1.6.0-rc.1": 30 * time.Minute, "unparseable": 2 * time.Hour, "1.5": 2 * time.Hour,
+	} {
+		if got := LabSoakDuration(version); got != want {
+			t.Errorf("%s: soak %v, want %v", version, got, want)
+		}
 	}
 }
