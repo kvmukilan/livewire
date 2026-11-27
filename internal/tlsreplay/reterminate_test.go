@@ -328,3 +328,54 @@ func TestParseKeyLog(t *testing.T) {
 		t.Fatal("lookup should be case-insensitive on client random")
 	}
 }
+
+// A session recorded late in a capture, and lasting longer than the connection
+// timeout, must replay on its own clock within the recorded span.
+func TestReTerminateTimingRebasesToSessionStartAndExtendsBudget(t *testing.T) {
+	cert := selfSigned(t)
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{Certificates: []tls.Certificate{cert}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		buf := make([]byte, 512)
+		for {
+			n, err := c.Read(buf)
+			if n > 0 {
+				c.Write([]byte(strings.ToUpper(string(buf[:n]))))
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	roots := x509.NewCertPool()
+	roots.AddCert(cert.Leaf)
+	at := func(d time.Duration) time.Duration { return time.Hour + d }
+	script := []AppMessage{
+		{Role: FromClient, Data: []byte("one"), CapturedAt: at(0), HasCaptureTime: true},
+		{Role: FromServer, Data: []byte("ONE"), CapturedAt: at(10 * time.Millisecond), HasCaptureTime: true},
+		{Role: FromClient, Data: []byte("two"), CapturedAt: at(1500 * time.Millisecond), CapturedPacket: 2, HasCaptureTime: true},
+		{Role: FromServer, Data: []byte("TWO"), CapturedAt: at(1510 * time.Millisecond), CapturedPacket: 3, HasCaptureTime: true},
+	}
+	started := time.Now()
+	res, err := ReTerminate(ReTermConfig{
+		Address: ln.Addr().String(), TLSConfig: &tls.Config{RootCAs: roots, ServerName: "localhost"},
+		Script: script, Timeout: time.Second, Profile: replay.ProfileTiming, Verify: true,
+	})
+	if err != nil {
+		t.Fatalf("ReTerminate: %v", err)
+	}
+	if elapsed := time.Since(started); elapsed < 1500*time.Millisecond || elapsed > 5*time.Second {
+		t.Fatalf("replay took %v; recorded pacing spans 1.5s", elapsed)
+	}
+	if res.Requests != 2 || res.Mismatches != 0 {
+		t.Fatalf("result: %+v", res)
+	}
+}

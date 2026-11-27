@@ -141,13 +141,19 @@ for fresh repeated attempts and `-gap 0s` for no settle delay.
 
 ## Dashboard
 
-Run `livewire web -dir ./captures` and open the local URL printed by the command.
-Put capture files in that directory, select one, choose replay intent in
-**Replay intent & settings**, then use **Inspect & preview**. Select sessions
-in the coverage table and inspect again. Review the target before **Start replay**.
+Run `livewire web` (or double-click `livewire.exe` on Windows). The dashboard
+opens in the browser over HTTPS; accept its local certificate once. Drop a
+capture onto the page or pick one already in the working folder; it is
+inspected immediately. Enter the device under **Target** and press
+**Start replay**. **Result** states whether the device answered the same as the
+recording, differently, or did not complete, and lists the differing values.
+Untick conversations under **Capture** to replay only part of a capture.
+Replay intent, pacing, attempts, and two-sided replay are under
+**Advanced options**.
 
-TLS/FTP/SSH inputs appear only for a fresh-session route. Key logs, CA files,
-private keys, and pinned public keys must be in the dashboard working directory.
+TLS/FTP/SSH inputs appear only for a fresh-session route. Use **Choose file**
+to add a key log, CA file, private key, or pinned public key; it is copied into
+the dashboard working directory.
 Supported private-key suffixes are `.key`, `.pem`, or `.txt`; pinned host keys
 use `.pub` or `.txt`. These files are read through the existing rooted file API.
 

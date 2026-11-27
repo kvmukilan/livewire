@@ -567,7 +567,11 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	if inspection.Mode == "wire" {
 		fmt.Printf("Injecting captured frames on %q ...\n", iface)
 	} else {
-		fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
+		if iface == "" {
+			fmt.Printf("Replaying against %s ...\n", deviceIP)
+		} else {
+			fmt.Printf("Replaying against %s on %q ...\n", deviceIP, iface)
+		}
 	}
 
 	runs := iterate.Plan{Times: o.times, Gap: o.gap, StopWhenDifferent: o.stopWhenDifferent}.Normalize()
@@ -610,6 +614,7 @@ func runGenericReproduce(o reproduceOptions, recs []*pcapio.Record, captureDiges
 	}
 	artifactErrs = append(artifactErrs, faultExpectationError(ctx, o.expectFault, faults))
 	printReproduceSummary(summary, runs, profile, o.strict)
+	artifactErrs = append(artifactErrs, incompleteExitError(ctx, o.expectFault, summary))
 	return errors.Join(artifactErrs...)
 }
 
@@ -856,12 +861,48 @@ func printSessionResult(result plannedResult, variables map[string]string) {
 			matched = matched && transfer.Matched
 		}
 		matched = result.FTP.Verified && matched
-		fmt.Printf("\n---- %s ----\nRESULT: completed=%v verified=%v matched=%v commands=%d replies=%d transfers=%d\n--------------------------------\n",
-			label, result.FTP.Completed, result.FTP.Verified, matched, result.FTP.Commands, result.FTP.Replies, len(result.FTP.Transfers))
+		fmt.Printf("\n---- %s ----\nRESULT: completed=%v verified=%v matched=%v commands=%d replies=%d transfers=%d\n%s--------------------------------\n",
+			label, result.FTP.Completed, result.FTP.Verified, matched, result.FTP.Commands, result.FTP.Replies, len(result.FTP.Transfers),
+			redactRunText(differenceLines(result.FTP.Differences), variables))
 	default:
-		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v sent=%d received=%d\n--------------------------------\n",
-			label, result.Transport.Completed, result.Transport.Matched, result.Transport.Sent, result.Transport.Received)
+		detail := differenceLines(result.Transport.Differences)
+		if !result.Transport.Completed && result.Transport.Error != "" {
+			detail = "  did not complete: " + result.Transport.Error + "\n" + detail
+		}
+		fmt.Printf("\n---- %s ----\nRESULT: completed=%v matched=%v sent=%d received=%d\n%s--------------------------------\n",
+			label, result.Transport.Completed, result.Transport.Matched, result.Transport.Sent, result.Transport.Received,
+			redactRunText(detail, variables))
 	}
+}
+
+// differenceLines names what the device answered differently, so the reader
+// does not have to open the report to learn which values drifted. Repeats of
+// one difference are counted rather than listed.
+func differenceLines(differences []replay.Difference) string {
+	var order []string
+	counts := map[string]int{}
+	for _, d := range differences {
+		line := d.Field + ": " + d.Expected
+		if d.Actual != "" {
+			line = fmt.Sprintf("%s: expected %s, got %s", d.Field, d.Expected, d.Actual)
+		}
+		if counts[line] == 0 {
+			order = append(order, line)
+		}
+		counts[line]++
+	}
+	var b strings.Builder
+	for i, line := range order {
+		if i >= maxShownDivergences {
+			fmt.Fprintf(&b, "  ...and %d more kind(s) of difference; see the report\n", len(order)-i)
+			break
+		}
+		if counts[line] > 1 {
+			line += fmt.Sprintf(" (x%d)", counts[line])
+		}
+		fmt.Fprintf(&b, "  - %s\n", line)
+	}
+	return b.String()
 }
 
 // planBlockers lists, without jargon, the parts of the capture that cannot be

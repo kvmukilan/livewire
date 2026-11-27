@@ -186,7 +186,12 @@ func iec104Track(dir replay.Direction, f dissect.IEC104, state *replay.RuntimeSt
 			delete(state.Protocol, iec104StoppingKey)
 		}
 	case dir == replay.ServerToClient && f.Format == dissect.IEC104I:
-		state.Protocol[iec104RecvSeqKey] = uint16((int(f.SendSeq) + 1) % iec104Modulus)
+		next := uint16((int(f.SendSeq) + 1) % iec104Modulus)
+		if _, seen := state.Protocol[iec104RecvSeqKey]; seen && iec104Counter(state, iec104RecvSeqKey) == next {
+			// Already counted when it arrived; Observe sees matched responses again.
+			return
+		}
+		state.Protocol[iec104RecvSeqKey] = next
 		unacked, _ := state.Protocol[iec104UnackedKey].(int)
 		state.Protocol[iec104UnackedKey] = unacked + 1
 	}
@@ -205,12 +210,7 @@ func (a IEC104) LiveEvent(m replay.Message, state *replay.RuntimeState) ([]repla
 	}
 	switch f.Format {
 	case dissect.IEC104I:
-		iec104Track(replay.ServerToClient, f, state)
-		unacked, _ := state.Protocol[iec104UnackedKey].(int)
-		if stopping, _ := state.Protocol[iec104StoppingKey].(bool); unacked < iec104StandardW || stopping {
-			return nil, true, nil
-		}
-		reply, err := a.Decode(replay.ClientToServer, dissect.IEC104SFrame(iec104Counter(state, iec104RecvSeqKey)))
+		reply, err := a.acknowledge(f, state)
 		return reply, true, err
 	case dissect.IEC104S:
 		return nil, true, nil
@@ -224,6 +224,30 @@ func (a IEC104) LiveEvent(m replay.Message, state *replay.RuntimeState) ([]repla
 		}
 	}
 	return nil, false, nil
+}
+
+// ResponseReceived counts a response the capture expects towards the same
+// acknowledgement window as unsolicited data. The station's send window does
+// not distinguish them: a captured burst longer than the window, or one extra
+// spontaneous frame inside it, would otherwise stall the station before the
+// last expected frame.
+func (a IEC104) ResponseReceived(m replay.Message, state *replay.RuntimeState) ([]replay.Message, error) {
+	f, err := iec104Frame(m)
+	if err != nil || f.Format != dissect.IEC104I {
+		return nil, err
+	}
+	return a.acknowledge(f, state)
+}
+
+// acknowledge tracks a received I frame and returns an S frame once the
+// standard window of unacknowledged frames is reached.
+func (a IEC104) acknowledge(f dissect.IEC104, state *replay.RuntimeState) ([]replay.Message, error) {
+	iec104Track(replay.ServerToClient, f, state)
+	unacked, _ := state.Protocol[iec104UnackedKey].(int)
+	if stopping, _ := state.Protocol[iec104StoppingKey].(bool); unacked < iec104StandardW || stopping {
+		return nil, nil
+	}
+	return a.Decode(replay.ClientToServer, dissect.IEC104SFrame(iec104Counter(state, iec104RecvSeqKey)))
 }
 
 // NormalizeConversation keeps the frames a controlling station drives and the

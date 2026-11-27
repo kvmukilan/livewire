@@ -25,6 +25,26 @@ type LiveEventAdapter interface {
 	LiveEvent(Message, *RuntimeState) ([]Message, bool, error)
 }
 
+// ResponseAckAdapter sends link-level acknowledgements for expected responses
+// as they arrive. A peer with a send window stops transmitting when the window
+// fills, so an acknowledgement that waits for the whole captured burst to be
+// read can never be sent.
+type ResponseAckAdapter interface {
+	ResponseReceived(Message, *RuntimeState) ([]Message, error)
+}
+
+func (r *MessageReader) acknowledge(ctx context.Context, conn net.Conn, a Adapter, message Message, state *RuntimeState, timeout time.Duration) error {
+	acker, ok := a.(ResponseAckAdapter)
+	if !ok || state == nil {
+		return nil
+	}
+	replies, err := acker.ResponseReceived(message, state)
+	if err != nil || len(replies) == 0 {
+		return err
+	}
+	return r.writeControl(ctx, conn, a, replies, state, timeout)
+}
+
 func (r *MessageReader) ReadExchange(ctx context.Context, conn net.Conn, a Adapter, expected, peers []Message, state *RuntimeState, timeout time.Duration) ([]Message, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -96,6 +116,9 @@ func (r *MessageReader) ReadExchange(ctx context.Context, conn net.Conn, a Adapt
 			return out, err
 		}
 		if i >= 0 {
+			if err := r.acknowledge(ctx, conn, a, next, state, time.Until(deadline)); err != nil {
+				return out, err
+			}
 			out = append(out, next)
 			remaining = append(remaining[:i], remaining[i+1:]...)
 			if n := ConsumePeers(a, ServerToClient, []Message{next}, len(peers)); n > 0 {

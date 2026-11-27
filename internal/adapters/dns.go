@@ -193,12 +193,125 @@ func (DNS) Prepare(_ replay.Direction, msg replay.Message, state *replay.Runtime
 		return nil, err
 	}
 	rebuilt := append(append(append([]byte(nil), raw[:12]...), enc...), raw[qend:]...)
+	if err := repointDNSNames(raw, rebuilt, qend, enc); err != nil {
+		return nil, err
+	}
 	if tcp {
 		out = binary.BigEndian.AppendUint16(nil, uint16(len(rebuilt)))
 		out = append(out, rebuilt...)
 		return out, nil
 	}
 	return rebuilt, nil
+}
+
+// repointDNSNames repairs compression pointers after the question name changed
+// length. Records are compressed against the question and against each other,
+// so every pointer past the question moves with the data it follows. A pointer
+// to a parent domain inside the old question is kept only when the new name
+// ends in that same domain; otherwise the record would silently name something
+// else, and the substitution is refused.
+func repointDNSNames(old, rebuilt []byte, qend int, name []byte) error {
+	if binary.BigEndian.Uint16(old[4:6]) != 1 {
+		return nil
+	}
+	delta := len(name) - (qend - 12)
+	pointers, err := dnsPointerOffsets(old, qend+4)
+	if err != nil {
+		return err
+	}
+	for _, at := range pointers {
+		target := int(binary.BigEndian.Uint16(old[at:at+2]) & 0x3fff)
+		switch {
+		case target >= qend:
+			target += delta
+		case target > 12:
+			suffix := old[target:qend]
+			if len(suffix) > len(name) || !bytes.EqualFold(name[len(name)-len(suffix):], suffix) || !dnsLabelBoundary(name, len(name)-len(suffix)) {
+				parent, _, _ := dnsName(old, target, 0)
+				return fmt.Errorf("dns: dns.name must stay under %q, which captured records are compressed against", parent)
+			}
+			target = 12 + len(name) - len(suffix)
+		case target < 12:
+			return fmt.Errorf("dns: compression pointer into the header")
+		}
+		if target > 0x3fff {
+			return fmt.Errorf("dns: substituted name moves records beyond the compression range")
+		}
+		binary.BigEndian.PutUint16(rebuilt[at+delta:], 0xc000|uint16(target))
+	}
+	return nil
+}
+
+func dnsLabelBoundary(name []byte, at int) bool {
+	for off := 0; off < len(name); off += int(name[off]) + 1 {
+		if off == at {
+			return true
+		}
+		if name[off] == 0 || name[off] > 63 {
+			break
+		}
+	}
+	return false
+}
+
+// dnsPointerOffsets returns where compression pointers sit in the record
+// sections: in owner names and in the names of the record types RFC 1035 and
+// RFC 3597 allow to be compressed.
+func dnsPointerOffsets(msg []byte, off int) ([]int, error) {
+	var out []int
+	skipName := func(at int) (int, error) {
+		for {
+			if at >= len(msg) {
+				return 0, fmt.Errorf("dns: truncated name")
+			}
+			n := int(msg[at])
+			switch {
+			case n == 0:
+				return at + 1, nil
+			case n&0xc0 == 0xc0:
+				if at+2 > len(msg) {
+					return 0, fmt.Errorf("dns: truncated pointer")
+				}
+				out = append(out, at)
+				return at + 2, nil
+			case n > 63:
+				return 0, fmt.Errorf("dns: invalid label")
+			}
+			at += n + 1
+		}
+	}
+	records := int(binary.BigEndian.Uint16(msg[6:8])) + int(binary.BigEndian.Uint16(msg[8:10])) + int(binary.BigEndian.Uint16(msg[10:12]))
+	for i := 0; i < records; i++ {
+		next, err := skipName(off)
+		if err != nil || next+10 > len(msg) {
+			return nil, fmt.Errorf("dns: malformed resource record %d", i)
+		}
+		rtype := binary.BigEndian.Uint16(msg[next : next+2])
+		rdata := next + 10
+		end := rdata + int(binary.BigEndian.Uint16(msg[next+8:next+10]))
+		if end > len(msg) {
+			return nil, fmt.Errorf("dns: truncated resource record %d", i)
+		}
+		names, skip := 0, 0
+		switch rtype {
+		case 2, 5, 12, 39: // NS, CNAME, PTR, DNAME
+			names = 1
+		case 6: // SOA: MNAME, RNAME
+			names = 2
+		case 15: // MX: preference, exchange
+			names, skip = 1, 2
+		case 33: // SRV: priority, weight, port, target
+			names, skip = 1, 6
+		}
+		at := rdata + skip
+		for n := 0; n < names && at < end; n++ {
+			if at, err = skipName(at); err != nil || at > end {
+				return nil, fmt.Errorf("dns: malformed resource record %d", i)
+			}
+		}
+		off = end
+	}
+	return out, nil
 }
 
 func encodeDNSName(name string) ([]byte, error) {

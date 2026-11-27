@@ -107,6 +107,13 @@ func httpMessageLen(data []byte, dir replay.Direction, responseTo string) (int, 
 		}
 	}
 	f["headers"] = headers
+	if dir == replay.ClientToServer && strings.Contains(strings.ToLower(headers["expect"]), "100-continue") {
+		// The recorded client paused for an interim response between header
+		// and body. A replay writes the request whole, and a server is then
+		// free to omit the 100 Continue, so the recorded turns have no
+		// dependable live counterpart.
+		return 0, nil, fmt.Errorf("http/1: %s %s uses Expect: 100-continue, which cannot be replayed; the interim response depends on client timing", f["method"], f["path"])
+	}
 	if dir == replay.ServerToClient {
 		status, _ := strconv.Atoi(stringFieldFromMap(f, "status"))
 		method := strings.ToUpper(responseTo)
@@ -235,11 +242,9 @@ func (HTTP) Prepare(dir replay.Direction, msg replay.Message, state *replay.Runt
 	if dir == replay.ClientToServer {
 		if jar, ok := state.Protocol["http.cookies"].(http.CookieJar); ok {
 			if u, err := requestURL(out, state); err == nil {
-				var values []string
-				for _, c := range jar.Cookies(u) {
-					values = append(values, c.Name+"="+c.Value)
+				if merged := mergeCookies(httpHeaders(out)["cookie"], jar.Cookies(u)); merged != "" {
+					out = replaceHeader(out, "Cookie", merged)
 				}
-				out = replaceHeader(out, "Cookie", strings.Join(values, "; "))
 			}
 		}
 	}
@@ -269,6 +274,41 @@ func (HTTP) Prepare(dir replay.Direction, msg replay.Message, state *replay.Runt
 		}
 	}
 	return out, nil
+}
+
+// mergeCookies keeps the cookies the captured request carried, gives each the
+// value the live server has since set for that name, and appends cookies only
+// the live server set. Cookies the capture sent that the live server never set,
+// such as a session established before the capture began, are sent as recorded.
+// An empty result means there is nothing to send and the header is left alone.
+func mergeCookies(captured string, live []*http.Cookie) string {
+	liveValue := map[string]string{}
+	for _, c := range live {
+		liveValue[c.Name] = c.Value
+	}
+	var pairs []string
+	sent := map[string]bool{}
+	for _, pair := range strings.Split(captured, ";") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		name, _, _ := strings.Cut(pair, "=")
+		if value, ok := liveValue[name]; ok {
+			pair = name + "=" + value
+		}
+		if !sent[name] {
+			pairs = append(pairs, pair)
+			sent[name] = true
+		}
+	}
+	for _, c := range live {
+		if !sent[c.Name] {
+			pairs = append(pairs, c.Name+"="+c.Value)
+			sent[c.Name] = true
+		}
+	}
+	return strings.Join(pairs, "; ")
 }
 
 func replaceHTTPBody(raw []byte, dir replay.Direction, body []byte) ([]byte, error) {

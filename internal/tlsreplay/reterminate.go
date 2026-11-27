@@ -111,9 +111,30 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 			futureResponses = append(futureResponses, expected...)
 		}
 	}
+	// Recorded pacing is measured from this session's first message, not from
+	// the start of the capture, so a session that begins late in a long capture
+	// does not idle on an open connection first. The time the recording itself
+	// spans is added to the connection budget: it is the replay's schedule, not
+	// a slow peer.
+	var captureBase, captureSpan time.Duration
+	if cfg.Profile == replay.ProfileTiming && len(cfg.Script) > 0 && cfg.Start.IsZero() {
+		captureBase = cfg.Script[0].CapturedAt
+		for _, message := range cfg.Script {
+			if message.CapturedAt < captureBase {
+				captureBase = message.CapturedAt
+			}
+		}
+	}
+	if cfg.Profile == replay.ProfileTiming {
+		for _, message := range cfg.Script {
+			if message.CapturedAt-captureBase > captureSpan {
+				captureSpan = message.CapturedAt - captureBase
+			}
+		}
+	}
 	if cfg.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout+captureSpan)
 		defer cancel()
 	}
 	d := &net.Dialer{Timeout: cfg.Timeout}
@@ -198,7 +219,7 @@ func ReTerminateContext(ctx context.Context, cfg ReTermConfig) (res *ReTermResul
 	var pendingPeers []replay.Message
 	for i, msg := range cfg.Script {
 		if cfg.Profile == replay.ProfileTiming {
-			target := started.Add(msg.CapturedAt)
+			target := started.Add(msg.CapturedAt - captureBase)
 			if cfg.Adapter != nil {
 				if err := reader.WaitUntil(ctx, conn, cfg.Adapter, futureResponses, pendingPeers, cfg.State, target, exchangeTimeout); err != nil {
 					return res, fmt.Errorf("tlsreplay: waiting for message %d: %w", i, replayContextError(ctx, err))

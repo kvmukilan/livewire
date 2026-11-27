@@ -58,10 +58,10 @@ func TestCLIDisconnectedTargetCannotClaimMatch(t *testing.T) {
 	defer server.Close()
 	path := writeIntentHTTP(t, uint16(server.Listener.Addr().(*net.TCPAddr).Port), body, false)
 	out, err := runBinary(t, buildBinary(t), "live", path, "--mode", "application", "-t", "127.0.0.1")
-	// Reproduce preserves its report-oriented exit policy. The report, rather
-	// than exit zero, must identify this attempt as incomplete.
-	if err != nil {
-		t.Fatal("unexpected command failure", err, out)
+	// An exchange that did not complete fails the command on every route, and
+	// the report must still be written and identify the attempt as incomplete.
+	if err == nil || !strings.Contains(out, "1 exchange(s) did not complete") {
+		t.Fatal("incomplete replay must fail the command", err, out)
 	}
 	data, err := os.ReadFile(strings.TrimSuffix(path, ".pcap") + ".report.json")
 	if err != nil {

@@ -34,7 +34,7 @@ func TestWholeBinaryDefaultFrontDoorsAgainstIndependentStreamPeers(t *testing.T)
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 			output := t.TempDir()
-			cases := []string{"http1", "dns-tcp", "modbus-tcp", "http1-tls", "dns-tls", "modbus-tls", "dnp3", "dnp3-tls", "ftp", "ftps-explicit", "ftps-implicit", "ssh", "tls-handshake"}
+			cases := []string{"http1", "dns-tcp", "modbus-tcp", "http1-tls", "dns-tls", "modbus-tls", "dnp3", "dnp3-tls", "ftp", "ftps-explicit", "ftps-implicit", "ssh", "tls-handshake", "iec104", "iec104-tls"}
 			run, err := Run(ctx, Options{Binary: binary, SourceRoot: root, Output: output, Version: buildinfo.Version, Command: command, Repeat: 2, Cases: cases})
 			if err != nil {
 				t.Fatalf("whole binary smoke: %v (evidence %s)", err, output)

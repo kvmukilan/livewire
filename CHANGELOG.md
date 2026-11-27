@@ -2,6 +2,67 @@
 
 All notable changes to Livewire are documented here.
 
+## [1.5.0] - 2026-11-27
+
+A guided HTTPS dashboard and a round of live-replay correctness fixes. This
+version is not yet qualified in the software-lab profile; the 1.3.0
+[release audit](docs/RELEASE_AUDIT.md) does not cover it.
+
+### Live replay
+
+- Stop before sending when a TLS key log or embedded secrets cover only some of
+  the selected TLS sessions. Previously the covered sessions were replayed, the
+  rest skipped, and the run reported "same as the recording" with exit 0. Use
+  `-session` to replay a subset deliberately. Sessions whose capture is not a
+  complete TLS exchange are still skipped.
+- Report a multi-session TLS run as verified only when every replayed session
+  was verified, instead of "different" with no differences.
+- Offer the captured SNI and ALPN when replaying decrypted TLS application
+  data, as the handshake-only path already did. Connecting by IP without
+  `-server-name` previously sent neither.
+- Merge cookies set by the live HTTP server into the captured `Cookie` header
+  by name. Previously the first live `Set-Cookie` replaced every captured
+  cookie, and requests with no live cookie gained an empty `Cookie` header.
+- Acknowledge IEC 60870-5-104 responses as they arrive. A captured burst longer
+  than the station's send window, or one spontaneous frame inside it, stalled
+  the station and timed the replay out.
+- Measure recorded TLS pacing (`-under-load`) from each session's first message
+  and add the recorded span to the connection budget, so long captures and
+  sessions that begin late no longer idle and time out.
+- Ignore TCP keep-alive probes during reassembly instead of rejecting the
+  session with "conflicting overlap".
+- Reject HTTP requests that use `Expect: 100-continue` with a clear message
+  before sending; over TLS they previously timed out waiting for the server.
+- Repair DNS compression pointers when `-set dns.name=` changes the question
+  length, and refuse a rename outside the parent domain that captured records
+  are compressed against.
+- Exit nonzero when an exchange does not complete, on every route. The generic
+  route previously exited 0. A difference from the recording still exits 0
+  unless `-strict-exit` is given.
+- Print the differing values under each result instead of only `matched=false`.
+- Add `iec104` and `iec104-tls` cases to the replay lab.
+
+- Build every release, CI and qualification job with Go 1.26.11, which fixes
+  GO-2026-6859 (net/http server crash) in the Go 1.26.10 standard library.
+
+### Dashboard
+
+- Rework the dashboard into a guided flow: capture, target, run, result. A
+  capture is inspected as soon as it is chosen, and the result states whether
+  the device answered the same as the recording, differently, or did not
+  complete, with the differing values listed. Expert controls are unchanged
+  under **Advanced options**.
+- Add captures, TLS key logs, CA certificates and SSH key files from the browser
+  by drag-and-drop or file picker; they are copied into the working folder
+  without overwriting existing files.
+- Serve the dashboard over HTTPS only, with a persisted local self-signed
+  certificate or `-tls-cert`/`-tls-key`. `http://` URLs for the dashboard no
+  longer work.
+- `livewire web` opens the default browser (`-no-open` disables this) and falls
+  back to a free port when the default one is taken. Double-clicking
+  `livewire.exe` on Windows starts the dashboard instead of printing help.
+- List captures with upper-case `.PCAP`/`.PCAPNG` extensions in the dashboard.
+
 ## [1.3.0] - 2026-10-21
 
 Add IEC 60870-5-104 application replay and replay every TLS session of a

@@ -56,7 +56,7 @@ captured TCP state and TLS ciphertext are not reused as a live session.
 livewire check issue.pcap                      # what is in the capture, can it be replayed
 livewire live issue.pcap -t 192.168.1.50       # fresh application sessions and live responses
 livewire reproduce issue.pcap -i eth0          # stateless replay of the recorded packets
-livewire web                                   # the same workflow in a browser
+livewire web                                   # the same workflow in a browser (HTTPS, opens itself)
 ```
 
 **`live` is stateful.** It creates fresh application connections, lets the OS

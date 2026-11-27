@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ func TestGuardCommandSignalHelper(t *testing.T) {
 	}
 	var err error
 	if scenario == "web" {
-		err = cmdWeb([]string{"-addr", "127.0.0.1:0", "-dir", os.Getenv("LIVEWIRE_SIGNAL_DIR")})
+		err = cmdWeb([]string{"-addr", "127.0.0.1:0", "-no-open", "-dir", os.Getenv("LIVEWIRE_SIGNAL_DIR")})
 	} else {
 		err = cmdRstdrop([]string{"-t", "192.0.2.10", "-port", "502", "-sport", "41001"})
 	}
@@ -61,7 +62,7 @@ func TestGuardCommandsReleaseRulesOnBrokenPipe(t *testing.T) {
 			// #nosec G204 -- runs this test binary, with only fixed helper arguments.
 			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestGuardCommandSignalHelper$")
 			cmd.Env = append(os.Environ(), "LIVEWIRE_SIGNAL_TEST="+scenario, "LIVEWIRE_SIGNAL_DIR="+dir,
-				"LIVEWIRE_SIGNAL_LOG="+logPath, "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+				"LIVEWIRE_SIGNAL_LOG="+logPath, "XDG_CONFIG_HOME="+filepath.Join(dir, "config"), "PATH="+dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 			readEnd, writeEnd, err := os.Pipe()
 			if err != nil {
 				t.Fatal(err)
@@ -123,7 +124,10 @@ func TestGuardCommandsReleaseRulesOnBrokenPipe(t *testing.T) {
 
 func armDashboardTestRule(t *testing.T, url string) {
 	t.Helper()
-	client := &http.Client{Timeout: 3 * time.Second}
+	// The dashboard's certificate is generated per test directory; this client
+	// only ever talks to that loopback process.
+	// #nosec G402 -- test client for the locally generated dashboard certificate.
+	client := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
 	response, err := client.Get(url)
 	if err != nil {
 		t.Fatal(err)
